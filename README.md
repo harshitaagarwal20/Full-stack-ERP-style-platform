@@ -1,3 +1,4 @@
+
 # Nibasia System (FMS)
 
 Production-ready full-stack web app for workflow:
@@ -144,3 +145,6 @@ Frontend runs on `http://localhost:5173`.
 - Status badges (`Pending`, `Approved`, `Completed`, `Rejected`)
 - Toast notifications, loading spinners, error feedback
 - Search and filters across modules
+
+# Full-stack-ERP-style-platform
+Full-stack logistics and ERP-style platform with a Node.js/Express backend and Vite/React frontend, built to handle order management, enquiry tracking, production workflows, dispatch control, and role-based user access in one cohesive system. It includes order lifecycle tracking, responsive admin interface for users approvals.

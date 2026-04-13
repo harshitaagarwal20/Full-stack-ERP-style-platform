@@ -13,16 +13,32 @@ import productionRoutes from "./routes/productionRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 
 const app = express();
-const allowedOrigins = new Set(String(env.clientOrigin || "")
+const allowedOriginRules = String(env.clientOrigin || "")
   .split(",")
   .map((origin) => origin.trim())
-  .filter(Boolean));
+  .filter(Boolean);
+
+function isOriginAllowed(requestOrigin) {
+  if (!requestOrigin) return true;
+  if (allowedOriginRules.length === 0) return true;
+
+  return allowedOriginRules.some((rule) => {
+    if (rule === requestOrigin) return true;
+
+    if (rule.includes("*")) {
+      const escapedRule = rule.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
+      const wildcardRegex = new RegExp(`^${escapedRule.replace(/\\\*/g, ".*")}$`);
+      return wildcardRegex.test(requestOrigin);
+    }
+
+    return false;
+  });
+}
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.size === 0 || allowedOrigins.has(origin)) return callback(null, true);
+      if (isOriginAllowed(origin)) return callback(null, true);
       return callback(new Error("CORS blocked for this origin."));
     },
     credentials: true

@@ -1,0 +1,169 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  admin
+  sales
+  production
+  dispatch
+}
+
+enum EnquiryStatus {
+  PENDING
+  ACCEPTED
+  HOLD
+  REJECTED
+}
+
+enum OrderStatus {
+  CREATED
+  IN_PRODUCTION
+  COMPLETED
+  DISPATCHED
+}
+
+enum ProductionStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum Unit {
+  KG
+  MT
+  LTR
+}
+
+enum ShipmentStatus {
+  PACKING
+  SHIPPED
+  DELIVERED
+}
+
+model User {
+  id                 Int       @id @default(autoincrement())
+  name               String
+  email              String    @unique
+  password           String
+  role               Role
+  createdAt          DateTime  @default(now())
+  enquiriesCreated   Enquiry[] @relation("EnquiryCreator")
+  enquiriesApproved  Enquiry[] @relation("EnquiryApprover")
+  ordersCreated      Order[]
+  auditLogs          AuditLog[]
+
+  @@index([createdAt, id])
+  @@index([role, createdAt])
+}
+
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  action     String
+  entityType String
+  entityId   Int?
+  actorId    Int?
+  actorName  String?
+  actorRole  Role?
+  oldValue   Json?
+  newValue   Json?
+  note       String?
+  createdAt  DateTime @default(now())
+
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([action, createdAt])
+  @@index([createdAt])
+}
+
+model Enquiry {
+  id               Int           @id @default(autoincrement())
+  companyName      String
+  product          String
+  quantity         Int
+  unitOfMeasurement String?
+  enquiryDate      DateTime?
+  modeOfEnquiry    String?
+  expectedTimeline DateTime?
+  assignedPerson   String
+  notesForProduction String?
+  remarks          String?
+  status           EnquiryStatus @default(PENDING)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  createdById      Int
+  approvedById     Int?
+  createdBy        User          @relation("EnquiryCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  approvedBy       User?         @relation("EnquiryApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  order            Order?
+}
+
+model Order {
+  id               Int         @id @default(autoincrement())
+  enquiryId        Int?        @unique
+  salesOrderNumber String      @unique
+  orderNo          String      @unique
+  product          String
+  grade            String
+  quantity         Int
+  unit             Unit
+  packingType      String
+  packingSize      String
+  deliveryDate     DateTime
+  clientName       String
+  address          String?
+  city             String?
+  pincode          String?
+  state            String?
+  countryCode      String?
+  exportDate       DateTime?
+  status           OrderStatus @default(CREATED)
+  orderDate        DateTime    @default(now())
+  remarks          String?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  createdById      Int
+  enquiry          Enquiry?    @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
+  createdBy        User        @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  production       Production?
+  dispatches       Dispatch[]
+}
+
+model Production {
+  id                       Int              @id @default(autoincrement())
+  orderId                  Int              @unique
+  status                   ProductionStatus @default(PENDING)
+  assignedPersonnel        String
+  deliveryDate             DateTime
+  productSpecs             String
+  capacity                 Int
+  particleSize             String
+  acmRpm                   Int
+  classifierRpm            Int
+  blowerRpm                Int
+  rawMaterials             String
+  remarks                  String?
+  productionCompletionDate DateTime?
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
+  order                    Order            @relation(fields: [orderId], references: [id], onDelete: Restrict)
+}
+
+model Dispatch {
+  id             Int            @id @default(autoincrement())
+  orderId        Int
+  dispatchedQuantity Int
+  dispatchDate   DateTime       @default(now())
+  packingDone    Boolean
+  shipmentStatus ShipmentStatus
+  remarks        String?
+  createdAt      DateTime       @default(now())
+  order          Order          @relation(fields: [orderId], references: [id], onDelete: Restrict)
+}
+

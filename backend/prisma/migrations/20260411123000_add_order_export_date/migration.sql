@@ -1,0 +1,2 @@
+ALTER TABLE `Order`
+ADD COLUMN `exportDate` DATETIME(3) NULL;

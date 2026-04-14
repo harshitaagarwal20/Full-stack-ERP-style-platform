@@ -8,6 +8,7 @@ import authRoutes from "./routes/authRoutes.js";
 import auditRoutes from "./routes/auditRoutes.js";
 import dispatchRoutes from "./routes/dispatchRoutes.js";
 import enquiryRoutes from "./routes/enquiryRoutes.js";
+import masterDataRoutes from "./routes/masterDataRoutes.js";
 import orderRoutes from "./routes/orderRoutes.js";
 import productionRoutes from "./routes/productionRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
@@ -53,6 +54,7 @@ app.get("/api/health", (req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
+app.use("/api/master-data", masterDataRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/audit-logs", auditRoutes);
 app.use("/api/enquiries", enquiryRoutes);

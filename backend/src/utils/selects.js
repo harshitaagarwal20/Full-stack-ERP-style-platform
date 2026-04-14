@@ -106,6 +106,7 @@ export const PRODUCTION_LIST_SELECT = {
   id: true,
   orderId: true,
   status: true,
+  state: true,
   assignedPersonnel: true,
   deliveryDate: true,
   productSpecs: true,

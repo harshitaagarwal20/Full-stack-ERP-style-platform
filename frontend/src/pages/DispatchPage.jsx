@@ -4,15 +4,9 @@ import DispatchMobileModule from "../components/mobile/modules/DispatchMobileMod
 import { EditIcon, SearchIcon, TrashIcon, TruckIcon } from "../components/erp/ErpIcons";
 import { useAuth } from "../context/AuthContext";
 import useIsMobile from "../hooks/useIsMobile";
+import useMasterData from "../hooks/useMasterData";
 import { logApiError } from "../utils/apiError";
 import { exportRowsToExcel } from "../utils/exportExcel";
-
-const statusFilterOptions = [
-  { value: "all", label: "All Status" },
-  { value: "pending", label: "Pending" },
-  { value: "in_transit", label: "In Transit" },
-  { value: "delivered", label: "Delivered" }
-];
 
 function formatDate(dateValue) {
   return dateValue ? new Date(dateValue).toLocaleDateString() : "-";
@@ -52,6 +46,7 @@ function getClientCode(clientName, orderId) {
 function DispatchPage() {
   const PAGE_SIZE = 10;
   const { user } = useAuth();
+  const masterData = useMasterData();
   const isMobile = useIsMobile();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -73,6 +68,19 @@ function DispatchPage() {
     packing_done: false,
     remarks: ""
   });
+  const statusFilterOptions = useMemo(
+    () => [
+      { value: "all", label: "All Status" },
+      { value: "pending", label: "Pending" },
+      ...masterData.shipmentStatuses
+        .filter((item) => item.value !== "PACKING")
+        .map((item) => ({
+          value: item.value.toLowerCase(),
+          label: item.label
+        }))
+    ],
+    [masterData.shipmentStatuses]
+  );
   const canManageDispatch = ["admin", "dispatch"].includes(user?.role);
 
   if (isMobile) {
@@ -109,8 +117,12 @@ function DispatchPage() {
 
   const filteredDispatches = useMemo(() => {
     return dispatches.filter((dispatch) => {
-      const shipment = mapShipmentStatus(dispatch.shipmentStatus);
-      const matchesStatus = statusFilter === "all" ? true : shipment.className === statusFilter.replace("_", "-");
+      const currentStatus = String(dispatch.shipmentStatus || "").toLowerCase();
+      const matchesStatus = statusFilter === "all"
+        ? true
+        : statusFilter === "pending"
+          ? currentStatus === "packing"
+          : currentStatus === statusFilter;
       const matchesClient = clientFilter
         ? dispatch.order?.clientName?.toLowerCase().includes(clientFilter.toLowerCase())
         : true;
@@ -524,9 +536,9 @@ function DispatchPage() {
                   required
                 >
                   <option value="" disabled>Select status</option>
-                  <option value="PACKING">Pending</option>
-                  <option value="SHIPPED">In Transit</option>
-                  <option value="DELIVERED">Delivered</option>
+                  {masterData.shipmentStatuses.map((item) => (
+                    <option key={item.value} value={item.value}>{item.label}</option>
+                  ))}
                 </select>
               </div>
               <div className="full-row">

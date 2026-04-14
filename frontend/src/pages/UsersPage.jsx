@@ -2,16 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import api from "../api/axiosClient";
 import LoadingSpinner from "../components/LoadingSpinner";
 import { useAuth } from "../context/AuthContext";
+import useMasterData from "../hooks/useMasterData";
 import { logApiError } from "../utils/apiError";
 import { exportRowsToExcel } from "../utils/exportExcel";
-
-const roleOptions = [
-  { value: "all", label: "All Roles" },
-  { value: "admin", label: "Admin" },
-  { value: "sales", label: "Sales" },
-  { value: "production", label: "Production" },
-  { value: "dispatch", label: "Dispatch" }
-];
 
 function getInitials(name) {
   return (name || "")
@@ -24,17 +17,27 @@ function getInitials(name) {
 
 function UsersPage() {
   const { user } = useAuth();
+  const masterData = useMasterData();
   const menuRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingUserId, setEditingUserId] = useState(null);
   const [activeMenuUserId, setActiveMenuUserId] = useState(null);
-  const [menuPosition, setMenuPosition] = useState(null);
   const [roleFilter, setRoleFilter] = useState("all");
   const [users, setUsers] = useState([]);
   const [form, setForm] = useState({ name: "", email: "", password: "", role: "sales" });
   const canManageUsers = user?.role === "admin";
+  const roleOptions = useMemo(
+    () => [
+      { value: "all", label: "All Roles" },
+      ...masterData.roles.map((role) => ({
+        value: role.value,
+        label: role.label
+      }))
+    ],
+    [masterData.roles]
+  );
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -56,7 +59,6 @@ function UsersPage() {
     const handleClickOutside = (event) => {
       if (menuRef.current && !menuRef.current.contains(event.target)) {
         setActiveMenuUserId(null);
-        setMenuPosition(null);
       }
     };
 
@@ -114,27 +116,10 @@ function UsersPage() {
     );
   };
 
-  const toggleActionMenu = (userId, triggerElement) => {
+  const toggleActionMenu = (userId) => {
     if (activeMenuUserId === userId) {
       setActiveMenuUserId(null);
-      setMenuPosition(null);
       return;
-    }
-
-    if (triggerElement) {
-      const triggerRect = triggerElement.getBoundingClientRect();
-      const menuWidth = 132;
-      const menuHeight = 92;
-      const gap = 8;
-      const openUp = triggerRect.bottom + menuHeight + gap > window.innerHeight;
-      const top = openUp
-        ? Math.max(12, triggerRect.top - menuHeight - gap)
-        : Math.min(window.innerHeight - menuHeight - 12, triggerRect.bottom + gap);
-      const left = Math.min(
-        window.innerWidth - menuWidth - 12,
-        Math.max(12, triggerRect.right - menuWidth)
-      );
-      setMenuPosition({ top, left });
     }
 
     setActiveMenuUserId(userId);
@@ -150,7 +135,6 @@ function UsersPage() {
     });
     setIsCreateModalOpen(true);
     setActiveMenuUserId(null);
-    setMenuPosition(null);
   };
 
   const onDeleteUser = async (userId) => {
@@ -162,7 +146,6 @@ function UsersPage() {
       logApiError(error, "Failed to delete user");
     }
     setActiveMenuUserId(null);
-    setMenuPosition(null);
   };
 
   return (
@@ -225,15 +208,12 @@ function UsersPage() {
                           type="button"
                           className="user-menu-trigger"
                           aria-label={`Open actions for ${user.name}`}
-                          onClick={(event) => toggleActionMenu(user.id, event.currentTarget)}
+                          onClick={() => toggleActionMenu(user.id)}
                         >
                           ...
                         </button>
-                        {activeMenuUserId === user.id && menuPosition && (
-                          <div
-                            className="user-menu-panel floating"
-                            style={{ top: `${menuPosition.top}px`, left: `${menuPosition.left}px` }}
-                          >
+                        {activeMenuUserId === user.id && (
+                          <div className="user-menu-panel">
                             <button type="button" onClick={() => onEditUser(user)}>Edit</button>
                             <button type="button" className="danger" onClick={() => onDeleteUser(user.id)}>Delete</button>
                           </div>
@@ -287,10 +267,9 @@ function UsersPage() {
               <div>
                 <label className="users-field-label">Role</label>
                 <select className="users-input" value={form.role} onChange={(e) => setForm((p) => ({ ...p, role: e.target.value }))}>
-                  <option value="admin">Admin</option>
-                  <option value="sales">Sales</option>
-                  <option value="production">Production</option>
-                  <option value="dispatch">Dispatch</option>
+                  {masterData.roles.map((role) => (
+                    <option key={role.value} value={role.value}>{role.label}</option>
+                  ))}
                 </select>
               </div>
               <div className="users-form-actions">

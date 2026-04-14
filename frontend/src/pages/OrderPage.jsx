@@ -4,17 +4,10 @@ import api from "../api/axiosClient";
 import OrdersMobileModule from "../components/mobile/modules/OrdersMobileModule";
 import { BoxesIcon, EditIcon, EyeIcon, FactoryIcon, SearchIcon, TrashIcon } from "../components/erp/ErpIcons";
 import { useAuth } from "../context/AuthContext";
+import useMasterData from "../hooks/useMasterData";
 import useIsMobile from "../hooks/useIsMobile";
 import { logApiError } from "../utils/apiError";
 import { exportRowsToExcel } from "../utils/exportExcel";
-
-const statusFilterOptions = [
-  { value: "all", label: "All Status" },
-  { value: "CREATED", label: "Created" },
-  { value: "IN_PRODUCTION", label: "In Production" },
-  { value: "DISPATCHED", label: "Dispatched" },
-  { value: "COMPLETED", label: "Completed" }
-];
 
 function formatDate(dateValue) {
   return dateValue ? new Date(dateValue).toLocaleDateString() : "-";
@@ -82,6 +75,7 @@ function OrderPage() {
   const PAGE_SIZE = 10;
   const navigate = useNavigate();
   const { user } = useAuth();
+  const masterData = useMasterData();
   const isMobile = useIsMobile();
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -112,6 +106,24 @@ function OrderPage() {
     country_code: "IN",
     remarks: ""
   });
+  const customerMasterRows = useMemo(
+    () => (Array.isArray(masterData.customerMaster) ? masterData.customerMaster : []),
+    [masterData.customerMaster]
+  );
+  const selectedCustomerProfile = useMemo(
+    () => customerMasterRows.find((item) => item.customerName === form.client_name) || null,
+    [customerMasterRows, form.client_name]
+  );
+  const statusFilterOptions = useMemo(
+    () => [
+      { value: "all", label: "All Status" },
+      ...masterData.orderStatuses.map((status) => ({
+        value: status.value,
+        label: status.label
+      }))
+    ],
+    [masterData.orderStatuses]
+  );
 
   const fetchData = async (searchQuery = query, status = statusFilter) => {
     setLoading(true);
@@ -346,6 +358,24 @@ function OrderPage() {
   };
 
   const canCreate = user.role === "sales" || user.role === "admin";
+
+  const onCustomerChange = (customerName) => {
+    const profile = customerMasterRows.find((item) => item.customerName === customerName);
+    if (!profile) {
+      setForm((prev) => ({ ...prev, client_name: customerName }));
+      return;
+    }
+
+    setForm((prev) => ({
+      ...prev,
+      client_name: customerName,
+      address: profile.address || prev.address,
+      city: profile.city || prev.city,
+      pincode: profile.pincode || prev.pincode,
+      state: profile.state || prev.state,
+      country_code: profile.countryCode || prev.country_code
+    }));
+  };
 
   if (isMobile) {
     return <OrdersMobileModule canCreate={canCreate} />;
@@ -603,7 +633,21 @@ function OrderPage() {
             <form onSubmit={submitOrder} className="order-form-grid">
               <div>
                 <label>Client Name</label>
-                <input value={form.client_name} onChange={(e) => setForm((p) => ({ ...p, client_name: e.target.value }))} required />
+                <input
+                  list="customer-name-options"
+                  value={form.client_name}
+                  onChange={(e) => onCustomerChange(e.target.value)}
+                  required
+                />
+                <datalist id="customer-name-options">
+                  {customerMasterRows.map((row) => (
+                    <option key={row.customerCode || row.customerName} value={row.customerName} />
+                  ))}
+                </datalist>
+              </div>
+              <div>
+                <label>Customer Code</label>
+                <input value={selectedCustomerProfile?.customerCode || ""} disabled />
               </div>
               <div>
                 <label>Product</label>
@@ -620,9 +664,9 @@ function OrderPage() {
               <div>
                 <label>Unit</label>
                 <select value={form.unit} onChange={(e) => setForm((p) => ({ ...p, unit: e.target.value }))}>
-                  <option value="KG">KG</option>
-                  <option value="MT">MT</option>
-                  <option value="LTR">LTR</option>
+                  {masterData.units.map((unit) => (
+                    <option key={unit.value} value={unit.value}>{unit.label}</option>
+                  ))}
                 </select>
               </div>
               <div>
@@ -655,7 +699,11 @@ function OrderPage() {
               </div>
               <div>
                 <label>Country Code</label>
-                <input value={form.country_code} onChange={(e) => setForm((p) => ({ ...p, country_code: e.target.value }))} required />
+                <select value={form.country_code} onChange={(e) => setForm((p) => ({ ...p, country_code: e.target.value }))} required>
+                  {masterData.countryCodes.map((item) => (
+                    <option key={item.value} value={item.value}>{item.label}</option>
+                  ))}
+                </select>
               </div>
               <div className="full-row">
                 <label>Remarks</label>

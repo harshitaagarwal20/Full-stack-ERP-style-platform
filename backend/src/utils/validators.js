@@ -21,119 +21,25 @@ export const updateUserSchema = z.object({
 
 export const createEnquirySchema = z.object({
   enquiry_date: z.string().min(4),
-  mode_of_enquiry: z.enum(["Phone", "Whatsapp", "Website", "We Reached Out", "Walk-in", "Other"]).optional().nullable(),
+  mode_of_enquiry: z.string().min(1).optional().nullable(),
   company_name: z.string().min(2),
-  product: z.enum([
-    "ALUMINIUM STEARATE",
-    "ANTIBLOCKING AGENT",
-    "BARIUM STEARATE",
-    "Butyl Stearate",
-    "CALCIUM 12-HYDROXY STEARATE",
-    "CALCIUM STEARATE",
-    "CALCIUM ZINC STABILIZER",
-    "Calcium Zinc Stearate",
-    "Cetyl-Stearyl Alcohols",
-    "EGDS",
-    "GMS 40",
-    "GMS 90",
-    "GMS 95",
-    "GMS 97",
-    "HSA 12 MAGNESIUM STEARATE",
-    "Isostearic Acid",
-    "Lithium 12-Hydroxystearate",
-    "Lithium Stearate",
-    "MAGNESIUM STEARATE",
-    "Manganese Stearate",
-    "Neutral Polymer",
-    "NIMAID EBS",
-    "NIMLUB - 187",
-    "NIMLUB - T",
-    "NIMLUB CZ 50",
-    "NIMLUB NR6",
-    "NIMPHOB",
-    "NIMSTAT N66",
-    "NUWAX",
-    "OXO-BIODEGRADABLE ADDITIVE",
-    "PE WAX",
-    "PE WAX-500",
-    "Pentaerythritol Tetrastearate (PETS)",
-    "Potassium Octadecanoate",
-    "Sodium Benzoate",
-    "Sodium Octadecanoate",
-    "STEARIC ACID",
-    "TALC",
-    "Ultra 8100",
-    "ZINC 12-HYDROXY STEARATE",
-    "Zinc Laurate",
-    "ZINC OXIDE",
-    "Zinc salt of fatty acids",
-    "ZINC STEARATE",
-    "Zinc Stearate",
-    "ABC"
-  ]),
+  product: z.string().min(1),
   quantity: z.number().int().positive(),
   unit_of_measurement: z.string().optional().nullable(),
   expected_timeline: z.string().min(2),
-  assigned_person: z.enum(["Sharun Mittal", "Saumya Mittal", "Ravishu Mittal", "Ankesh Jain", "Shrinivas Potukuchi"]),
+  assigned_person: z.string().min(1),
   notes_for_production: z.string().optional().nullable()
 });
 
 export const updateEnquirySchema = z.object({
   enquiry_date: z.string().min(4).optional(),
-  mode_of_enquiry: z.enum(["Phone", "Whatsapp", "Website", "We Reached Out", "Walk-in", "Other"]).optional().nullable(),
+  mode_of_enquiry: z.string().min(1).optional().nullable(),
   company_name: z.string().min(2).optional(),
-  product: z.enum([
-    "ALUMINIUM STEARATE",
-    "ANTIBLOCKING AGENT",
-    "BARIUM STEARATE",
-    "Butyl Stearate",
-    "CALCIUM 12-HYDROXY STEARATE",
-    "CALCIUM STEARATE",
-    "CALCIUM ZINC STABILIZER",
-    "Calcium Zinc Stearate",
-    "Cetyl-Stearyl Alcohols",
-    "EGDS",
-    "GMS 40",
-    "GMS 90",
-    "GMS 95",
-    "GMS 97",
-    "HSA 12 MAGNESIUM STEARATE",
-    "Isostearic Acid",
-    "Lithium 12-Hydroxystearate",
-    "Lithium Stearate",
-    "MAGNESIUM STEARATE",
-    "Manganese Stearate",
-    "Neutral Polymer",
-    "NIMAID EBS",
-    "NIMLUB - 187",
-    "NIMLUB - T",
-    "NIMLUB CZ 50",
-    "NIMLUB NR6",
-    "NIMPHOB",
-    "NIMSTAT N66",
-    "NUWAX",
-    "OXO-BIODEGRADABLE ADDITIVE",
-    "PE WAX",
-    "PE WAX-500",
-    "Pentaerythritol Tetrastearate (PETS)",
-    "Potassium Octadecanoate",
-    "Sodium Benzoate",
-    "Sodium Octadecanoate",
-    "STEARIC ACID",
-    "TALC",
-    "Ultra 8100",
-    "ZINC 12-HYDROXY STEARATE",
-    "Zinc Laurate",
-    "ZINC OXIDE",
-    "Zinc salt of fatty acids",
-    "ZINC STEARATE",
-    "Zinc Stearate",
-    "ABC"
-  ]).optional(),
+  product: z.string().min(1).optional(),
   quantity: z.number().int().positive().optional(),
   unit_of_measurement: z.string().optional().nullable(),
   expected_timeline: z.string().min(2).optional(),
-  assigned_person: z.enum(["Sharun Mittal", "Saumya Mittal", "Ravishu Mittal", "Ankesh Jain", "Shrinivas Potukuchi"]).optional(),
+  assigned_person: z.string().min(1).optional(),
   notes_for_production: z.string().optional().nullable()
 });
 
@@ -146,7 +52,7 @@ export const createOrderSchema = z.object({
   product: z.string().min(2),
   grade: z.string().min(1),
   quantity: z.number().int().positive(),
-  unit: z.enum(["KG", "MT", "LTR"]),
+  unit: z.string().min(1),
   packing_type: z.string().min(1),
   packing_size: z.string().min(1),
   delivery_date: z.string().min(4),
@@ -163,7 +69,7 @@ export const updateOrderSchema = z.object({
   product: z.string().min(2).optional(),
   grade: z.string().min(1).optional(),
   quantity: z.number().int().positive().optional(),
-  unit: z.enum(["KG", "MT", "LTR"]).optional(),
+  unit: z.string().min(1).optional(),
   packing_type: z.string().min(1).optional(),
   packing_size: z.string().min(1).optional(),
   delivery_date: z.string().min(4).optional(),
@@ -191,21 +97,23 @@ export const createProductionSchema = z.object({
   classifier_rpm: z.number().int().positive().optional(),
   blower_rpm: z.number().int().positive().optional(),
   raw_materials: z.string().min(2).optional().or(z.literal("")),
-  remarks: z.string().optional().nullable()
+  remarks: z.string().optional().nullable(),
+  state: z.string().optional().nullable()
 });
 
 export const updateProductionSchema = z.object({
-  assigned_personnel: z.string().min(2).optional(),
-  delivery_date: z.string().min(4).optional(),
-  product_specs: z.string().min(2).optional(),
+  assigned_personnel: z.string().min(2).optional().or(z.literal("")),
+  delivery_date: z.string().min(4).optional().or(z.literal("")),
+  product_specs: z.string().min(2).optional().or(z.literal("")),
   capacity: z.number().int().positive().optional(),
-  particle_size: z.string().min(1).optional(),
+  particle_size: z.string().min(1).optional().or(z.literal("")),
   acm_rpm: z.number().int().positive().optional(),
   classifier_rpm: z.number().int().positive().optional(),
   blower_rpm: z.number().int().positive().optional(),
-  raw_materials: z.string().min(2).optional(),
+  raw_materials: z.string().min(2).optional().or(z.literal("")),
   remarks: z.string().optional().nullable(),
-  status: z.enum(["PENDING", "IN_PROGRESS", "COMPLETED"]).optional()
+  status: z.enum(["PENDING", "IN_PROGRESS", "COMPLETED"]).optional(),
+  state: z.string().optional().nullable()
 });
 
 export const completeProductionSchema = z.object({
@@ -233,4 +141,37 @@ export const updateDispatchSchema = z.object({
 
 export const updateOrderExportDateSchema = z.object({
   export_date: z.string().min(4)
+});
+
+export const createMasterDataValueSchema = z.object({
+  value: z.string().min(1),
+  label: z.string().optional().nullable()
+});
+
+export const createEnquiryMasterSchema = z.object({
+  mode_of_enquiry: z.string().min(1),
+  company_name: z.string().min(1),
+  product: z.string().min(1),
+  assigned_person: z.string().min(1)
+});
+
+export const createCustomerMasterSchema = z.object({
+  customer_name: z.string().min(1),
+  gstn: z.string().optional().nullable(),
+  country: z.string().optional().nullable(),
+  country_code: z.string().optional().nullable(),
+  cust_initials: z.string().optional().nullable(),
+  s_no_code: z.string().optional().nullable(),
+  customer_code: z.string().optional().nullable().or(z.literal("")),
+  contact_person: z.string().optional().nullable(),
+  contact_person_number: z.string().optional().nullable(),
+  company_email: z.string().optional().nullable(),
+  address: z.string().optional().nullable(),
+  pincode: z.string().optional().nullable(),
+  state: z.string().optional().nullable(),
+  city: z.string().optional().nullable()
+});
+
+export const importCustomerMasterSchema = z.object({
+  rows: z.array(createCustomerMasterSchema).min(1)
 });

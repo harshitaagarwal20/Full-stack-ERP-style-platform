@@ -7,20 +7,15 @@ import MobileHeader from "../common/MobileHeader";
 import MobileSearchBar from "../common/MobileSearchBar";
 import MobileStatusBadge from "../common/MobileStatusBadge";
 import FloatingButton from "../common/FloatingButton";
+import useMasterData from "../../../hooks/useMasterData";
 import { logApiError } from "../../../utils/apiError";
-
-const filters = [
-  { value: "all", label: "All" },
-  { value: "PACKING", label: "Pending" },
-  { value: "SHIPPED", label: "In Transit" },
-  { value: "DELIVERED", label: "Delivered" }
-];
 
 function formatDate(value) {
   return value ? new Date(value).toLocaleDateString() : "-";
 }
 
 function DispatchMobileModule({ canManage = false }) {
+  const masterData = useMasterData();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [readyOrders, setReadyOrders] = useState([]);
@@ -36,6 +31,16 @@ function DispatchMobileModule({ canManage = false }) {
     packing_done: false,
     remarks: ""
   });
+  const filters = useMemo(
+    () => [
+      { value: "all", label: "All" },
+      ...masterData.shipmentStatuses.map((item) => ({
+        value: item.value,
+        label: item.label
+      }))
+    ],
+    [masterData.shipmentStatuses]
+  );
 
   const fetchData = async (searchQuery = query) => {
     setLoading(true);
@@ -203,9 +208,9 @@ function DispatchMobileModule({ canManage = false }) {
               <label>Status</label>
               <select value={form.shipment_status} onChange={(event) => setForm((prev) => ({ ...prev, shipment_status: event.target.value }))} required>
                 <option value="">Select status</option>
-                <option value="PACKING">Pending</option>
-                <option value="SHIPPED">In Transit</option>
-                <option value="DELIVERED">Delivered</option>
+                {masterData.shipmentStatuses.map((item) => (
+                  <option key={item.value} value={item.value}>{item.label}</option>
+                ))}
               </select>
               <label>Dispatch Date</label>
               <input type="date" value={form.dispatch_date} onChange={(event) => setForm((prev) => ({ ...prev, dispatch_date: event.target.value }))} required />

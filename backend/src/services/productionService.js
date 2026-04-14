@@ -70,7 +70,8 @@ export async function createProduction(payload, actorUser) {
   }
 
   const assignedPersonnel = payload.assigned_personnel?.trim() || order.clientName || "Production Team";
-  const deliveryDateValue = payload.delivery_date ? new Date(payload.delivery_date) : new Date(order.deliveryDate || new Date());
+  const parsedDeliveryDate = parseDateInput(payload.delivery_date);
+  const deliveryDateValue = parsedDeliveryDate || new Date(order.deliveryDate || new Date());
   const productSpecs = payload.product_specs?.trim() || `${order.product} ${order.grade ? `(${order.grade})` : ""}`.trim();
   const capacity = payload.capacity ?? order.quantity ?? 1;
   const particleSize = payload.particle_size?.trim() || "NA";
@@ -93,7 +94,8 @@ export async function createProduction(payload, actorUser) {
       blowerRpm,
       rawMaterials,
       remarks,
-      status: "PENDING"
+      status: "PENDING",
+      state: payload.state || null
     },
     select: PRODUCTION_LIST_SELECT
   });
@@ -235,6 +237,7 @@ export async function updateProduction(productionId, payload, actorUser) {
     select: {
       id: true,
       status: true,
+      state: true,
       orderId: true,
       assignedPersonnel: true,
       deliveryDate: true,
@@ -256,21 +259,51 @@ export async function updateProduction(productionId, payload, actorUser) {
     throw error;
   }
 
+  const updateData = {};
+  
+  if (payload.assigned_personnel !== undefined && payload.assigned_personnel?.trim()) {
+    updateData.assignedPersonnel = payload.assigned_personnel.trim();
+  }
+  if (payload.delivery_date !== undefined && payload.delivery_date?.trim()) {
+    const parsedDate = parseDateInput(payload.delivery_date);
+    if (parsedDate) {
+      updateData.deliveryDate = parsedDate;
+    }
+  }
+  if (payload.product_specs !== undefined && payload.product_specs?.trim()) {
+    updateData.productSpecs = payload.product_specs.trim();
+  }
+  if (payload.capacity !== undefined) {
+    updateData.capacity = payload.capacity;
+  }
+  if (payload.particle_size !== undefined && payload.particle_size?.trim()) {
+    updateData.particleSize = payload.particle_size.trim();
+  }
+  if (payload.acm_rpm !== undefined) {
+    updateData.acmRpm = payload.acm_rpm;
+  }
+  if (payload.classifier_rpm !== undefined) {
+    updateData.classifierRpm = payload.classifier_rpm;
+  }
+  if (payload.blower_rpm !== undefined) {
+    updateData.blowerRpm = payload.blower_rpm;
+  }
+  if (payload.raw_materials !== undefined && payload.raw_materials?.trim()) {
+    updateData.rawMaterials = payload.raw_materials.trim();
+  }
+  if (payload.remarks !== undefined) {
+    updateData.remarks = payload.remarks?.trim() || null;
+  }
+  if (payload.status !== undefined) {
+    updateData.status = payload.status;
+  }
+  if (payload.state !== undefined) {
+    updateData.state = payload.state?.trim() || null;
+  }
+
   const updatedProduction = await prisma.production.update({
     where: { id: productionId },
-    data: {
-      assignedPersonnel: payload.assigned_personnel,
-      deliveryDate: payload.delivery_date ? new Date(payload.delivery_date) : undefined,
-      productSpecs: payload.product_specs,
-      capacity: payload.capacity,
-      particleSize: payload.particle_size,
-      acmRpm: payload.acm_rpm,
-      classifierRpm: payload.classifier_rpm,
-      blowerRpm: payload.blower_rpm,
-      rawMaterials: payload.raw_materials,
-      remarks: payload.remarks,
-      status: payload.status
-    },
+    data: updateData,
     select: PRODUCTION_LIST_SELECT
   });
 

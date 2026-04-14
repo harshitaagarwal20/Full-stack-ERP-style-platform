@@ -139,6 +139,7 @@ model Production {
   id                       Int              @id @default(autoincrement())
   orderId                  Int              @unique
   status                   ProductionStatus @default(PENDING)
+  state                    String?
   assignedPersonnel        String
   deliveryDate             DateTime
   productSpecs             String

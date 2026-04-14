@@ -4,21 +4,9 @@ import ProductionMobileModule from "../components/mobile/modules/ProductionMobil
 import { EditIcon, EyeIcon, FactoryIcon, SearchIcon, TrashIcon } from "../components/erp/ErpIcons";
 import { useAuth } from "../context/AuthContext";
 import useIsMobile from "../hooks/useIsMobile";
+import useMasterData from "../hooks/useMasterData";
 import { logApiError } from "../utils/apiError";
 import { exportRowsToExcel } from "../utils/exportExcel";
-
-const statusFilterOptions = [
-  { value: "all", label: "All Status" },
-  { value: "PENDING", label: "Pending" },
-  { value: "IN_PROGRESS", label: "In Progress" },
-  { value: "COMPLETED", label: "Completed" }
-];
-
-const productionStatusOptions = [
-  { value: "PENDING", label: "Pending" },
-  { value: "IN_PROGRESS", label: "In Progress" },
-  { value: "COMPLETED", label: "Completed" }
-];
 
 function formatDate(value) {
   return value ? new Date(value).toLocaleDateString() : "-";
@@ -63,6 +51,7 @@ function getOrderExportDate(order) {
 function ProductionPage() {
   const PAGE_SIZE = 10;
   const { user } = useAuth();
+  const masterData = useMasterData();
   const isMobile = useIsMobile();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -82,8 +71,20 @@ function ProductionPage() {
     delivery_date: "",
     capacity: "",
     remarks: "",
-    status: "PENDING"
+    status: "PENDING",
+    state: ""
   });
+  const productionStatusOptions = useMemo(
+    () => masterData.productionStatuses,
+    [masterData.productionStatuses]
+  );
+  const statusFilterOptions = useMemo(
+    () => [
+      { value: "all", label: "All Status" },
+      ...masterData.productionStatuses
+    ],
+    [masterData.productionStatuses]
+  );
   const canManageProduction = ["admin", "production"].includes(user?.role);
 
   if (isMobile) {
@@ -180,7 +181,7 @@ function ProductionPage() {
     try {
       const payload = {
         ...form,
-        capacity: Number(form.capacity)
+        capacity: form.capacity ? Number(form.capacity) : undefined
       };
 
       await api.put(`/production/${editingProductionId}/edit`, payload);
@@ -188,7 +189,8 @@ function ProductionPage() {
         delivery_date: "",
         capacity: "",
         remarks: "",
-        status: "PENDING"
+        status: "PENDING",
+        state: ""
       });
       setEditingProductionId(null);
       setEditingRecord(null);
@@ -215,7 +217,8 @@ function ProductionPage() {
         { key: "countryCode", header: "Country Code" },
         { key: "status", header: "Status" },
         { key: "productionCompDate", header: "Production Completion Date" },
-        { key: "dateOfExport", header: "Date of Export" }
+        { key: "dateOfExport", header: "Date of Export" },
+        { key: "state", header: "State" }
       ],
       filteredRecords.map((record) => ({
         clientCode: getClientCode(record.order?.clientName, record.order?.id),
@@ -228,7 +231,8 @@ function ProductionPage() {
         countryCode: record.order?.countryCode || "-",
         status: getStatusLabel(record.status),
         productionCompDate: formatDate(record.productionCompletionDate),
-        dateOfExport: formatDate(getOrderExportDate(record.order))
+        dateOfExport: formatDate(getOrderExportDate(record.order)),
+        state: record.state || "-"
       }))
     );
   };
@@ -251,7 +255,8 @@ function ProductionPage() {
       delivery_date: record.deliveryDate ? new Date(record.deliveryDate).toISOString().slice(0, 10) : "",
       capacity: record.capacity ? String(record.capacity) : "",
       remarks: record.remarks || "",
-      status: record.status || "PENDING"
+      status: record.status || "PENDING",
+      state: record.state || ""
     });
     setIsCreateModalOpen(true);
   };
@@ -418,6 +423,7 @@ function ProductionPage() {
               <p><span>Status:</span> {getStatusLabel(selectedRecord.status)}</p>
               <p><span>Production Completion Date:</span> {formatDate(selectedRecord.productionCompletionDate)}</p>
               <p><span>Date of Export:</span> {formatDate(getOrderExportDate(selectedRecord.order))}</p>
+              <p><span>State:</span> {selectedRecord.state || "-"}</p>
               <p><span>Assigned Team/User:</span> {selectedRecord.assignedPersonnel}</p>
             </div>
             {canManageProduction && (
@@ -475,6 +481,7 @@ function ProductionPage() {
                   <p><span>Status:</span> {getStatusLabel(editingRecord.status)}</p>
                   <p><span>Production Completion Date:</span> {formatDate(editingRecord.productionCompletionDate)}</p>
                   <p><span>Date of Export:</span> {formatDate(getOrderExportDate(editingRecord.order))}</p>
+                  <p><span>State:</span> {editingRecord.state || "-"}</p>
                 </div>
               )}
               <div>
@@ -492,6 +499,10 @@ function ProductionPage() {
               <div>
                 <label>Capacity</label>
                 <input type="number" min="1" value={form.capacity} onChange={(e) => setForm((p) => ({ ...p, capacity: e.target.value }))} required />
+              </div>
+              <div>
+                <label>State</label>
+                <input type="text" placeholder="Enter production state" value={form.state} onChange={(e) => setForm((p) => ({ ...p, state: e.target.value }))} />
               </div>
               <div className="full-row">
                 <label>Remarks</label>

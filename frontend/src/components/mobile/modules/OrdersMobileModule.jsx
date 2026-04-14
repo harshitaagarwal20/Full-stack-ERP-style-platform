@@ -8,14 +8,8 @@ import MobileHeader from "../common/MobileHeader";
 import MobileSearchBar from "../common/MobileSearchBar";
 import MobileStatusBadge from "../common/MobileStatusBadge";
 import FloatingButton from "../common/FloatingButton";
+import useMasterData from "../../../hooks/useMasterData";
 import { logApiError } from "../../../utils/apiError";
-
-const filters = [
-  { value: "all", label: "All" },
-  { value: "CREATED", label: "Created" },
-  { value: "IN_PRODUCTION", label: "In Production" },
-  { value: "DISPATCHED", label: "Dispatched" }
-];
 
 function formatDate(dateValue) {
   return dateValue ? new Date(dateValue).toLocaleDateString() : "-";
@@ -50,6 +44,7 @@ function getMissingLocationFields(order) {
 
 function OrdersMobileModule({ canCreate }) {
   const navigate = useNavigate();
+  const masterData = useMasterData();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [orders, setOrders] = useState([]);
@@ -74,6 +69,34 @@ function OrdersMobileModule({ canCreate }) {
     country_code: "IN",
     remarks: ""
   });
+  const customerMasterRows = useMemo(
+    () => (Array.isArray(masterData.customerMaster) ? masterData.customerMaster : []),
+    [masterData.customerMaster]
+  );
+  const filters = useMemo(
+    () => [
+      { value: "all", label: "All" },
+      ...masterData.orderStatuses.map((item) => ({ value: item.value, label: item.label }))
+    ],
+    [masterData.orderStatuses]
+  );
+
+  const onCustomerChange = (customerName) => {
+    const profile = customerMasterRows.find((item) => item.customerName === customerName);
+    if (!profile) {
+      setForm((prev) => ({ ...prev, client_name: customerName }));
+      return;
+    }
+    setForm((prev) => ({
+      ...prev,
+      client_name: customerName,
+      address: profile.address || prev.address,
+      city: profile.city || prev.city,
+      pincode: profile.pincode || prev.pincode,
+      state: profile.state || prev.state,
+      country_code: profile.countryCode || prev.country_code
+    }));
+  };
 
   const fetchData = async (searchQuery = query, nextStatus = status) => {
     setLoading(true);
@@ -259,7 +282,12 @@ function OrdersMobileModule({ canCreate }) {
               <label>Quantity</label>
               <input type="number" min="1" value={form.quantity} onChange={(event) => setForm((prev) => ({ ...prev, quantity: event.target.value }))} required />
               <label>Client</label>
-              <input value={form.client_name} onChange={(event) => setForm((prev) => ({ ...prev, client_name: event.target.value }))} required />
+              <input list="mobile-customer-name-options" value={form.client_name} onChange={(event) => onCustomerChange(event.target.value)} required />
+              <datalist id="mobile-customer-name-options">
+                {customerMasterRows.map((row) => (
+                  <option key={row.customerCode || row.customerName} value={row.customerName} />
+                ))}
+              </datalist>
               <label>Delivery Date</label>
               <input type="date" value={form.delivery_date} onChange={(event) => setForm((prev) => ({ ...prev, delivery_date: event.target.value }))} required />
               <label>City</label>
@@ -271,7 +299,11 @@ function OrdersMobileModule({ canCreate }) {
               <label>State</label>
               <input value={form.state} onChange={(event) => setForm((prev) => ({ ...prev, state: event.target.value }))} required />
               <label>Country Code</label>
-              <input value={form.country_code} onChange={(event) => setForm((prev) => ({ ...prev, country_code: event.target.value }))} required />
+              <select value={form.country_code} onChange={(event) => setForm((prev) => ({ ...prev, country_code: event.target.value }))} required>
+                {masterData.countryCodes.map((item) => (
+                  <option key={item.value} value={item.value}>{item.label}</option>
+                ))}
+              </select>
               <div className="mapp-form-actions">
                 <button type="button" className="mapp-btn mapp-btn-secondary" onClick={() => setIsModalOpen(false)}>Cancel</button>
                 <button className="mapp-btn mapp-btn-primary" disabled={saving}>{saving ? "Saving..." : "Save"}</button>

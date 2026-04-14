@@ -5,8 +5,10 @@ import { ensureAuditLogTable } from "./services/auditService.js";
 
 async function start() {
   await ensureAuditLogTable();
-  app.listen(env.port, () => {
-    console.log(`Server running on http://localhost:${env.port}`);
+  app.listen(env.port, "0.0.0.0", () => {
+    console.log(`Server running on http://0.0.0.0:${env.port}`);
+    console.log(`Access from this machine: http://localhost:${env.port}`);
+    console.log(`Access from network: http://<your-machine-ip>:${env.port}`);
   });
 }
 

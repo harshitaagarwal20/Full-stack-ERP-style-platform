@@ -2,82 +2,16 @@ import { useEffect, useMemo, useState } from "react";
 import api from "../api/axiosClient";
 import { EditIcon, EyeIcon, InboxIcon, SearchIcon, TrashIcon } from "../components/erp/ErpIcons";
 import { useAuth } from "../context/AuthContext";
+import useMasterData from "../hooks/useMasterData";
 import { logApiError } from "../utils/apiError";
 import { exportRowsToExcel } from "../utils/exportExcel";
 
-const statusOptions = [
-  { value: "all", label: "All Status" },
-  { value: "PENDING", label: "Pending" },
-  { value: "ACCEPTED", label: "Accepted" },
-  { value: "HOLD", label: "Hold" },
-  { value: "REJECTED", label: "Rejected" }
-];
-
-const modeOfEnquiryOptions = [
-  "Phone",
-  "Whatsapp",
-  "Website",
-  "We Reached Out",
-  "Walk-in",
-  "Other"
-];
-
-const assignedPersonOptions = [
-  "Sharun Mittal",
-  "Saumya Mittal",
-  "Ravishu Mittal",
-  "Ankesh Jain",
-  "Shrinivas Potukuchi"
-];
-
-const productOptions = [
-  "ALUMINIUM STEARATE",
-  "ANTIBLOCKING AGENT",
-  "BARIUM STEARATE",
-  "Butyl Stearate",
-  "CALCIUM 12-HYDROXY STEARATE",
-  "CALCIUM STEARATE",
-  "CALCIUM ZINC STABILIZER",
-  "Calcium Zinc Stearate",
-  "Cetyl-Stearyl Alcohols",
-  "EGDS",
-  "GMS 40",
-  "GMS 90",
-  "GMS 95",
-  "GMS 97",
-  "HSA 12 MAGNESIUM STEARATE",
-  "Isostearic Acid",
-  "Lithium 12-Hydroxystearate",
-  "Lithium Stearate",
-  "MAGNESIUM STEARATE",
-  "Manganese Stearate",
-  "Neutral Polymer",
-  "NIMAID EBS",
-  "NIMLUB - 187",
-  "NIMLUB - T",
-  "NIMLUB CZ 50",
-  "NIMLUB NR6",
-  "NIMPHOB",
-  "NIMSTAT N66",
-  "NUWAX",
-  "OXO-BIODEGRADABLE ADDITIVE",
-  "PE WAX",
-  "PE WAX-500",
-  "Pentaerythritol Tetrastearate (PETS)",
-  "Potassium Octadecanoate",
-  "Sodium Benzoate",
-  "Sodium Octadecanoate",
-  "STEARIC ACID",
-  "TALC",
-  "Ultra 8100",
-  "ZINC 12-HYDROXY STEARATE",
-  "Zinc Laurate",
-  "ZINC OXIDE",
-  "Zinc salt of fatty acids",
-  "ZINC STEARATE",
-  "Zinc Stearate",
-  "ABC"
-];
+function prettyLabel(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
 
 function formatDate(dateValue) {
   return dateValue ? new Date(dateValue).toLocaleDateString() : "-";
@@ -101,6 +35,7 @@ function getStatusClass(status) {
 function EnquiryPage() {
   const PAGE_SIZE = 10;
   const { user } = useAuth();
+  const masterData = useMasterData();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -126,6 +61,16 @@ function EnquiryPage() {
     notes_for_production: ""
   });
   const canManageEnquiries = user?.role === "admin" || user?.role === "sales";
+  const statusOptions = useMemo(
+    () => [
+      { value: "all", label: "All Status" },
+      ...masterData.enquiryStatuses.map((status) => ({
+        value: status.value,
+        label: prettyLabel(status.label || status.value)
+      }))
+    ],
+    [masterData.enquiryStatuses]
+  );
 
   const fetchEnquiries = async (searchQuery = query, status = statusFilter) => {
     setLoading(true);
@@ -525,21 +470,26 @@ function EnquiryPage() {
                 <label>Mode of Enquiry</label>
                 <select value={form.mode_of_enquiry} onChange={(e) => setForm((p) => ({ ...p, mode_of_enquiry: e.target.value }))}>
                   <option value="">Select mode</option>
-                  {modeOfEnquiryOptions.map((option) => (
-                    <option key={option} value={option}>{option}</option>
+                  {masterData.modeOfEnquiry.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
                   ))}
                 </select>
               </div>
               <div>
                 <label>Company Name*</label>
-                <input value={form.company_name} onChange={(e) => setForm((p) => ({ ...p, company_name: e.target.value }))} required />
+                <select value={form.company_name} onChange={(e) => setForm((p) => ({ ...p, company_name: e.target.value }))} required>
+                  <option value="">Select company</option>
+                  {masterData.companyNames.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label>Product Enquired*</label>
                 <select value={form.product} onChange={(e) => setForm((p) => ({ ...p, product: e.target.value }))} required>
                   <option value="">Select product</option>
-                  {productOptions.map((option) => (
-                    <option key={option} value={option}>{option}</option>
+                  {masterData.products.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
                   ))}
                 </select>
               </div>
@@ -559,8 +509,8 @@ function EnquiryPage() {
                 <label>Assigned To?</label>
                 <select value={form.assigned_person} onChange={(e) => setForm((p) => ({ ...p, assigned_person: e.target.value }))} required>
                   <option value="">Select assignee</option>
-                  {assignedPersonOptions.map((option) => (
-                    <option key={option} value={option}>{option}</option>
+                  {masterData.assignedPersons.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
                   ))}
                 </select>
               </div>

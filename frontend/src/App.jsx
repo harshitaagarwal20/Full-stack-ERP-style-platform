@@ -7,6 +7,7 @@ import DashboardPage from "./pages/DashboardPage";
 import DispatchPage from "./pages/DispatchPage";
 import EnquiryPage from "./pages/EnquiryPage";
 import LoginPage from "./pages/LoginPage";
+import MasterDataPage from "./pages/MasterDataPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import OrderPage from "./pages/OrderPage";
 import ActivityLogPage from "./pages/ActivityLogPage";
@@ -42,6 +43,7 @@ function App() {
           <Route element={<ProtectedRoute roles={[ROLES.ADMIN]} />}>
             <Route path="/approval" element={<ApprovalPage />} />
             <Route path="/activity-log" element={<ActivityLogPage />} />
+            <Route path="/master-data" element={<MasterDataPage />} />
             <Route path="/users" element={<UsersPage />} />
           </Route>
 

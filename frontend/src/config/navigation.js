@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { to: "/dispatch", label: "Dispatch", icon: "truck", roles: ["admin", "sales", "production", "dispatch"] },
   { to: "/pending-export-date", label: "Pending Export Date", icon: "clipboard", roles: ["admin", "dispatch"] },
   { to: "/activity-log", label: "Activity Log", icon: "clipboard", roles: ["admin"] },
+  { to: "/master-data", label: "Master Data", icon: "clipboard", roles: ["admin"] },
   { to: "/users", label: "Users", icon: "users", roles: ["admin"] }
 ];
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../../api/axiosClient";
 import { EditIcon, EyeIcon, FactoryIcon } from "../../erp/ErpIcons";
@@ -7,20 +7,8 @@ import MobileFilterChips from "../common/MobileFilterChips";
 import MobileHeader from "../common/MobileHeader";
 import MobileSearchBar from "../common/MobileSearchBar";
 import MobileStatusBadge from "../common/MobileStatusBadge";
+import useMasterData from "../../../hooks/useMasterData";
 import { logApiError } from "../../../utils/apiError";
-
-const filters = [
-  { value: "all", label: "All" },
-  { value: "PENDING", label: "Pending" },
-  { value: "IN_PROGRESS", label: "In Progress" },
-  { value: "COMPLETED", label: "Completed" }
-];
-
-const productionStatusOptions = [
-  { value: "PENDING", label: "Pending" },
-  { value: "IN_PROGRESS", label: "In Progress" },
-  { value: "COMPLETED", label: "Completed" }
-];
 
 function formatDate(value) {
   return value ? new Date(value).toLocaleDateString() : "-";
@@ -40,6 +28,7 @@ function getOrderExportDate(order) {
 
 function ProductionMobileModule({ canManage = false }) {
   const navigate = useNavigate();
+  const masterData = useMasterData();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [records, setRecords] = useState([]);
@@ -54,8 +43,23 @@ function ProductionMobileModule({ canManage = false }) {
     delivery_date: "",
     capacity: "",
     remarks: "",
-    status: "PENDING"
+    status: "PENDING",
+    state: ""
   });
+  const filters = useMemo(
+    () => [
+      { value: "all", label: "All" },
+      ...masterData.productionStatuses.map((item) => ({
+        value: item.value,
+        label: item.label
+      }))
+    ],
+    [masterData.productionStatuses]
+  );
+  const productionStatusOptions = useMemo(
+    () => masterData.productionStatuses,
+    [masterData.productionStatuses]
+  );
 
   const fetchData = async (searchQuery = query, nextStatus = status) => {
     setLoading(true);
@@ -98,7 +102,8 @@ function ProductionMobileModule({ canManage = false }) {
         delivery_date: "",
         capacity: "",
         remarks: "",
-        status: "PENDING"
+        status: "PENDING",
+        state: ""
       });
       await fetchData();
     } catch (error) {
@@ -116,7 +121,8 @@ function ProductionMobileModule({ canManage = false }) {
       delivery_date: record.deliveryDate ? new Date(record.deliveryDate).toISOString().slice(0, 10) : "",
       capacity: record.capacity ? String(record.capacity) : "",
       remarks: record.remarks || "",
-      status: record.status || "PENDING"
+      status: record.status || "PENDING",
+      state: record.state || ""
     });
     setIsModalOpen(true);
   };
@@ -192,6 +198,7 @@ function ProductionMobileModule({ canManage = false }) {
                   <p><strong>Status:</strong> {editingRecord.status || "-"}</p>
                   <p><strong>Production Completion Date:</strong> {formatDate(editingRecord.productionCompletionDate)}</p>
                   <p><strong>Date of Export:</strong> {formatDate(getOrderExportDate(editingRecord.order))}</p>
+                  <p><strong>State:</strong> {editingRecord.state || "-"}</p>
                 </>
               )}
               <label>Status</label>
@@ -209,6 +216,13 @@ function ProductionMobileModule({ canManage = false }) {
                 value={form.capacity}
                 onChange={(event) => setForm((prev) => ({ ...prev, capacity: event.target.value }))}
                 required
+              />
+              <label>State</label>
+              <input
+                type="text"
+                placeholder="Enter production state"
+                value={form.state}
+                onChange={(event) => setForm((prev) => ({ ...prev, state: event.target.value }))}
               />
               <label>Remarks</label>
               <textarea
@@ -246,6 +260,7 @@ function ProductionMobileModule({ canManage = false }) {
               <p><strong>Status:</strong> {selectedRecord.status || "-"}</p>
               <p><strong>Delivery Date:</strong> {formatDate(selectedRecord.deliveryDate || selectedRecord.order?.deliveryDate)}</p>
               <p><strong>Production Completion Date:</strong> {formatDate(selectedRecord.productionCompletionDate)}</p>
+              <p><strong>State:</strong> {selectedRecord.state || "-"}</p>
               <p><strong>Quantity:</strong> {selectedRecord.order?.quantity || "-"}</p>
               <p><strong>Client:</strong> {selectedRecord.order?.clientName || "-"}</p>
             </div>

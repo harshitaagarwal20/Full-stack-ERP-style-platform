@@ -24,13 +24,23 @@ enum EnquiryStatus {
 enum OrderStatus {
   CREATED
   IN_PRODUCTION
+  READY_FOR_DISPATCH
+  PARTIALLY_DISPATCHED
   COMPLETED
   DISPATCHED
+}
+
+enum ManualOrderRequestStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  ORDER_CREATED
 }
 
 enum ProductionStatus {
   PENDING
   IN_PROGRESS
+  HOLD
   COMPLETED
 }
 
@@ -56,6 +66,8 @@ model User {
   enquiriesCreated   Enquiry[] @relation("EnquiryCreator")
   enquiriesApproved  Enquiry[] @relation("EnquiryApprover")
   ordersCreated      Order[]
+  manualOrderRequestsCreated ManualOrderRequest[] @relation("ManualOrderRequestCreator")
+  manualOrderRequestsApproved ManualOrderRequest[] @relation("ManualOrderRequestApprover")
   auditLogs          AuditLog[]
 
   @@index([createdAt, id])
@@ -84,9 +96,13 @@ model AuditLog {
 
 model Enquiry {
   id               Int           @id @default(autoincrement())
+  enquiryNumber    String?
   companyName      String
   product          String
+  products         Json?
   quantity         Int
+  price            Float?
+  currency         String?
   unitOfMeasurement String?
   enquiryDate      DateTime?
   modeOfEnquiry    String?
@@ -107,11 +123,14 @@ model Enquiry {
 model Order {
   id               Int         @id @default(autoincrement())
   enquiryId        Int?        @unique
+  salesGroupNumber String?
   salesOrderNumber String      @unique
   orderNo          String      @unique
   product          String
   grade            String
   quantity         Int
+  price            Float?
+  currency         String?
   unit             Unit
   packingType      String
   packingSize      String
@@ -122,7 +141,7 @@ model Order {
   pincode          String?
   state            String?
   countryCode      String?
-  exportDate       DateTime?
+  dispatchDate     DateTime?
   status           OrderStatus @default(CREATED)
   orderDate        DateTime    @default(now())
   remarks          String?
@@ -133,12 +152,45 @@ model Order {
   createdBy        User        @relation(fields: [createdById], references: [id], onDelete: Restrict)
   production       Production?
   dispatches       Dispatch[]
+  manualOrderRequest ManualOrderRequest? @relation("ManualOrderRequestToOrder")
+}
+
+model ManualOrderRequest {
+  id             Int                     @id @default(autoincrement())
+  requestNumber  String
+  product        String
+  grade          String
+  quantity       Int
+  unit           String
+  packingType    String
+  packingSize    String
+  dispatchDate   DateTime?
+  clientName     String
+  address        String?
+  city           String?
+  pincode        String?
+  state          String?
+  countryCode    String?
+  remarks        String?
+  status         ManualOrderRequestStatus @default(REQUESTED)
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  createdById    Int
+  approvedById   Int?
+  orderId        Int?                    @unique
+  createdBy      User                    @relation("ManualOrderRequestCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  approvedBy     User?                   @relation("ManualOrderRequestApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  order          Order?                  @relation("ManualOrderRequestToOrder", fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([requestNumber])
 }
 
 model Production {
   id                       Int              @id @default(autoincrement())
   orderId                  Int              @unique
   status                   ProductionStatus @default(PENDING)
+  statusChangeCount        Int              @default(0)
   state                    String?
   assignedPersonnel        String
   deliveryDate             DateTime
@@ -149,7 +201,7 @@ model Production {
   classifierRpm            Int
   blowerRpm                Int
   rawMaterials             String
-  remarks                  String?
+  remarks                  String?          @db.LongText
   productionCompletionDate DateTime?
   createdAt                DateTime         @default(now())
   updatedAt                DateTime         @updatedAt
@@ -167,4 +219,3 @@ model Dispatch {
   createdAt      DateTime       @default(now())
   order          Order          @relation(fields: [orderId], references: [id], onDelete: Restrict)
 }
-

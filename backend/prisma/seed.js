@@ -1,5 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { formatEnquiryNumber } from "../src/utils/businessNumbers.js";
+import { formatEnquiryProducts, normalizeEnquiryProductRows, normalizeEnquiryProducts } from "../src/utils/enquiryProducts.js";
 
 const prisma = new PrismaClient();
 
@@ -31,8 +33,10 @@ const DEMO_USERS = [
 const DEMO_ENQUIRIES = [
   {
     companyName: "Apex Polymers Pvt Ltd",
-    product: "CALCIUM STEARATE",
+    products: ["CALCIUM STEARATE", "ZINC STEARATE"],
     quantity: 25,
+    price: 18500,
+    currency: "INR",
     unitOfMeasurement: "KG",
     enquiryDate: new Date("2026-04-01T00:00:00.000Z"),
     modeOfEnquiry: "Phone",
@@ -43,8 +47,10 @@ const DEMO_ENQUIRIES = [
   },
   {
     companyName: "Nova Chemicals",
-    product: "ZINC STEARATE",
+    products: ["ZINC STEARATE", "Zinc Stearate", "CALCIUM ZINC STABILIZER"],
     quantity: 40,
+    price: 22800,
+    currency: "INR",
     unitOfMeasurement: "KG",
     enquiryDate: new Date("2026-04-02T00:00:00.000Z"),
     modeOfEnquiry: "Website",
@@ -55,8 +61,10 @@ const DEMO_ENQUIRIES = [
   },
   {
     companyName: "Sunrise Compounds",
-    product: "GMS 90",
+    products: ["GMS 90", "GMS 95", "GMS 97"],
     quantity: 18,
+    price: 9600,
+    currency: "INR",
     unitOfMeasurement: "KG",
     enquiryDate: new Date("2026-04-03T00:00:00.000Z"),
     modeOfEnquiry: "Walk-in",
@@ -67,8 +75,10 @@ const DEMO_ENQUIRIES = [
   },
   {
     companyName: "Matrix Additives",
-    product: "PE WAX",
+    products: ["PE WAX", "PE WAX-500", "NIMLUB - T"],
     quantity: 30,
+    price: 51000,
+    currency: "INR",
     unitOfMeasurement: "MT",
     enquiryDate: new Date("2026-04-04T00:00:00.000Z"),
     modeOfEnquiry: "Whatsapp",
@@ -79,8 +89,10 @@ const DEMO_ENQUIRIES = [
   },
   {
     companyName: "Vertex Industrial",
-    product: "MAGNESIUM STEARATE",
+    products: ["MAGNESIUM STEARATE", "HSA 12 MAGNESIUM STEARATE", "LITHIUM STEARATE"],
     quantity: 55,
+    price: 28400,
+    currency: "INR",
     unitOfMeasurement: "KG",
     enquiryDate: new Date("2026-04-05T00:00:00.000Z"),
     modeOfEnquiry: "We Reached Out",
@@ -91,11 +103,131 @@ const DEMO_ENQUIRIES = [
   }
 ];
 
+const DEMO_MULTI_PRODUCT_ENQUIRIES = [
+  {
+    companyName: "Dropdown Multi Enquiry Pvt Ltd",
+    products: [
+      { product: "PE WAX", grade: "A", quantity: 20, unit_of_measurement: "KG" },
+      { product: "GMS 90", grade: "B", quantity: 12, unit_of_measurement: "KG" }
+    ],
+    enquiryDate: new Date("2026-04-06T00:00:00.000Z"),
+    modeOfEnquiry: "Website",
+    expectedTimeline: new Date("2026-04-21T00:00:00.000Z"),
+    assignedPerson: "Sharun Mittal",
+    notesForProduction: "Seeded sample from the product dropdown with multiple selections.",
+    remarks: "Created as a sample multi-product enquiry.",
+    status: "PENDING"
+  }
+];
+
+const DEMO_MANUAL_ORDER_REQUESTS = [
+  {
+    requestNumber: "MOR_0001",
+    clientName: "Dropdown Multi Manual Order Pvt Ltd",
+    products: [
+      { product: "CALCIUM STEARATE", grade: "A", quantity: 10, unit_of_measurement: "KG" },
+      { product: "ZINC STEARATE", grade: "A", quantity: 15, unit_of_measurement: "KG" }
+    ],
+    dispatchDate: new Date("2026-04-14T00:00:00.000Z"),
+    packingType: "Bag",
+    packingSize: "25 KG",
+    address: "Plot 18, GIDC Estate",
+    city: "Ankleshwar",
+    pincode: "393002",
+    state: "Gujarat",
+    countryCode: "IN",
+    remarks: "Seeded manual order request from the product dropdown.",
+    status: "REQUESTED"
+  }
+];
+
 async function createUser({ name, email, password, role }) {
   const hashed = await bcrypt.hash(password, 10);
   return prisma.user.create({
     data: { name, email, password: hashed, role }
   });
+}
+
+async function createSeedEnquiryGroup(tx, enquiry, createdById) {
+  const productRows = normalizeEnquiryProductRows(enquiry.products ?? enquiry.product);
+  let enquiryNumber = null;
+  const createdRows = [];
+
+  for (const [index, row] of productRows.entries()) {
+    const createdRow = await tx.enquiry.create({
+      data: {
+        enquiryNumber,
+        enquiryDate: enquiry.enquiryDate,
+        modeOfEnquiry: enquiry.modeOfEnquiry,
+        companyName: enquiry.companyName,
+        product: formatEnquiryProducts([row]),
+        products: [row],
+        quantity: Number(row.quantity || 0) || 1,
+        price: enquiry.price ?? null,
+        currency: enquiry.currency ?? null,
+        unitOfMeasurement: row.unit_of_measurement || null,
+        expectedTimeline: enquiry.expectedTimeline,
+        assignedPerson: enquiry.assignedPerson,
+        notesForProduction: enquiry.notesForProduction,
+        remarks: enquiry.remarks ?? null,
+        status: enquiry.status,
+        createdById
+      }
+    });
+
+    if (index === 0) {
+      enquiryNumber = formatEnquiryNumber(createdRow.id);
+      createdRows.push(
+        await tx.enquiry.update({
+          where: { id: createdRow.id },
+          data: { enquiryNumber }
+        })
+      );
+      continue;
+    }
+
+    createdRows.push(
+      await tx.enquiry.update({
+        where: { id: createdRow.id },
+        data: { enquiryNumber }
+      })
+    );
+  }
+
+  return createdRows;
+}
+
+async function createSeedManualOrderRequestGroup(tx, request, createdById) {
+  const productRows = normalizeEnquiryProductRows(request.products ?? request.product);
+  const createdRows = [];
+
+  for (const row of productRows) {
+    const createdRow = await tx.manualOrderRequest.create({
+      data: {
+        requestNumber: request.requestNumber,
+        product: row.product,
+        grade: row.grade || "",
+        quantity: Number(row.quantity || 0) || 1,
+        unit: row.unit_of_measurement || "KG",
+        packingType: request.packingType,
+        packingSize: request.packingSize,
+        dispatchDate: request.dispatchDate,
+        clientName: request.clientName,
+        address: request.address || null,
+        city: request.city || null,
+        pincode: request.pincode || null,
+        state: request.state || null,
+        countryCode: request.countryCode || null,
+        remarks: request.remarks ?? null,
+        status: request.status,
+        createdById
+      }
+    });
+
+    createdRows.push(createdRow);
+  }
+
+  return createdRows;
 }
 
 async function main() {
@@ -122,11 +254,15 @@ async function main() {
   );
 
   for (const enquiry of DEMO_ENQUIRIES) {
+    const products = normalizeEnquiryProducts(enquiry.products ?? enquiry.product);
     await prisma.enquiry.create({
       data: {
         companyName: enquiry.companyName,
-        product: enquiry.product,
+        product: formatEnquiryProducts(products, enquiry.product),
+        products,
         quantity: enquiry.quantity,
+        price: enquiry.price ?? null,
+        currency: enquiry.currency ?? null,
         unitOfMeasurement: enquiry.unitOfMeasurement,
         enquiryDate: enquiry.enquiryDate,
         modeOfEnquiry: enquiry.modeOfEnquiry,
@@ -138,6 +274,18 @@ async function main() {
         status: enquiry.status
       }
     });
+  }
+
+  let seededEnquiryRows = DEMO_ENQUIRIES.length;
+  for (const enquiry of DEMO_MULTI_PRODUCT_ENQUIRIES) {
+    const createdRows = await prisma.$transaction((tx) => createSeedEnquiryGroup(tx, enquiry, sales1.id));
+    seededEnquiryRows += createdRows.length;
+  }
+
+  let seededManualOrderRequestRows = 0;
+  for (const request of DEMO_MANUAL_ORDER_REQUESTS) {
+    const createdRows = await prisma.$transaction((tx) => createSeedManualOrderRequestGroup(tx, request, sales2.id));
+    seededManualOrderRequestRows += createdRows.length;
   }
 
   const entries = [
@@ -212,7 +360,9 @@ async function main() {
     }
   }
 
-  console.log("Seed reset complete: 5 demo users, 5 enquiry entries, and 5 audit entries were created.");
+  console.log(
+    `Seed reset complete: 5 demo users, ${seededEnquiryRows} enquiry rows, ${seededManualOrderRequestRows} manual order request rows, and 5 audit entries were created.`
+  );
 }
 
 main()

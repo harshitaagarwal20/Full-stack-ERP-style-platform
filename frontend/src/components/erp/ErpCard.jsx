@@ -1,6 +1,6 @@
-function ErpCard({ icon, value, label, accent = "blue" }) {
+function ErpCard({ icon, value, label, accent = "blue", size = "md" }) {
   return (
-    <article className={`erp-stat-card ${accent}`}>
+    <article className={`erp-stat-card ${accent} ${size}`}>
       <div className="erp-stat-icon">{icon}</div>
       <div>
         <p className="erp-stat-value">{value}</p>

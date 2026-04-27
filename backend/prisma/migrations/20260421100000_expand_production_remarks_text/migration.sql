@@ -1,0 +1,2 @@
+ALTER TABLE `Production`
+MODIFY COLUMN `remarks` LONGTEXT NULL;

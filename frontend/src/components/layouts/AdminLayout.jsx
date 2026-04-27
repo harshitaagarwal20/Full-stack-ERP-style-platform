@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { getNavItemsByRole } from "../../config/navigation";
 import { useAuth } from "../../context/AuthContext";
@@ -22,6 +22,8 @@ function AdminLayout() {
   const location = useLocation();
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [installPromptEvent, setInstallPromptEvent] = useState(null);
+  const [isStandalone, setIsStandalone] = useState(false);
 
   const items = useMemo(
     () => getNavItemsByRole(user?.role).map((item) => ({ ...item, icon: iconMap[item.icon] })),
@@ -32,6 +34,53 @@ function AdminLayout() {
     const matched = items.find((item) => item.to === location.pathname);
     return matched?.label || "Nimbasia";
   }, [items, location.pathname]);
+
+  useEffect(() => {
+    // Always close drawer after navigation on compact screens.
+    setOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 900px)");
+    const onViewportChange = (event) => {
+      if (event.matches) {
+        setOpen(false);
+      }
+    };
+    mediaQuery.addEventListener("change", onViewportChange);
+    return () => mediaQuery.removeEventListener("change", onViewportChange);
+  }, []);
+
+  useEffect(() => {
+    const standaloneMode = window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone === true;
+    setIsStandalone(Boolean(standaloneMode));
+
+    const onBeforeInstallPrompt = (event) => {
+      event.preventDefault();
+      setInstallPromptEvent(event);
+    };
+
+    const onAppInstalled = () => {
+      setInstallPromptEvent(null);
+      setIsStandalone(true);
+    };
+
+    window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
+    window.addEventListener("appinstalled", onAppInstalled);
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
+      window.removeEventListener("appinstalled", onAppInstalled);
+    };
+  }, []);
+
+  const handleInstall = async () => {
+    if (!installPromptEvent) return;
+
+    installPromptEvent.prompt();
+    await installPromptEvent.userChoice;
+    setInstallPromptEvent(null);
+  };
 
   return (
     <div className="erp-shell">
@@ -51,6 +100,8 @@ function AdminLayout() {
           userName={user?.name || "Admin User"}
           onToggleSidebar={() => setOpen((prev) => !prev)}
           onLogout={logout}
+          canInstall={!isStandalone && Boolean(installPromptEvent)}
+          onInstall={handleInstall}
         />
         <main className="erp-content">
           <Outlet />

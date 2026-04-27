@@ -1,6 +1,3 @@
-ALTER TABLE `Order`
-  ADD COLUMN IF NOT EXISTS `address` VARCHAR(191) NULL,
-  ADD COLUMN IF NOT EXISTS `city` VARCHAR(191) NULL,
-  ADD COLUMN IF NOT EXISTS `pincode` VARCHAR(191) NULL,
-  ADD COLUMN IF NOT EXISTS `state` VARCHAR(191) NULL,
-  ADD COLUMN IF NOT EXISTS `countryCode` VARCHAR(191) NULL;
+-- No-op migration.
+-- The baseline schema already includes the Order location columns in this codebase.
+SELECT 1;

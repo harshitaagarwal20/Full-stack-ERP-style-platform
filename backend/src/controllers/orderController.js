@@ -3,6 +3,7 @@ import { createOrder, deleteOrder, listOrders, moveOrderToProduction, updateOrde
 export async function getOrders(req, res, next) {
   try {
     const orders = await listOrders(req.query);
+    res.setHeader("Cache-Control", "private, max-age=10");
     return res.json(orders);
   } catch (error) {
     return next(error);

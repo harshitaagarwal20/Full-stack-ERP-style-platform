@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronDownIcon, MenuIcon } from "./ErpIcons";
 
-function ErpNavbar({ pageTitle, userName, onToggleSidebar, onLogout }) {
+function ErpNavbar({ pageTitle, userName, onToggleSidebar, onLogout, canInstall = false, onInstall }) {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const profileRef = useRef(null);
 
@@ -47,6 +47,11 @@ function ErpNavbar({ pageTitle, userName, onToggleSidebar, onLogout }) {
       </div>
 
       <div className="erp-topbar-right">
+        {canInstall && (
+          <button className="erp-btn primary" onClick={onInstall}>
+            Install App
+          </button>
+        )}
         <div className="erp-topbar-control" ref={profileRef}>
           <button
             className={`erp-user-profile `}

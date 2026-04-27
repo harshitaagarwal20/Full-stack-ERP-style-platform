@@ -14,9 +14,13 @@ export const USER_MIN_SELECT = {
 
 export const ENQUIRY_LIST_SELECT = {
   id: true,
+  enquiryNumber: true,
   companyName: true,
   product: true,
+  products: true,
   quantity: true,
+  price: true,
+  currency: true,
   unitOfMeasurement: true,
   enquiryDate: true,
   modeOfEnquiry: true,
@@ -59,17 +63,19 @@ export const ORDER_PRODUCTION_SELECT = {
 
 export const ORDER_LIST_SELECT = {
   id: true,
-  enquiryId: true,
+  salesGroupNumber: true,
   salesOrderNumber: true,
   orderNo: true,
   product: true,
   grade: true,
   quantity: true,
+  price: true,
+  currency: true,
   unit: true,
   packingType: true,
   packingSize: true,
   deliveryDate: true,
-  exportDate: true,
+  dispatchDate: true,
   clientName: true,
   address: true,
   city: true,
@@ -85,10 +91,7 @@ export const ORDER_LIST_SELECT = {
   enquiry: {
     select: {
       id: true,
-      companyName: true,
-      product: true,
-      assignedPerson: true,
-      createdAt: true
+      enquiryNumber: true
     }
   },
   production: {
@@ -98,6 +101,47 @@ export const ORDER_LIST_SELECT = {
     select: ORDER_DISPATCH_SELECT,
     orderBy: {
       createdAt: "desc"
+    }
+  }
+};
+
+export const MANUAL_ORDER_REQUEST_SELECT = {
+  id: true,
+  requestNumber: true,
+  product: true,
+  grade: true,
+  quantity: true,
+  unit: true,
+  packingType: true,
+  packingSize: true,
+  dispatchDate: true,
+  clientName: true,
+  address: true,
+  city: true,
+  pincode: true,
+  state: true,
+  countryCode: true,
+  remarks: true,
+  status: true,
+  createdAt: true,
+  updatedAt: true,
+  createdById: true,
+  approvedById: true,
+  orderId: true,
+  createdBy: {
+    select: USER_MIN_SELECT
+  },
+  approvedBy: {
+    select: USER_MIN_SELECT
+  },
+  order: {
+    select: {
+      id: true,
+      salesGroupNumber: true,
+      salesOrderNumber: true,
+      orderNo: true,
+      price: true,
+      currency: true
     }
   }
 };
@@ -123,16 +167,19 @@ export const PRODUCTION_LIST_SELECT = {
   order: {
     select: {
       id: true,
+      salesGroupNumber: true,
       salesOrderNumber: true,
       orderNo: true,
       quantity: true,
+      price: true,
+      currency: true,
       unit: true,
       product: true,
       grade: true,
       packingType: true,
       packingSize: true,
       deliveryDate: true,
-      exportDate: true,
+      dispatchDate: true,
       clientName: true,
       city: true,
       pincode: true,
@@ -144,6 +191,7 @@ export const PRODUCTION_LIST_SELECT = {
       enquiry: {
         select: {
           id: true,
+          enquiryNumber: true,
           companyName: true,
           product: true,
           assignedPerson: true,
@@ -162,16 +210,19 @@ export const PRODUCTION_LIST_SELECT = {
 
 export const DISPATCH_ORDER_SELECT = {
   id: true,
+  salesGroupNumber: true,
   salesOrderNumber: true,
   orderNo: true,
   product: true,
   grade: true,
   quantity: true,
+  price: true,
+  currency: true,
   unit: true,
   packingType: true,
   packingSize: true,
   deliveryDate: true,
-  exportDate: true,
+  dispatchDate: true,
   clientName: true,
   city: true,
   pincode: true,
@@ -180,6 +231,12 @@ export const DISPATCH_ORDER_SELECT = {
   status: true,
   createdAt: true,
   updatedAt: true,
+  enquiry: {
+    select: {
+      id: true,
+      enquiryNumber: true
+    }
+  },
   production: {
     select: ORDER_PRODUCTION_SELECT
   },

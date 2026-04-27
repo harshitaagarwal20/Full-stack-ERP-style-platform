@@ -1,9 +1,11 @@
 import { createContext, useEffect, useContext, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "../api/axiosClient";
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
+  const navigate = useNavigate();
   const [user, setUser] = useState(() => {
     const raw = localStorage.getItem("fms_user");
     return raw ? JSON.parse(raw) : null;
@@ -28,16 +30,24 @@ export function AuthProvider({ children }) {
     localStorage.removeItem("fms_token");
     localStorage.removeItem("fms_user");
     setUser(null);
+    navigate("/login", { replace: true });
   };
 
   useEffect(() => {
-    const handleAuthExpired = () => {
+    const handleAuthExpired = (event) => {
+      const message = event?.detail?.message || "Session expired. Please sign in again.";
+      localStorage.removeItem("fms_token");
+      localStorage.removeItem("fms_user");
       setUser(null);
+      navigate("/login", {
+        replace: true,
+        state: { message }
+      });
     };
 
     window.addEventListener("fms-auth-expired", handleAuthExpired);
     return () => window.removeEventListener("fms-auth-expired", handleAuthExpired);
-  }, []);
+  }, [navigate]);
 
   const value = useMemo(
     () => ({

@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import api from "../api/axiosClient";
+import VirtualizedTableBody from "../components/common/VirtualizedTableBody";
 import { ClipboardIcon, SearchIcon } from "../components/erp/ErpIcons";
 import { logApiError } from "../utils/apiError";
 
@@ -27,7 +28,7 @@ function formatDateTime(value) {
 function prettyValue(value) {
   if (value == null) return "-";
   try {
-    return JSON.stringify(value, null, 2);
+    return typeof value === "string" ? value : JSON.stringify(value, null, 2);
   } catch {
     return String(value);
   }
@@ -48,6 +49,7 @@ function ActivityLogPage() {
   const [actionFilter, setActionFilter] = useState("ALL");
   const [entityFilter, setEntityFilter] = useState("ALL");
   const [selectedLog, setSelectedLog] = useState(null);
+  const tableWrapRef = useRef(null);
 
   const fetchLogs = async () => {
     setLoading(true);
@@ -97,8 +99,7 @@ function ActivityLogPage() {
           </div>
           <div>
             <h2>Activity Log</h2>
-            <p>Track approvals, production changes, dispatch actions, and deletions in one place.</p>
-          </div>
+            </div>
         </div>
         <button className="activity-refresh-btn" onClick={fetchLogs}>Refresh</button>
       </section>
@@ -131,7 +132,7 @@ function ActivityLogPage() {
         {loading ? (
           <div className="activity-empty">Loading activity log...</div>
         ) : filteredLogs.length ? (
-          <div className="activity-table-wrap">
+          <div className="activity-table-wrap" ref={tableWrapRef}>
             <div className="activity-table-meta">
               Showing {filteredLogs.length} activity record{filteredLogs.length === 1 ? "" : "s"}
             </div>
@@ -147,8 +148,14 @@ function ActivityLogPage() {
                   
                 </tr>
               </thead>
-              <tbody>
-                {filteredLogs.map((log) => (
+              <VirtualizedTableBody
+                rows={filteredLogs}
+                colSpan={6}
+                rowHeight={52}
+                overscan={10}
+                scrollContainerRef={tableWrapRef}
+                getRowKey={(log) => log.id}
+                renderRow={(log) => (
                   <tr key={log.id}>
                     <td>{formatDateTime(log.createdAt)}</td>
                     <td>
@@ -164,15 +171,14 @@ function ActivityLogPage() {
                         <span>{log.actorRole || log.actor?.role || "-"}</span>
                       </div>
                     </td>
-                    
                     <td>
                       <button className="activity-view-btn" onClick={() => setSelectedLog(log)}>
                         View
                       </button>
                     </td>
                   </tr>
-                ))}
-              </tbody>
+                )}
+              />
             </table>
           </div>
         ) : (
@@ -198,9 +204,13 @@ function ActivityLogPage() {
             </div>
 
             <div className="activity-modal-meta">
+              <p><span>Time:</span> {formatDateTime(selectedLog.createdAt)}</p>
+              <p><span>Action:</span> {actionLabels[selectedLog.action] || selectedLog.action}</p>
+              <p><span>Module:</span> {selectedLog.entityType}</p>
+              <p><span>Record ID:</span> {selectedLog.entityId ?? "-"}</p>
               <p><span>User:</span> {selectedLog.actorName || selectedLog.actor?.name || "System"}</p>
               <p><span>Role:</span> {selectedLog.actorRole || selectedLog.actor?.role || "-"}</p>
-              
+              <p><span>Note:</span> {selectedLog.note || "-"}</p>
             </div>
 
             <div className="activity-json-grid">

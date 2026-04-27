@@ -3,8 +3,9 @@ import {
   deleteDispatch,
   getDispatchDashboard,
   updateDispatch,
-  updateOrderExportDate
+  updateOrderDispatchDate
 } from "../services/dispatchService.js";
+import { setManualOrderDispatchDate } from "../services/manualOrderRequestService.js";
 
 function toPositiveIntOrThrow(rawValue, fieldLabel) {
   const value = Number(rawValue);
@@ -19,6 +20,7 @@ function toPositiveIntOrThrow(rawValue, fieldLabel) {
 export async function getDispatch(req, res, next) {
   try {
     const data = await getDispatchDashboard(req.query);
+    res.setHeader("Cache-Control", "private, max-age=10");
     return res.json(data);
   } catch (error) {
     return next(error);
@@ -54,11 +56,21 @@ export async function removeDispatch(req, res, next) {
   }
 }
 
-export async function setOrderExportDate(req, res, next) {
+export async function setOrderDispatchDate(req, res, next) {
   try {
     const enquiryId = toPositiveIntOrThrow(req.params.enquiryId, "enquiry id");
-    const order = await updateOrderExportDate(enquiryId, req.validatedBody, req.user);
+    const order = await updateOrderDispatchDate(enquiryId, req.validatedBody, req.user);
     return res.json(order);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function setManualOrderDispatchDateOnDispatchPage(req, res, next) {
+  try {
+    const requestId = toPositiveIntOrThrow(req.params.requestId, "manual order request id");
+    const result = await setManualOrderDispatchDate(requestId, req.validatedBody, req.user);
+    return res.json(result);
   } catch (error) {
     return next(error);
   }

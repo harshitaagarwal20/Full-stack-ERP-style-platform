@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import api from "../api/axiosClient";
 import { useAuth } from "../context/AuthContext";
 import { logApiError } from "../utils/apiError";
+import { getDisplaySalesNumber } from "../utils/businessNumbers";
 
 function toPositiveNumber(value) {
   const parsed = Number(value);
@@ -64,7 +65,7 @@ function ProductionCompletePage() {
         setRecord(found || null);
         if (found?.order) {
           setBatchRows([{
-            sales_order_no: found.order.salesOrderNumber || "",
+            sales_order_no: getDisplaySalesNumber(found.order) || "",
             product: found.order.product || found.order?.enquiry?.product || "",
             total_qty: Number(found.order.quantity || 0),
             batch_no: "B1",
@@ -93,7 +94,7 @@ function ProductionCompletePage() {
     setBatchRows((prev) => ([
       ...prev,
       {
-        sales_order_no: record.order.salesOrderNumber || "",
+        sales_order_no: getDisplaySalesNumber(record.order) || "",
         product: record.order.product || record.order?.enquiry?.product || "",
         total_qty: Number(record.order.quantity || 0),
         batch_no: `B${prev.length + 1}`,
@@ -108,13 +109,14 @@ function ProductionCompletePage() {
 
   const onSubmit = async (event) => {
     event.preventDefault();
+    event.preventDefault();
     if (!record || !canManageProduction) return;
     setSaving(true);
     try {
       await api.put(`/production/${record.id}/edit`, {
         remarks: [
           record.remarks || "",
-          `Completed Qty: ${totalProduced || "-"}`,
+          `Completed Quantity: ${totalProduced || "-"}`,
           `Completion Date: ${form.completion_date || "-"}`,
           `Batch Tracking: ${JSON.stringify(trackedRows)}`,
           `Notes: ${form.notes || "-"}`
@@ -142,9 +144,9 @@ function ProductionCompletePage() {
 
       <div className="mapp-card">
         <p><strong>Order:</strong> {record.order?.orderNo}</p>
-        <p><strong>Sales Order No:</strong> {record.order?.salesOrderNumber || "-"}</p>
+        <p><strong>Sales ID:</strong> {getDisplaySalesNumber(record.order) || "-"}</p>
         <p><strong>Product:</strong> {record.order?.product || record.order?.enquiry?.product}</p>
-        <p><strong>Grade / QTY:</strong> {record.order?.grade || "-"} / {record.order?.quantity || 0}</p>
+        <p><strong>Grade / QUANTITY:</strong> {record.order?.grade || "-"} / {record.order?.quantity || 0}</p>
         <p><strong>Assigned:</strong> {record.assignedPersonnel}</p>
       </div>
 
@@ -155,12 +157,12 @@ function ProductionCompletePage() {
               <thead>
                 <tr>
                   <th>#</th>
-                  <th>Sales Order No</th>
+                  <th>Sales ID</th>
                   <th>Product</th>
                   <th>Batch No</th>
-                  <th>Produced Qty</th>
+                  <th>Produced Quantity</th>
                   <th>Cumulative Produced</th>
-                  <th>Remaining Qty</th>
+                  <th>Remaining Quantity</th>
                   <th>Batch Status</th>
                   <th>Action</th>
                 </tr>

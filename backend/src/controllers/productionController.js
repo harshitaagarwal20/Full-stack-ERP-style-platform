@@ -12,6 +12,7 @@ export async function addProduction(req, res, next) {
 export async function getProductionOrders(req, res, next) {
   try {
     const records = await listProductionOrders(req.query);
+    res.setHeader("Cache-Control", "private, max-age=10");
     return res.json(records);
   } catch (error) {
     return next(error);

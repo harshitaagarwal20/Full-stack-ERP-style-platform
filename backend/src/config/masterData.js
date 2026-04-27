@@ -1,8 +1,8 @@
 export const RAW_MASTER_DATA = {
   roles: ["admin", "sales", "production", "dispatch"],
   enquiryStatuses: ["PENDING", "ACCEPTED", "HOLD", "REJECTED"],
-  orderStatuses: ["CREATED", "IN_PRODUCTION", "DISPATCHED", "COMPLETED"],
-  productionStatuses: ["PENDING", "IN_PROGRESS", "COMPLETED"],
+  orderStatuses: ["CREATED", "IN_PRODUCTION", "READY_FOR_DISPATCH", "PARTIALLY_DISPATCHED", "COMPLETED"],
+  productionStatuses: ["PENDING", "IN_PROGRESS", "HOLD", "COMPLETED"],
   shipmentStatuses: ["PACKING", "SHIPPED", "DELIVERED"],
   units: ["KG", "MT", "LTR"],
   modeOfEnquiry: ["Phone", "Whatsapp", "Website", "We Reached Out", "Walk-in", "Other"],
@@ -69,12 +69,25 @@ function toOptions(values) {
   return values.map((value) => ({ value, label: String(value) }));
 }
 
+const PRODUCTION_STATUS_OPTIONS = [
+  { value: "PENDING", label: "Not Started" },
+  { value: "IN_PROGRESS", label: "Started" },
+  { value: "HOLD", label: "Hold" },
+  { value: "COMPLETED", label: "Completed" }
+];
+
+const SHIPMENT_STATUS_OPTIONS = [
+  { value: "PACKING", label: "Packed" },
+  { value: "SHIPPED", label: "Dispatched" },
+  { value: "DELIVERED", label: "Delivered" }
+];
+
 export const MASTER_DATA = {
   roles: toOptions(RAW_MASTER_DATA.roles),
   enquiryStatuses: toOptions(RAW_MASTER_DATA.enquiryStatuses),
   orderStatuses: toOptions(RAW_MASTER_DATA.orderStatuses),
-  productionStatuses: toOptions(RAW_MASTER_DATA.productionStatuses),
-  shipmentStatuses: toOptions(RAW_MASTER_DATA.shipmentStatuses),
+  productionStatuses: PRODUCTION_STATUS_OPTIONS,
+  shipmentStatuses: SHIPMENT_STATUS_OPTIONS,
   units: toOptions(RAW_MASTER_DATA.units),
   modeOfEnquiry: toOptions(RAW_MASTER_DATA.modeOfEnquiry),
   assignedPersons: toOptions(RAW_MASTER_DATA.assignedPersons),

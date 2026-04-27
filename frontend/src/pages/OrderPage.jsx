@@ -1,13 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/axiosClient";
-import OrdersMobileModule from "../components/mobile/modules/OrdersMobileModule";
-import { BoxesIcon, EditIcon, EyeIcon, FactoryIcon, SearchIcon, TrashIcon } from "../components/erp/ErpIcons";
+import VirtualizedTableBody from "../components/common/VirtualizedTableBody";
+import { BoxesIcon, EditIcon, EyeIcon, SearchIcon, TrashIcon } from "../components/erp/ErpIcons";
 import { useAuth } from "../context/AuthContext";
 import useMasterData from "../hooks/useMasterData";
-import useIsMobile from "../hooks/useIsMobile";
 import { logApiError } from "../utils/apiError";
+import { findCustomerProfile } from "../utils/customerLookup";
 import { exportRowsToExcel } from "../utils/exportExcel";
+import { CURRENCY_OPTIONS, formatPriceValue } from "../utils/commerce";
+import { getDisplaySalesGroupNumber } from "../utils/businessNumbers";
+import { formatEnquiryProducts } from "../utils/enquiryProducts";
 
 function formatDate(dateValue) {
   return dateValue ? new Date(dateValue).toLocaleDateString() : "-";
@@ -29,14 +32,18 @@ function getClientCode(clientName, orderId) {
 
 function getOrderStatusClass(status) {
   if (status === "IN_PRODUCTION") return "in-production";
-  if (status === "DISPATCHED" || status === "COMPLETED") return "dispatched";
+  if (status === "READY_FOR_DISPATCH") return "ready";
+  if (status === "PARTIALLY_DISPATCHED") return "partial";
+  if (status === "COMPLETED" || status === "DISPATCHED") return "dispatched";
   if (status === "APPROVED") return "approved";
   return "created";
 }
 
 function getOrderStatusLabel(status) {
   if (status === "IN_PRODUCTION") return "In Production";
-  if (status === "DISPATCHED") return "Dispatched";
+  if (status === "READY_FOR_DISPATCH") return "Ready for Dispatch";
+  if (status === "PARTIALLY_DISPATCHED") return "Partially Dispatched";
+  if (status === "DISPATCHED") return "Completed";
   if (status === "COMPLETED") return "Completed";
   if (status === "APPROVED") return "Approved";
   return "Created";
@@ -44,10 +51,10 @@ function getOrderStatusLabel(status) {
 
 function getProductionStatusLabel(order) {
   if (order.production?.status === "COMPLETED") return "Completed";
-  if (order.production?.status === "IN_PROGRESS") return "In Progress";
-  if (order.status === "DISPATCHED" || order.status === "COMPLETED") return "Completed";
-  if (order.status === "IN_PRODUCTION") return "In Progress";
-  return "Pending";
+  if (order.production?.status === "IN_PROGRESS") return "Started";
+  if (order.status === "READY_FOR_DISPATCH" || order.status === "PARTIALLY_DISPATCHED" || order.status === "DISPATCHED" || order.status === "COMPLETED") return "Completed";
+  if (order.status === "IN_PRODUCTION") return "Started";
+  return "Not Started";
 }
 
 function getLatestDispatchDate(order) {
@@ -57,9 +64,9 @@ function getLatestDispatchDate(order) {
   return sorted[0]?.dispatchDate || null;
 }
 
-function getOrderExportDate(order) {
+function getOrderDispatchDate(order) {
   const convertedFromEnquiry = String(order?.remarks || "").toLowerCase().includes("created from approved enquiry");
-  return order?.exportDate || getLatestDispatchDate(order) || (convertedFromEnquiry ? order?.deliveryDate : null);
+  return order?.dispatchDate || getLatestDispatchDate(order) || (convertedFromEnquiry ? order?.deliveryDate : null);
 }
 
 function getMissingLocationFields(order) {
@@ -71,12 +78,37 @@ function getMissingLocationFields(order) {
   return missing;
 }
 
+const UNIT_OPTIONS = ["MT", "KG"];
+
+function createEmptyProductRow() {
+  return { product: "", grade: "", quantity: "", unit_of_measurement: "" };
+}
+
+function createCreateForm() {
+  return {
+    product: "",
+    grade: "",
+    quantity: "",
+    price: "",
+    currency: "INR",
+    unit: "KG",
+    delivery_date: "",
+    client_name: "",
+    address: "",
+    city: "",
+    pincode: "",
+    state: "",
+    country_code: "IN",
+    remarks: "",
+    products: [createEmptyProductRow()]
+  };
+}
+
 function OrderPage() {
   const PAGE_SIZE = 10;
   const navigate = useNavigate();
   const { user } = useAuth();
   const masterData = useMasterData();
-  const isMobile = useIsMobile();
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -90,30 +122,47 @@ function OrderPage() {
   const [dateFilter, setDateFilter] = useState("");
   const [sortConfig, setSortConfig] = useState({ key: "createdAt", direction: "desc" });
   const [currentPage, setCurrentPage] = useState(1);
-  const [form, setForm] = useState({
-    product: "",
-    grade: "",
-    quantity: "",
-    unit: "KG",
-    packing_type: "",
-    packing_size: "",
-    delivery_date: "",
-    client_name: "",
-    address: "",
-    city: "",
-    pincode: "",
-    state: "",
-    country_code: "IN",
-    remarks: ""
-  });
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [form, setForm] = useState(createCreateForm());
+  const tableWrapRef = useRef(null);
   const customerMasterRows = useMemo(
     () => (Array.isArray(masterData.customerMaster) ? masterData.customerMaster : []),
     [masterData.customerMaster]
   );
   const selectedCustomerProfile = useMemo(
-    () => customerMasterRows.find((item) => item.customerName === form.client_name) || null,
+    () => findCustomerProfile(customerMasterRows, form.client_name),
     [customerMasterRows, form.client_name]
   );
+  const getOrderLocation = (order) => {
+    const profile = findCustomerProfile(customerMasterRows, order?.clientName);
+    return {
+      city: (order?.city || profile?.city || "").trim(),
+      pincode: (order?.pincode || profile?.pincode || "").trim(),
+      state: (order?.state || profile?.state || "").trim(),
+      countryCode: (order?.countryCode || profile?.countryCode || "").trim()
+    };
+  };
+  const selectedOrderLocation = useMemo(
+    () => (selectedOrder ? getOrderLocation(selectedOrder) : null),
+    [selectedOrder, customerMasterRows]
+  );
+  const orderUnitOptions = useMemo(() => {
+    const current = String(form.unit || "").trim();
+    if (current && !UNIT_OPTIONS.includes(current)) {
+      return [current, ...UNIT_OPTIONS];
+    }
+    return UNIT_OPTIONS;
+  }, [form.unit]);
+  const productOptions = useMemo(() => {
+    const options = Array.isArray(masterData.products) ? masterData.products : [];
+    const current = String(form.product || "").trim();
+    if (current && !options.some((item) => item.value === current)) {
+      return [{ value: current, label: current }, ...options];
+    }
+    return options;
+  }, [form.product, masterData.products]);
+  const requestProductOptions = productOptions;
   const statusFilterOptions = useMemo(
     () => [
       { value: "all", label: "All Status" },
@@ -125,16 +174,25 @@ function OrderPage() {
     [masterData.orderStatuses]
   );
 
-  const fetchData = async (searchQuery = query, status = statusFilter) => {
+  const fetchData = async () => {
     setLoading(true);
     try {
       const ordersRes = await api.get("/orders", {
         params: {
-          q: searchQuery || undefined,
-          status: status === "all" ? undefined : status
+          q: query || undefined,
+          status: statusFilter === "all" ? undefined : statusFilter,
+          client: clientFilter || undefined,
+          date: dateFilter || undefined,
+          page: currentPage,
+          limit: PAGE_SIZE
         }
       });
-      setOrders(ordersRes.data || []);
+      const payload = ordersRes.data;
+      const items = Array.isArray(payload?.items) ? payload.items : Array.isArray(payload) ? payload : [];
+      const pagination = payload?.pagination || null;
+      setOrders(items);
+      setTotalPages(Math.max(1, Number(pagination?.totalPages || 1)));
+      setTotalRecords(Number(pagination?.total || items.length));
     } catch (error) {
       logApiError(error, "Failed to load orders");
     } finally {
@@ -143,27 +201,17 @@ function OrderPage() {
   };
 
   useEffect(() => {
-    fetchData("", "all");
-  }, []);
-
-  const filteredOrders = useMemo(() => {
-    return orders.filter((order) => {
-      const matchesClient = clientFilter
-        ? (order.clientName || "").toLowerCase().includes(clientFilter.toLowerCase())
-        : true;
-      const matchesDate = dateFilter ? new Date(order.deliveryDate).toISOString().slice(0, 10) === dateFilter : true;
-      return matchesClient && matchesDate;
-    });
-  }, [orders, clientFilter, dateFilter]);
+    fetchData();
+  }, [query, statusFilter, clientFilter, dateFilter, currentPage]);
 
   const sortedOrders = useMemo(() => {
-    const sorted = [...filteredOrders];
+    const sorted = [...orders];
     const { key, direction } = sortConfig;
     const sign = direction === "asc" ? 1 : -1;
 
     const getValue = (order) => {
       if (key === "createdAt") return new Date(order.createdAt || order.orderDate || 0).getTime();
-      if (key === "salesOrderNumber") return String(order.salesOrderNumber || "").toLowerCase();
+      if (key === "salesOrderNumber") return String(getDisplaySalesGroupNumber(order) || "").toLowerCase();
       if (key === "product") return String(order.product || "").toLowerCase();
       if (key === "quantity") return Number(order.quantity || 0);
       if (key === "deliveryDate") return new Date(order.deliveryDate || 0).getTime();
@@ -181,14 +229,7 @@ function OrderPage() {
     });
 
     return sorted;
-  }, [filteredOrders, sortConfig]);
-
-  const totalPages = Math.max(1, Math.ceil(sortedOrders.length / PAGE_SIZE));
-
-  const paginatedOrders = useMemo(() => {
-    const start = (currentPage - 1) * PAGE_SIZE;
-    return sortedOrders.slice(start, start + PAGE_SIZE);
-  }, [sortedOrders, currentPage]);
+  }, [orders, sortConfig]);
 
   useEffect(() => {
     if (currentPage > totalPages) {
@@ -209,7 +250,6 @@ function OrderPage() {
     const nextQuery = searchText.trim();
     setQuery(nextQuery);
     setCurrentPage(1);
-    fetchData(nextQuery, statusFilter);
   };
 
   const submitOrder = async (event) => {
@@ -217,32 +257,57 @@ function OrderPage() {
     if (!canCreate) return;
     setCreating(true);
     try {
-      const payload = {
-        ...form,
-        quantity: Number(form.quantity)
-      };
-
       if (editingOrderId) {
+        const payload = {
+          ...form,
+          quantity: Number(form.quantity),
+          price: form.price === "" ? null : Number(form.price),
+          currency: form.currency || null
+        };
         await api.put(`/orders/${editingOrderId}`, payload);
       } else {
-        await api.post("/orders", payload);
+        const productRows = (form.products || [])
+          .map((row) => ({
+            product: String(row.product || "").trim(),
+            grade: String(row.grade || "").trim(),
+            quantity: Number(row.quantity || 0),
+            unit_of_measurement: String(row.unit_of_measurement || "").trim()
+          }))
+          .filter((row) => row.product);
+
+        if (!productRows.length) {
+          window.alert("Add at least one product before saving the manual request.");
+          setCreating(false);
+          return;
+        }
+
+        const invalidRow = productRows.find((row) => !row.quantity || !row.unit_of_measurement);
+        if (invalidRow) {
+          window.alert("Fill product, quantity, and unit of measurement for each requested row.");
+          setCreating(false);
+          return;
+        }
+
+        const productSummary = formatEnquiryProducts(productRows);
+        const payload = {
+          client_name: form.client_name,
+          address: form.address,
+          city: form.city,
+          pincode: form.pincode,
+          state: form.state,
+          country_code: form.country_code,
+          delivery_date: form.delivery_date,
+          remarks: form.remarks || null,
+          products: productRows,
+          product: productSummary,
+          unit: productRows[0]?.unit_of_measurement || "KG",
+          quantity: productRows.reduce((sum, row) => sum + Number(row.quantity || 0), 0),
+          grade: productRows[0]?.grade || ""
+        };
+        await api.post("/manual-orders", payload);
+        navigate("/approval");
       }
-      setForm({
-        product: "",
-        grade: "",
-        quantity: "",
-        unit: "KG",
-        packing_type: "",
-        packing_size: "",
-        delivery_date: "",
-        client_name: "",
-        address: "",
-        city: "",
-        pincode: "",
-        state: "",
-        country_code: "IN",
-        remarks: ""
-      });
+      setForm(createCreateForm());
       setEditingOrderId(null);
       setIsCreateModalOpen(false);
       await fetchData();
@@ -253,20 +318,36 @@ function OrderPage() {
     }
   };
 
-  const exportOrders = () => {
+  const exportOrders = async () => {
+    let exportSource = sortedOrders;
+    try {
+      const { data } = await api.get("/orders", {
+        params: {
+          q: query || undefined,
+          status: statusFilter === "all" ? undefined : statusFilter,
+          client: clientFilter || undefined,
+          date: dateFilter || undefined,
+          page: 1,
+          limit: 0
+        }
+      });
+      exportSource = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : sortedOrders;
+    } catch {
+      // Fall back to currently loaded page.
+    }
+
     exportRowsToExcel(
       `orders_${new Date().toISOString().slice(0, 10)}.csv`,
       [
         { key: "timestamp", header: "Timestamp" },
-        { key: "salesOrderNumber", header: "Sales Order" },
+        { key: "salesGroupNumber", header: "Sales ID" },
         { key: "orderNo", header: "Order No" },
-        { key: "enquiryId", header: "Enquiry ID" },
         { key: "product", header: "Product" },
         { key: "grade", header: "Grade" },
         { key: "quantity", header: "Qty" },
+        { key: "price", header: "Price" },
+        { key: "currency", header: "Currency" },
         { key: "unit", header: "Unit of Measurement" },
-        { key: "packagingType", header: "Packaging Type" },
-        { key: "packagingSize", header: "Packaging Size" },
         { key: "expectedTimeline", header: "Expected Timeline" },
         { key: "clientName", header: "Client Name" },
         { key: "clientCode", header: "Client Code" },
@@ -277,31 +358,35 @@ function OrderPage() {
         { key: "countryCode", header: "Country Code" },
         { key: "prodStatus", header: "Prod Status" },
         { key: "prodCompDate", header: "Prod Comp Date" },
-        { key: "exportDate", header: "Export Date" },
+        { key: "dispatchDate", header: "Dispatch Date" },
         { key: "status", header: "Order Status" }
       ],
-      filteredOrders.map((order) => ({
+      exportSource.map((order) => ({
+        ...(function () {
+          const location = getOrderLocation(order);
+          return {
+            city: location.city || "-",
+            pincode: location.pincode || "-",
+            state: location.state || "-",
+            countryCode: location.countryCode || "-"
+          };
+        })(),
         timestamp: formatDateTime(order.createdAt || order.orderDate),
-        salesOrderNumber: order.salesOrderNumber,
+        salesGroupNumber: getDisplaySalesGroupNumber(order),
         orderNo: order.orderNo,
-        enquiryId: order.enquiryId,
         product: order.product,
         grade: order.grade,
         quantity: order.quantity,
+        price: formatPriceValue(order.price),
+        currency: order.currency || "-",
         unit: order.unit,
-        packagingType: order.packingType || "-",
-        packagingSize: order.packingSize || "-",
         expectedTimeline: formatDate(order.deliveryDate),
         clientName: order.clientName,
         clientCode: getClientCode(order.clientName, order.id),
         address: order.address || "-",
-        city: order.city || "-",
-        pincode: order.pincode || "-",
-        state: order.state || "-",
-        countryCode: order.countryCode || "-",
         prodStatus: getProductionStatusLabel(order),
         prodCompDate: formatDate(order.production?.productionCompletionDate),
-        exportDate: formatDate(getOrderExportDate(order)),
+        dispatchDate: formatDate(getOrderDispatchDate(order)),
         status: getOrderStatusLabel(order.status)
       }))
     );
@@ -309,13 +394,34 @@ function OrderPage() {
 
   const moveToProduction = async (order) => {
     if (!canCreate) return;
-    const missing = getMissingLocationFields(order);
+    const location = getOrderLocation(order);
+    const missing = getMissingLocationFields({
+      city: location.city,
+      pincode: location.pincode,
+      state: location.state,
+      countryCode: location.countryCode
+    });
     if (missing.length > 0) {
       window.alert(`Fill these fields before starting production: ${missing.join(", ")}.`);
       return;
     }
 
     try {
+      // Keep order row in sync so backend validations for production pass.
+      if (
+        location.city !== (order.city || "") ||
+        location.pincode !== (order.pincode || "") ||
+        location.state !== (order.state || "") ||
+        location.countryCode !== (order.countryCode || "")
+      ) {
+        await api.put(`/orders/${order.id}`, {
+          client_name: order.clientName,
+          city: location.city,
+          pincode: location.pincode,
+          state: location.state,
+          country_code: location.countryCode
+        });
+      }
       await api.post("/production", { order_id: order.id });
       await fetchData();
       navigate("/production");
@@ -326,22 +432,24 @@ function OrderPage() {
 
   const onEdit = (order) => {
     if (!canCreate) return;
+    const location = getOrderLocation(order);
     setEditingOrderId(order.id);
     setForm({
       product: order.product || "",
       grade: order.grade || "",
       quantity: order.quantity ? String(order.quantity) : "",
+      price: order.price ?? "",
+      currency: order.currency || "",
       unit: order.unit || "KG",
-      packing_type: order.packingType || "",
-      packing_size: order.packingSize || "",
       delivery_date: order.deliveryDate ? new Date(order.deliveryDate).toISOString().slice(0, 10) : "",
       client_name: order.clientName || "",
       address: order.address || "",
-      city: order.city || "",
-      pincode: order.pincode || "",
-      state: order.state || "",
-      country_code: order.countryCode || "IN",
-      remarks: order.remarks || ""
+      city: location.city || "",
+      pincode: location.pincode || "",
+      state: location.state || "",
+      country_code: location.countryCode || "IN",
+      remarks: order.remarks || "",
+      products: [createEmptyProductRow()]
     });
     setIsCreateModalOpen(true);
   };
@@ -360,31 +468,36 @@ function OrderPage() {
   const canCreate = user.role === "sales" || user.role === "admin";
 
   const onCustomerChange = (customerName) => {
-    const profile = customerMasterRows.find((item) => item.customerName === customerName);
+    const normalizedName = String(customerName || "").trim();
+    const profile = findCustomerProfile(customerMasterRows, normalizedName);
     if (!profile) {
-      setForm((prev) => ({ ...prev, client_name: customerName }));
+      setForm((prev) => ({
+        ...prev,
+        client_name: normalizedName,
+        address: "",
+        city: "",
+        pincode: "",
+        state: "",
+        country_code: "IN"
+      }));
       return;
     }
 
     setForm((prev) => ({
       ...prev,
-      client_name: customerName,
-      address: profile.address || prev.address,
-      city: profile.city || prev.city,
-      pincode: profile.pincode || prev.pincode,
-      state: profile.state || prev.state,
-      country_code: profile.countryCode || prev.country_code
+      client_name: normalizedName,
+      address: profile.address || "",
+      city: profile.city || "",
+      pincode: profile.pincode || "",
+      state: profile.state || "",
+      country_code: profile.countryCode || "IN"
     }));
   };
-
-  if (isMobile) {
-    return <OrdersMobileModule canCreate={canCreate} />;
-  }
 
   return (
     <div className="order-page">
       <section className="order-card order-header-card">
-        <h2>Order Module</h2>
+        <h2>Order </h2>
         <div className="order-header-right">
           <div className="order-header-search">
             <SearchIcon />
@@ -402,35 +515,21 @@ function OrderPage() {
               className="order-btn-primary"
               onClick={() => {
                 setEditingOrderId(null);
-                setForm({
-                  product: "",
-                  grade: "",
-                  quantity: "",
-                  unit: "KG",
-                  packing_type: "",
-                  packing_size: "",
-                  delivery_date: "",
-                  client_name: "",
-                  address: "",
-                  city: "",
-                  pincode: "",
-                  state: "",
-                  country_code: "IN",
-                  remarks: ""
-                });
+                setForm(createCreateForm());
                 setIsCreateModalOpen(true);
               }}
             >
-              Create Manual Order
+              Create Manual Request
             </button>
           )}
+         
         </div>
       </section>
 
       <section className="order-card">
         <div className="order-toolbar">
           <div className="order-filter-grid">
-            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+            <select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setCurrentPage(1); }}>
               {statusFilterOptions.map((option) => (
                 <option key={option.value} value={option.value}>{option.label}</option>
               ))}
@@ -439,9 +538,9 @@ function OrderPage() {
               type="text"
               placeholder="Filter by client"
               value={clientFilter}
-              onChange={(event) => setClientFilter(event.target.value)}
+              onChange={(event) => { setClientFilter(event.target.value); setCurrentPage(1); }}
             />
-            <input type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} />
+            <input type="date" value={dateFilter} onChange={(event) => { setDateFilter(event.target.value); setCurrentPage(1); }} />
           </div>
           <div className="order-toolbar-actions">
             <button className="order-btn-primary ghost" onClick={onSearchSubmit}>Search</button>
@@ -453,23 +552,25 @@ function OrderPage() {
           <div className="order-skeleton-list">
             {[1, 2, 3].map((item) => <div key={item} className="order-skeleton-row" />)}
           </div>
-        ) : filteredOrders.length ? (
+        ) : sortedOrders.length ? (
           <>
-            <div className="order-table-wrap">
+            <div className="order-table-wrap" ref={tableWrapRef}>
               <div className="order-table-meta">
-                Showing {Math.min((currentPage - 1) * PAGE_SIZE + 1, sortedOrders.length)}-
-                {Math.min(currentPage * PAGE_SIZE, sortedOrders.length)} of {sortedOrders.length} records
+                Showing {Math.min((currentPage - 1) * PAGE_SIZE + 1, totalRecords)}-
+                {Math.min(currentPage * PAGE_SIZE, totalRecords)} of {totalRecords} records
               </div>
               <table className="order-table">
                 <thead>
                   <tr>
                     <th>#</th>
                     <th><button className="order-sort-btn" onClick={() => onSort("createdAt")}>Timestamp</button></th>
-                    <th><button className="order-sort-btn" onClick={() => onSort("salesOrderNumber")}>Sales Order</button></th>
-                    <th>Enquiry ID</th>
+                    <th><button className="order-sort-btn" onClick={() => onSort("salesOrderNumber")}>Sales ID</button></th>
+                    <th>Order No</th>
                     <th><button className="order-sort-btn" onClick={() => onSort("product")}>Product</button></th>
                     <th>Grade</th>
-                    <th><button className="order-sort-btn" onClick={() => onSort("quantity")}>Qty</button></th>
+                    <th><button className="order-sort-btn" onClick={() => onSort("quantity")}>Quantity</button></th>
+                    <th>Price</th>
+                    <th>Currency</th>
                     <th>Unit</th>
                     <th><button className="order-sort-btn" onClick={() => onSort("deliveryDate")}>Expected Timeline</button></th>
                     <th><button className="order-sort-btn" onClick={() => onSort("clientName")}>Client</button></th>
@@ -480,50 +581,61 @@ function OrderPage() {
                     <th>Country</th>
                     <th>Prod Status</th>
                     <th>Prod Comp Date</th>
-                    <th>Export Date</th>
+                    <th>Dispatch Date</th>
                     <th><button className="order-sort-btn" onClick={() => onSort("status")}>Order Status</button></th>
                     <th>Actions</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {paginatedOrders.map((order, index) => (
-                    <tr key={order.id}>
-                      <td>{(currentPage - 1) * PAGE_SIZE + index + 1}</td>
-                      <td>{formatDateTime(order.createdAt || order.orderDate)}</td>
-                      <td>{order.salesOrderNumber}</td>
-                      <td>{order.enquiryId || "-"}</td>
-                      <td>{order.product}</td>
-                      <td>{order.grade || "-"}</td>
-                      <td>{order.quantity}</td>
-                      <td>{order.unit}</td>
-                      <td>{formatDate(order.deliveryDate)}</td>
-                      <td>{order.clientName || "-"}</td>
-                      <td>{getClientCode(order.clientName, order.id)}</td>
-                      <td>{order.city || "-"}</td>
-                      <td>{order.pincode || "-"}</td>
-                      <td>{order.state || "-"}</td>
-                      <td>{order.countryCode || "-"}</td>
-                      <td>{getProductionStatusLabel(order)}</td>
-                      <td>{formatDate(order.production?.productionCompletionDate)}</td>
-                      <td>{formatDate(getOrderExportDate(order))}</td>
-                      <td>
-                        <span className={`order-status ${getOrderStatusClass(order.status)}`}>{getOrderStatusLabel(order.status)}</span>
-                      </td>
-                      <td>
-                        <div className="order-row-actions">
-                          <button className="icon-btn" aria-label="View order" onClick={() => setSelectedOrder(order)}><EyeIcon /></button>
-                          {canCreate && <button className="icon-btn" aria-label="Edit order" onClick={() => onEdit(order)}><EditIcon /></button>}
-                          {canCreate && <button className="icon-btn danger" aria-label="Delete order" onClick={() => onDelete(order.id)}><TrashIcon /></button>}
-                          {canCreate && order.status === "CREATED" && (
-                            <button className="order-move-btn" onClick={() => moveToProduction(order)}>
-                              Start Production
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
+                <VirtualizedTableBody
+                  rows={sortedOrders}
+                  colSpan={22}
+                  rowHeight={52}
+                  overscan={8}
+                  scrollContainerRef={tableWrapRef}
+                  getRowKey={(order) => order.id}
+                  renderRow={(order, index) => {
+                    const location = getOrderLocation(order);
+                    return (
+                      <tr key={order.id}>
+                        <td>{(currentPage - 1) * PAGE_SIZE + index + 1}</td>
+                        <td>{formatDateTime(order.createdAt || order.orderDate)}</td>
+                        <td>{getDisplaySalesGroupNumber(order)}</td>
+                        <td>{order.orderNo}</td>
+                        <td>{order.product}</td>
+                        <td>{order.grade || "-"}</td>
+                        <td>{order.quantity}</td>
+                        <td>{formatPriceValue(order.price)}</td>
+                        <td>{order.currency || "-"}</td>
+                        <td>{order.unit}</td>
+                        <td>{formatDate(order.deliveryDate)}</td>
+                        <td>{order.clientName || "-"}</td>
+                        <td>{getClientCode(order.clientName, order.id)}</td>
+                        <td>{location.city || "-"}</td>
+                        <td>{location.pincode || "-"}</td>
+                        <td>{location.state || "-"}</td>
+                        <td>{location.countryCode || "-"}</td>
+                        <td>{getProductionStatusLabel(order)}</td>
+                        <td>{formatDate(order.production?.productionCompletionDate)}</td>
+                        <td>{formatDate(getOrderDispatchDate(order))}</td>
+                        <td>
+                          <span className={`order-status ${getOrderStatusClass(order.status)}`}>{getOrderStatusLabel(order.status)}</span>
+                        </td>
+                        <td>
+                          <div className="order-row-actions">
+                            <button className="icon-btn" aria-label="View order" onClick={() => setSelectedOrder(order)}><EyeIcon /></button>
+                            {canCreate && <button className="icon-btn" aria-label="Edit order" onClick={() => onEdit(order)}><EditIcon /></button>}
+                            {canCreate && <button className="icon-btn danger" aria-label="Delete order" onClick={() => onDelete(order.id)}><TrashIcon /></button>}
+                            {canCreate && order.status === "CREATED" && (
+                              <button className="order-move-btn" onClick={() => moveToProduction(order)}>
+                                Start Production
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  }}
+                />
               </table>
             </div>
             <div className="order-pagination">
@@ -542,11 +654,12 @@ function OrderPage() {
               <button
                 className="order-btn-primary"
                 onClick={() => {
-                  setEditingOrderId(null);
-                  setIsCreateModalOpen(true);
-                }}
-              >
-                Create Order
+                setEditingOrderId(null);
+                setIsCreateModalOpen(true);
+                setForm(createCreateForm());
+              }}
+            >
+              Create Order
               </button>
             )}
           </div>
@@ -559,35 +672,32 @@ function OrderPage() {
             <div className="order-modal-head">
               <div>
                 <h3>Order Details</h3>
-                <p>{selectedOrder.salesOrderNumber} - {selectedOrder.clientName}</p>
+                <p>{getDisplaySalesGroupNumber(selectedOrder)} - {selectedOrder.clientName}</p>
               </div>
               <button className="order-modal-close-btn" onClick={() => setSelectedOrder(null)}>Close</button>
             </div>
             <div className="order-detail-grid">
               <p><span>Timestamp:</span> {formatDateTime(selectedOrder.createdAt || selectedOrder.orderDate)}</p>
-              <p><span>Sales Order Number:</span> {selectedOrder.salesOrderNumber}</p>
-              <p><span>Order Number:</span> {selectedOrder.orderNo}</p>
-              <p><span>Enquiry ID:</span> {selectedOrder.enquiryId || "-"}</p>
+              <p><span>Sales ID:</span> {getDisplaySalesGroupNumber(selectedOrder)}</p>
+              <p><span>Order No:</span> {selectedOrder.orderNo}</p>
               <p><span>Product:</span> {selectedOrder.product}</p>
               <p><span>Grade:</span> {selectedOrder.grade}</p>
-              <p><span>Qty:</span> {selectedOrder.quantity}</p>
+              <p><span>Quantity:</span> {selectedOrder.quantity}</p>
+              <p><span>Price:</span> {formatPriceValue(selectedOrder.price)}</p>
+              <p><span>Currency:</span> {selectedOrder.currency || "-"}</p>
               <p><span>Unit of Measurement:</span> {selectedOrder.unit}</p>
               <p><span>Expected Timeline:</span> {formatDate(selectedOrder.deliveryDate)}</p>
               <p><span>Client Code:</span> {getClientCode(selectedOrder.clientName, selectedOrder.id)}</p>
               <p><span>Client Name:</span> {selectedOrder.clientName || "-"}</p>
-              <p><span>Assigned To:</span> {selectedOrder.enquiry?.assignedPerson || "-"}</p>
               <p><span>Sales Eng ID:</span> {selectedOrder.createdById || "-"}</p>
-              <p><span>Enquiry Date:</span> {formatDateTime(selectedOrder.enquiry?.createdAt)}</p>
-              <p><span>Packaging Type:</span> {selectedOrder.packingType || "-"}</p>
-              <p><span>Packaging Size:</span> {selectedOrder.packingSize || "-"}</p>
-              <p><span>City:</span> {selectedOrder.city || "-"}</p>
-              <p><span>Pincode:</span> {selectedOrder.pincode || "-"}</p>
-              <p><span>State:</span> {selectedOrder.state || "-"}</p>
+              <p><span>City:</span> {selectedOrderLocation?.city || "-"}</p>
+              <p><span>Pincode:</span> {selectedOrderLocation?.pincode || "-"}</p>
+              <p><span>State:</span> {selectedOrderLocation?.state || "-"}</p>
               <p><span>Address:</span> {selectedOrder.address || "-"}</p>
-              <p><span>Country Code:</span> {selectedOrder.countryCode || "-"}</p>
+              <p><span>Country Code:</span> {selectedOrderLocation?.countryCode || "-"}</p>
               <p><span>Prod Status:</span> {getProductionStatusLabel(selectedOrder)}</p>
               <p><span>Prod Comp Date:</span> {formatDate(selectedOrder.production?.productionCompletionDate)}</p>
-              <p><span>Export Date:</span> {formatDate(getOrderExportDate(selectedOrder))}</p>
+              <p><span>Dispatch Date:</span> {formatDate(getOrderDispatchDate(selectedOrder))}</p>
               <p><span>Status:</span> {getOrderStatusLabel(selectedOrder.status)}</p>
               <p><span>Remarks:</span> {selectedOrder.remarks || "-"}</p>
             </div>
@@ -618,8 +728,8 @@ function OrderPage() {
           <div className="order-modal-card large">
             <div className="order-modal-head">
               <div>
-                <h3>{editingOrderId ? "Edit Order" : "Create Order"}</h3>
-                <p>{editingOrderId ? "Update order entry." :""}</p>
+                <h3>{editingOrderId ? "Edit Order" : "Create Manual Request"}</h3>
+                <p>{editingOrderId ? "Update order entry." : "Submit a manual order request for approval."}</p>
               </div>
               <button
                 className="order-modal-close-btn"
@@ -649,38 +759,178 @@ function OrderPage() {
                 <label>Customer Code</label>
                 <input value={selectedCustomerProfile?.customerCode || ""} disabled />
               </div>
-              <div>
-                <label>Product</label>
-                <input value={form.product} onChange={(e) => setForm((p) => ({ ...p, product: e.target.value }))} required />
-              </div>
-              <div>
-                <label>Grade</label>
-                <input value={form.grade} onChange={(e) => setForm((p) => ({ ...p, grade: e.target.value }))} required />
-              </div>
-              <div>
-                <label>Quantity</label>
-                <input type="number" min="1" value={form.quantity} onChange={(e) => setForm((p) => ({ ...p, quantity: e.target.value }))} required />
-              </div>
-              <div>
-                <label>Unit</label>
-                <select value={form.unit} onChange={(e) => setForm((p) => ({ ...p, unit: e.target.value }))}>
-                  {masterData.units.map((unit) => (
-                    <option key={unit.value} value={unit.value}>{unit.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label>Packing Type</label>
-                <input value={form.packing_type} onChange={(e) => setForm((p) => ({ ...p, packing_type: e.target.value }))} required />
-              </div>
-              <div>
-                <label>Packing Size</label>
-                <input value={form.packing_size} onChange={(e) => setForm((p) => ({ ...p, packing_size: e.target.value }))} required />
-              </div>
-              <div>
-                <label>Delivery Date</label>
-                <input type="date" value={form.delivery_date} onChange={(e) => setForm((p) => ({ ...p, delivery_date: e.target.value }))} required />
-              </div>
+              {!editingOrderId ? (
+                <>
+                <div className="full-row">
+                  <label>Products Requested*</label>
+                  <div className="enquiry-product-rows">
+                    {(form.products || []).map((row, index) => (
+                      <div key={index} className="enquiry-product-row">
+                        <div>
+                          <label>Product</label>
+                          <select
+                            value={row.product}
+                            onChange={(event) =>
+                              setForm((prev) => ({
+                                ...prev,
+                                products: prev.products.map((item, rowIndex) =>
+                                  rowIndex === index ? { ...item, product: event.target.value } : item
+                                )
+                              }))
+                            }
+                            required
+                          >
+                            <option value="">Select product</option>
+                            {requestProductOptions.map((option) => (
+                              <option key={option.value} value={option.value}>{option.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label>Grade</label>
+                          <input
+                            type="text"
+                            value={row.grade}
+                            onChange={(event) =>
+                              setForm((prev) => ({
+                                ...prev,
+                                products: prev.products.map((item, rowIndex) =>
+                                  rowIndex === index ? { ...item, grade: event.target.value } : item
+                                )
+                              }))
+                            }
+                            placeholder="Enter grade"
+                          />
+                        </div>
+                        <div>
+                          <label>Quantity</label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={row.quantity}
+                            onChange={(event) =>
+                              setForm((prev) => ({
+                                ...prev,
+                                products: prev.products.map((item, rowIndex) =>
+                                  rowIndex === index ? { ...item, quantity: event.target.value } : item
+                                )
+                              }))
+                            }
+                            placeholder="Enter quantity"
+                          />
+                        </div>
+                        <div>
+                          <label>Unit of Measurement</label>
+                          <select
+                            value={row.unit_of_measurement}
+                            onChange={(event) =>
+                              setForm((prev) => ({
+                                ...prev,
+                                products: prev.products.map((item, rowIndex) =>
+                                  rowIndex === index ? { ...item, unit_of_measurement: event.target.value } : item
+                                )
+                              }))
+                            }
+                          >
+                            <option value="">Select unit</option>
+                            {UNIT_OPTIONS.map((unit) => (
+                              <option key={unit} value={unit}>{unit}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="enquiry-product-row-actions">
+                          <button
+                            type="button"
+                            className="enquiry-btn-secondary"
+                            onClick={() =>
+                              setForm((prev) => ({
+                                ...prev,
+                                products:
+                                  prev.products.length > 1
+                                    ? prev.products.filter((_, rowIndex) => rowIndex !== index)
+                                    : [createEmptyProductRow()]
+                              }))
+                            }
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    className="enquiry-btn-secondary"
+                    onClick={() => setForm((prev) => ({ ...prev, products: [...prev.products, createEmptyProductRow()] }))}
+                  >
+                    Add Product
+                  </button>
+                </div>
+                <div className="full-row">
+                  <label>Expected Timeline</label>
+                  <input
+                    type="date"
+                    value={form.delivery_date}
+                    onChange={(e) => setForm((p) => ({ ...p, delivery_date: e.target.value }))}
+                    required
+                  />
+                </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label>Product</label>
+                    <select value={form.product} onChange={(e) => setForm((p) => ({ ...p, product: e.target.value }))} required>
+                      <option value="">Select product</option>
+                      {productOptions.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label>Grade</label>
+                    <input value={form.grade} onChange={(e) => setForm((p) => ({ ...p, grade: e.target.value }))} required />
+                  </div>
+                  <div>
+                    <label>Quantity</label>
+                    <input type="number" min="1" value={form.quantity} onChange={(e) => setForm((p) => ({ ...p, quantity: e.target.value }))} required />
+                  </div>
+                  <div>
+                    <label>Price</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={form.price}
+                      onChange={(e) => setForm((p) => ({ ...p, price: e.target.value }))}
+                      placeholder="Enter price"
+                    />
+                  </div>
+                  <div>
+                    <label>Currency</label>
+                    <select value={form.currency} onChange={(e) => setForm((p) => ({ ...p, currency: e.target.value }))}>
+                      <option value="">Select currency</option>
+                      {CURRENCY_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label>Unit</label>
+                    <select value={form.unit} onChange={(e) => setForm((p) => ({ ...p, unit: e.target.value }))}>
+                      {orderUnitOptions.map((unit) => (
+                        <option key={unit} value={unit}>{unit}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label>Dispatch Date</label>
+                    <input type="date" value={form.delivery_date} onChange={(e) => setForm((p) => ({ ...p, delivery_date: e.target.value }))} required />
+                  </div>
+                </>
+              )}
               <div>
                 <label>City</label>
                 <input value={form.city} onChange={(e) => setForm((p) => ({ ...p, city: e.target.value }))} required />
@@ -722,7 +972,7 @@ function OrderPage() {
                   Cancel
                 </button>
                 <button className="order-btn-primary" disabled={creating}>
-                  {creating ? "Saving..." : editingOrderId ? "Save Changes" : "Create Order"}
+                  {creating ? "Saving..." : editingOrderId ? "Save Changes" : "Submit Request"}
                 </button>
               </div>
             </form>

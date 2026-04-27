@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import LoadingSpinner from "../components/LoadingSpinner";
 import { useAuth } from "../context/AuthContext";
 import { logApiError } from "../utils/apiError";
 
 function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login, loading } = useAuth();
 
   const [form, setForm] = useState({
@@ -13,6 +14,7 @@ function LoginPage() {
     password: "Admin@123"
   });
   const [error, setError] = useState("");
+  const authMessage = location.state?.message || "";
 
   const onChange = (event) => {
     setForm((prev) => ({ ...prev, [event.target.name]: event.target.value }));
@@ -47,7 +49,11 @@ function LoginPage() {
             <input id="password" name="password" type="password" className="input" value={form.password} onChange={onChange} required />
           </div>
 
-          {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+          {(authMessage || error) && (
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+              {authMessage || error}
+            </p>
+          )}
 
           <button className="btn-primary w-full" disabled={loading}>
             {loading ? <LoadingSpinner label="Signing in..." /> : "Login"}

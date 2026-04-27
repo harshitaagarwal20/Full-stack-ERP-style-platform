@@ -1,0 +1,2 @@
+ALTER TABLE `Order`
+  MODIFY COLUMN `enquiryId` INTEGER NULL;

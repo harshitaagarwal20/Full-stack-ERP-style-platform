@@ -1,36 +1,65 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import api from "../api/axiosClient";
-import DispatchMobileModule from "../components/mobile/modules/DispatchMobileModule";
+import VirtualizedTableBody from "../components/common/VirtualizedTableBody";
 import { EditIcon, SearchIcon, TrashIcon, TruckIcon } from "../components/erp/ErpIcons";
 import { useAuth } from "../context/AuthContext";
-import useIsMobile from "../hooks/useIsMobile";
 import useMasterData from "../hooks/useMasterData";
 import { logApiError } from "../utils/apiError";
 import { exportRowsToExcel } from "../utils/exportExcel";
+import { getDisplaySalesNumber } from "../utils/businessNumbers";
 
 function formatDate(dateValue) {
   return dateValue ? new Date(dateValue).toLocaleDateString() : "-";
 }
 
-function toISODate(dateValue) {
-  if (!dateValue) return "";
-  const parsed = new Date(dateValue);
-  if (Number.isNaN(parsed.getTime())) return "";
-  return parsed.toISOString().slice(0, 10);
-}
-
 function mapShipmentStatus(status) {
-  if (status === "PACKING") return { label: "Pending", className: "pending" };
-  if (status === "SHIPPED") return { label: "In Transit", className: "in-transit" };
+  if (status === "PACKED") return { label: "Pending", className: "pending" };
+  if (status === "SHIPPED") return { label: "Dispatched", className: "in-transit" };
   if (status === "DELIVERED") return { label: "Delivered", className: "delivered" };
   return { label: status || "Pending", className: "pending" };
 }
 
-function getOrderStatusLabel(status) {
-  if (status === "IN_PRODUCTION") return "In Production";
-  if (status === "DISPATCHED") return "Dispatched";
-  if (status === "COMPLETED") return "Completed";
-  return status || "-";
+function getOrderRemainingQuantity(order, dispatch) {
+  if (!order) return 0;
+  if (dispatch) {
+    return Math.max(
+      (order.quantity || 0) - ((order.dispatches || []).reduce((sum, item) => sum + (item.dispatchedQuantity || 0), 0)),
+      0
+    );
+  }
+  return order.remainingQuantity ?? order.quantity ?? 0;
+}
+
+function getDispatchRowStatus(row) {
+  const order = row.order || {};
+  const dispatch = row.dispatch;
+
+  if (!dispatch) {
+    return { label: "Pending", className: "pending" };
+  }
+
+  const remainingQuantity = getOrderRemainingQuantity(order, dispatch);
+
+  if (remainingQuantity > 0) {
+    return { label: "Partially Dispatched", className: "partial" };
+  }
+
+  return mapShipmentStatus(dispatch.shipmentStatus);
+}
+
+function getAllowedShipmentStatusOptions(order, dispatchQty, editingShipmentStatus = "") {
+  const baseOptions = [
+    { value: "PACKING", label: "Pending" },
+    { value: "SHIPPED", label: "Dispatched" }
+  ];
+
+  const remainingQuantity = getOrderRemainingQuantity(order, null);
+  const canDeliver = Number(dispatchQty) > 0 && Number(dispatchQty) === Number(remainingQuantity);
+  if (canDeliver || String(editingShipmentStatus || "").toUpperCase() === "DELIVERED") {
+    baseOptions.push({ value: "DELIVERED", label: "Delivered" });
+  }
+
+  return baseOptions;
 }
 
 function getClientCode(clientName, orderId) {
@@ -43,23 +72,49 @@ function getClientCode(clientName, orderId) {
   return `${prefix}${suffix}`;
 }
 
+function toExportRow(row) {
+  const order = row.order || {};
+  const dispatch = row.dispatch;
+  const dispatchQuantity = dispatch?.dispatchedQuantity || 0;
+  const remainingQuantity = getOrderRemainingQuantity(order, dispatch);
+
+  return {
+    clientCode: getClientCode(order.clientName, order.id),
+    packagingSize: order.packingSize || "-",
+    salesOrderNo: getDisplaySalesNumber(order) || "-",
+    product: order.product || "-",
+    orderQuantity: order.quantity || 0,
+    dispatchQuantity,
+    remainingQuantity,
+    unit: order.unit || "-",
+    expectedDeliveryDate: formatDate(order.deliveryDate),
+    city: order.city || "-",
+    pincode: order.pincode || "-",
+    state: order.state || "-",
+    countryCode: order.countryCode || "-",
+    dispatchDate: dispatch ? formatDate(dispatch.dispatchDate) : "-",
+    status: getDispatchRowStatus(row).label,
+    prodCompDate: formatDate(order.production?.productionCompletionDate)
+  };
+}
+
 function DispatchPage() {
   const PAGE_SIZE = 10;
   const { user } = useAuth();
   const masterData = useMasterData();
-  const isMobile = useIsMobile();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editingDispatchId, setEditingDispatchId] = useState(null);
-  const [readyOrders, setReadyOrders] = useState([]);
-  const [dispatches, setDispatches] = useState([]);
+  const [dispatchRows, setDispatchRows] = useState([]);
   const [query, setQuery] = useState("");
   const [searchText, setSearchText] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [clientFilter, setClientFilter] = useState("");
   const [dateFilter, setDateFilter] = useState("");
-  const [sortConfig, setSortConfig] = useState({ key: "dispatchDate", direction: "desc" });
+  const [sortConfig, setSortConfig] = useState({ key: "createdAt", direction: "desc" });
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [dispatchForm, setDispatchForm] = useState({
     dispatch_quantity: "",
@@ -68,12 +123,13 @@ function DispatchPage() {
     packing_done: false,
     remarks: ""
   });
+  const tableWrapRef = useRef(null);
   const statusFilterOptions = useMemo(
     () => [
       { value: "all", label: "All Status" },
       { value: "pending", label: "Pending" },
       ...masterData.shipmentStatuses
-        .filter((item) => item.value !== "PACKING")
+        .filter((item) => item.value !== "PACKED")
         .map((item) => ({
           value: item.value.toLowerCase(),
           label: item.label
@@ -82,60 +138,60 @@ function DispatchPage() {
     [masterData.shipmentStatuses]
   );
   const canManageDispatch = ["admin", "dispatch"].includes(user?.role);
+  const shipmentStatusOptions = useMemo(() => {
+    const dispatchQty = Number(dispatchForm.dispatch_quantity || 0);
+    return getAllowedShipmentStatusOptions(selectedOrder, dispatchQty, dispatchForm.shipment_status);
+  }, [dispatchForm.dispatch_quantity, dispatchForm.shipment_status, selectedOrder]);
 
-  if (isMobile) {
-    return <DispatchMobileModule canManage={canManageDispatch} />;
-  }
-
-  const fetchDispatchData = async (searchQuery = query) => {
+  const fetchDispatchData = async ({
+    searchQuery = query,
+    page = currentPage,
+    status = statusFilter,
+    client = clientFilter,
+    date = dateFilter
+  } = {}) => {
     setLoading(true);
     try {
-      const { data } = await api.get("/dispatch", { params: { q: searchQuery || undefined } });
-      setReadyOrders(data.readyOrders || []);
-      setDispatches(data.dispatches || []);
+      const { data } = await api.get("/dispatch", {
+        params: {
+          paginated: 1,
+          q: searchQuery || undefined,
+          status: status === "all" ? undefined : status,
+          client: client || undefined,
+          date: date || undefined,
+          page,
+          limit: PAGE_SIZE
+        }
+      });
+      const nextItems = Array.isArray(data?.items) ? data.items : [];
+      const pagination = data?.pagination || {};
+      setDispatchRows(nextItems);
+      setTotalPages(Math.max(1, Number(pagination.totalPages) || 1));
+      setTotalRecords(Math.max(0, Number(pagination.total) || 0));
     } catch (error) {
       logApiError(error, "Failed to load dispatch data");
+      setDispatchRows([]);
+      setTotalPages(1);
+      setTotalRecords(0);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchDispatchData("");
-  }, []);
+    fetchDispatchData();
+  }, [query, statusFilter, clientFilter, dateFilter, currentPage]);
 
-  const filteredReadyOrders = useMemo(() => {
-    return readyOrders.filter((order) => {
-      const matchesStatus = statusFilter === "all" || statusFilter === "pending";
-      const matchesClient = clientFilter
-        ? order.clientName?.toLowerCase().includes(clientFilter.toLowerCase())
-        : true;
-      const matchesDate = dateFilter ? toISODate(order.deliveryDate) === dateFilter : true;
-      return matchesStatus && matchesClient && matchesDate;
-    });
-  }, [readyOrders, statusFilter, clientFilter, dateFilter]);
-
-  const filteredDispatches = useMemo(() => {
-    return dispatches.filter((dispatch) => {
-      const currentStatus = String(dispatch.shipmentStatus || "").toLowerCase();
-      const matchesStatus = statusFilter === "all"
-        ? true
-        : statusFilter === "pending"
-          ? currentStatus === "packing"
-          : currentStatus === statusFilter;
-      const matchesClient = clientFilter
-        ? dispatch.order?.clientName?.toLowerCase().includes(clientFilter.toLowerCase())
-        : true;
-      const matchesDate = dateFilter ? toISODate(dispatch.dispatchDate) === dateFilter : true;
-      return matchesStatus && matchesClient && matchesDate;
-    });
-  }, [dispatches, statusFilter, clientFilter, dateFilter]);
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const onSearchSubmit = () => {
     const nextQuery = searchText.trim();
     setQuery(nextQuery);
     setCurrentPage(1);
-    fetchDispatchData(nextQuery);
   };
 
   const openDispatchModal = (order) => {
@@ -143,7 +199,7 @@ function DispatchPage() {
     setEditingDispatchId(null);
     setSelectedOrder(order);
     setDispatchForm({
-      dispatch_quantity: order.remainingQuantity ? String(order.remainingQuantity) : String(order.quantity || ""),
+      dispatch_quantity: String(order.remainingQuantity ?? order.quantity ?? ""),
       dispatch_date: "",
       shipment_status: "",
       packing_done: false,
@@ -155,13 +211,10 @@ function DispatchPage() {
     event.preventDefault();
     if (!canManageDispatch) return;
     if (!selectedOrder) return;
-    if (!dispatchForm.shipment_status) {
-      return;
-    }
+    if (!dispatchForm.shipment_status) return;
+
     const dispatchQty = Number(dispatchForm.dispatch_quantity);
-    if (!dispatchQty || dispatchQty <= 0) {
-      return;
-    }
+    if (!dispatchQty || dispatchQty <= 0) return;
 
     try {
       setSaving(true);
@@ -185,7 +238,8 @@ function DispatchPage() {
       }
       setSelectedOrder(null);
       setEditingDispatchId(null);
-      await fetchDispatchData();
+      setCurrentPage(1);
+      await fetchDispatchData({ page: 1 });
     } catch (error) {
       logApiError(error, "Dispatch save failed");
     } finally {
@@ -197,9 +251,11 @@ function DispatchPage() {
     if (!canManageDispatch) return;
     setEditingDispatchId(dispatch.id);
     setSelectedOrder({
-      id: dispatch.order.id,
-      salesOrderNumber: dispatch.order.salesOrderNumber,
-      clientName: dispatch.order.clientName
+      ...dispatch.order,
+      remainingQuantity: Math.max(
+        (dispatch.order.quantity || 0) - ((dispatch.order.dispatches || []).reduce((sum, item) => sum + (item.dispatchedQuantity || 0), 0) - (dispatch.dispatchedQuantity || 0)),
+        0
+      )
     });
     setDispatchForm({
       dispatch_quantity: dispatch.dispatchedQuantity ? String(dispatch.dispatchedQuantity) : "",
@@ -215,97 +271,15 @@ function DispatchPage() {
     if (!window.confirm("Delete this dispatch record?")) return;
     try {
       await api.delete(`/dispatch/${dispatchId}`);
-      await fetchDispatchData();
+      setCurrentPage(1);
+      await fetchDispatchData({ page: 1 });
     } catch (error) {
       logApiError(error, "Failed to delete dispatch");
     }
   };
 
-  const exportDispatches = () => {
-    const combinedRows = [
-      ...filteredDispatches.map((dispatch) => ({
-        clientCode: getClientCode(dispatch.order?.clientName, dispatch.order?.id),
-        packagingSize: dispatch.order?.packingSize || "-",
-        salesOrderNo: dispatch.order?.salesOrderNumber || "-",
-        product: dispatch.order?.product || "-",
-        orderQuantity: dispatch.order?.quantity || 0,
-        dispatchQuantity: dispatch.dispatchedQuantity || 0,
-        remainingQuantity: Math.max((dispatch.order?.quantity || 0) - ((dispatch.order?.dispatches || []).reduce((sum, d) => sum + (d.dispatchedQuantity || 0), 0)), 0),
-        unit: dispatch.order?.unit || "-",
-        expectedDeliveryDate: formatDate(dispatch.order?.deliveryDate),
-        city: dispatch.order?.city || "-",
-        pincode: dispatch.order?.pincode || "-",
-        state: dispatch.order?.state || "-",
-        countryCode: dispatch.order?.countryCode || "-",
-        dispatchDate: formatDate(dispatch.dispatchDate),
-        status: mapShipmentStatus(dispatch.shipmentStatus).label,
-        orderStatus: getOrderStatusLabel(dispatch.order?.status),
-        prodCompDate: formatDate(dispatch.order?.production?.productionCompletionDate),
-      })),
-      ...filteredReadyOrders.map((order) => ({
-        clientCode: getClientCode(order.clientName, order.id),
-        packagingSize: order.packingSize || "-",
-        salesOrderNo: order.salesOrderNumber,
-        product: order.product,
-        orderQuantity: order.quantity,
-        dispatchQuantity: 0,
-        remainingQuantity: order.remainingQuantity ?? order.quantity,
-        unit: order.unit,
-        expectedDeliveryDate: formatDate(order.deliveryDate),
-        city: order.city || "-",
-        pincode: order.pincode || "-",
-        state: order.state || "-",
-        countryCode: order.countryCode || "-",
-        dispatchDate: "-",
-        status: "Pending",
-        orderStatus: getOrderStatusLabel(order.status),
-        prodCompDate: formatDate(order.production?.productionCompletionDate)
-      }))
-    ];
-
-    exportRowsToExcel(
-      `dispatches_${new Date().toISOString().slice(0, 10)}.csv`,
-      [
-        { key: "clientCode", header: "Client Code" },
-        { key: "packagingSize", header: "Packaging Size" },
-        { key: "salesOrderNo", header: "Sales Order No" },
-        { key: "product", header: "Product" },
-        { key: "orderQuantity", header: "Order QTY" },
-        { key: "dispatchQuantity", header: "Dispatch QTY" },
-        { key: "remainingQuantity", header: "Remaining QTY" },
-        { key: "unit", header: "Unit of Measurement" },
-        { key: "expectedDeliveryDate", header: "Expected Delivery Date" },
-        { key: "city", header: "City" },
-        { key: "pincode", header: "Pincode" },
-        { key: "state", header: "State" },
-        { key: "countryCode", header: "Country Code" },
-        { key: "dispatchDate", header: "Dispatch Date" },
-        { key: "status", header: "Status" },
-        { key: "orderStatus", header: "Order Status" },
-        { key: "prodCompDate", header: "Prod Comp Date" } 
-      ],
-      combinedRows
-    );
-  };
-
-  const combinedDispatchRows = useMemo(() => {
-    const autoRows = filteredDispatches.map((dispatch) => ({
-      key: `dispatch-${dispatch.id}`,
-    
-      order: dispatch.order,
-      dispatch
-    }));
-    const manualRows = filteredReadyOrders.map((order) => ({
-      key: `ready-${order.id}`,
-      
-      order,
-      dispatch: null
-    }));
-    return [...autoRows, ...manualRows];
-  }, [filteredDispatches, filteredReadyOrders]);
-
   const sortedDispatchRows = useMemo(() => {
-    const sorted = [...combinedDispatchRows];
+    const sorted = [...dispatchRows];
     const { key, direction } = sortConfig;
     const sign = direction === "asc" ? 1 : -1;
 
@@ -315,13 +289,14 @@ function DispatchPage() {
       const remainingQty = row.dispatch
         ? Math.max((order.quantity || 0) - ((order.dispatches || []).reduce((sum, d) => sum + (d.dispatchedQuantity || 0), 0)), 0)
         : (order.remainingQuantity ?? order.quantity ?? 0);
-      if (key === "salesOrderNumber") return String(order.salesOrderNumber || "").toLowerCase();
+      if (key === "orderNo") return String(order.orderNo || "").toLowerCase();
+      if (key === "salesOrderNumber") return String(getDisplaySalesNumber(order) || "").toLowerCase();
       if (key === "product") return String(order.product || "").toLowerCase();
       if (key === "orderQuantity") return Number(order.quantity || 0);
       if (key === "dispatchQuantity") return Number(dispatchQty || 0);
       if (key === "remainingQuantity") return Number(remainingQty || 0);
       if (key === "dispatchDate") return new Date(row.dispatch?.dispatchDate || 0).getTime();
-      if (key === "status") return String(row.dispatch?.shipmentStatus || "PACKING").toLowerCase();
+      if (key === "status") return String(row.dispatch?.shipmentStatus || "PACKED").toLowerCase();
       return "";
     };
 
@@ -330,24 +305,17 @@ function DispatchPage() {
       const vb = getValue(b);
       if (va < vb) return -1 * sign;
       if (va > vb) return 1 * sign;
+      if (key === "orderNo") {
+        const ta = new Date(a.dispatch?.dispatchDate || 0).getTime();
+        const tb = new Date(b.dispatch?.dispatchDate || 0).getTime();
+        if (ta < tb) return -1 * sign;
+        if (ta > tb) return 1 * sign;
+      }
       return 0;
     });
 
     return sorted;
-  }, [combinedDispatchRows, sortConfig]);
-
-  const totalPages = Math.max(1, Math.ceil(sortedDispatchRows.length / PAGE_SIZE));
-
-  const paginatedDispatchRows = useMemo(() => {
-    const start = (currentPage - 1) * PAGE_SIZE;
-    return sortedDispatchRows.slice(start, start + PAGE_SIZE);
-  }, [sortedDispatchRows, currentPage]);
-
-  useEffect(() => {
-    if (currentPage > totalPages) {
-      setCurrentPage(totalPages);
-    }
-  }, [currentPage, totalPages]);
+  }, [dispatchRows, sortConfig]);
 
   const onSort = (key) => {
     setSortConfig((prev) => {
@@ -358,95 +326,169 @@ function DispatchPage() {
     });
   };
 
+  const exportDispatches = async () => {
+    let rowsToExport = sortedDispatchRows;
+    try {
+      const { data } = await api.get("/dispatch", {
+        params: {
+          paginated: 1,
+          q: query || undefined,
+          status: statusFilter === "all" ? undefined : statusFilter,
+          client: clientFilter || undefined,
+          date: dateFilter || undefined,
+          page: 1,
+          limit: 0
+        }
+      });
+      rowsToExport = Array.isArray(data?.items) ? data.items : sortedDispatchRows;
+    } catch (error) {
+      logApiError(error, "Export fallback: using current dispatch rows");
+    }
+
+    exportRowsToExcel(
+      `dispatches_${new Date().toISOString().slice(0, 10)}.csv`,
+      [
+        { key: "clientCode", header: "Client Code" },
+        { key: "packagingSize", header: "Packaging Size" },
+        { key: "orderNo", header: "Order No" },
+        { key: "salesOrderNo", header: "Sales ID" },
+        { key: "product", header: "Product" },
+        { key: "orderQuantity", header: "Order QUANTITY" },
+        { key: "dispatchQuantity", header: "Dispatch QUANTITY" },
+        { key: "remainingQuantity", header: "Remaining QUANTITY" },
+        { key: "unit", header: "Unit of Measurement" },
+        { key: "expectedDeliveryDate", header: "Expected Delivery Date" },
+        { key: "city", header: "City" },
+        { key: "pincode", header: "Pincode" },
+        { key: "state", header: "State" },
+        { key: "countryCode", header: "Country Code" },
+        { key: "dispatchDate", header: "Dispatch Date" },
+        { key: "status", header: "Status" },
+        { key: "prodCompDate", header: "Prod Comp Date" }
+      ],
+      rowsToExport.map(toExportRow)
+    );
+  };
+
+  const firstRecord = totalRecords === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
+  const lastRecord = Math.min((currentPage - 1) * PAGE_SIZE + sortedDispatchRows.length, totalRecords);
+
   return (
     <div className="dispatch-page">
-      <section className="dispatch-card dispatch-search-card">
-        <div className="dispatch-search-wrap">
-          <SearchIcon />
-          <input
-            className="dispatch-search-input"
-            placeholder="Search order ID, client, or product"
-            value={searchText}
-            onChange={(event) => setSearchText(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") onSearchSubmit();
-            }}
-          />
-          <button className="dispatch-search-btn" onClick={onSearchSubmit}>Search</button>
-        </div>
-
-        <div className="dispatch-filter-grid">
-          <select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setCurrentPage(1); }}>
-            {statusFilterOptions.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
-          <input
-            type="text"
-            value={clientFilter}
-            onChange={(event) => { setClientFilter(event.target.value); setCurrentPage(1); }}
-            placeholder="Filter by client"
-          />
-          <input type="date" value={dateFilter} onChange={(event) => { setDateFilter(event.target.value); setCurrentPage(1); }} />
+      <section className="dispatch-card dispatch-header-card">
+        <h2>Dispatch</h2>
+        <div className="dispatch-header-right">
+          <div className="dispatch-header-search">
+            <SearchIcon />
+            <input
+              className="dispatch-search-input"
+              placeholder="Search order ID, client, or product"
+              value={searchText}
+              onChange={(event) => setSearchText(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") onSearchSubmit();
+              }}
+            />
+          </div>
         </div>
       </section>
 
       <section className="dispatch-card">
-        <div className="dispatch-section-head">
-          <h2>Dispatch Module (Auto-Generated)</h2>
-          <button className="dispatch-btn-secondary" onClick={exportDispatches}>Export to Excel</button>
+        <div className="dispatch-toolbar">
+          <div className="dispatch-filter-grid">
+            <select
+              value={statusFilter}
+              onChange={(event) => {
+                setStatusFilter(event.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              {statusFilterOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+            <input
+              type="text"
+              value={clientFilter}
+              onChange={(event) => {
+                setClientFilter(event.target.value);
+                setCurrentPage(1);
+              }}
+              placeholder="Filter by client"
+            />
+            <input
+              type="date"
+              value={dateFilter}
+              onChange={(event) => {
+                setDateFilter(event.target.value);
+                setCurrentPage(1);
+              }}
+            />
+          </div>
+          <div className="dispatch-toolbar-actions">
+            <button className="dispatch-btn-primary ghost" onClick={onSearchSubmit}>Search</button>
+            <button className="dispatch-btn-secondary" onClick={exportDispatches}>Export to Excel</button>
+          </div>
         </div>
 
         {loading ? (
           <div className="dispatch-skeleton-list">
             {[1, 2, 3].map((item) => <div key={item} className="dispatch-skeleton-row" />)}
           </div>
-        ) : combinedDispatchRows.length ? (
+        ) : sortedDispatchRows.length ? (
           <>
-            <div className="dispatch-table-wrap">
-            <div className="dispatch-table-meta">
-              Showing {Math.min((currentPage - 1) * PAGE_SIZE + 1, sortedDispatchRows.length)}-
-              {Math.min(currentPage * PAGE_SIZE, sortedDispatchRows.length)} of {sortedDispatchRows.length} records
-            </div>
-            <table className="dispatch-table">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Client Code</th>
-                  <th>Packaging Size</th>
-                  <th><button className="dispatch-sort-btn" onClick={() => onSort("salesOrderNumber")}>Sales Order No</button></th>
-                  <th><button className="dispatch-sort-btn" onClick={() => onSort("product")}>Product</button></th>
-                  <th><button className="dispatch-sort-btn" onClick={() => onSort("orderQuantity")}>Order QTY</button></th>
-                  <th><button className="dispatch-sort-btn" onClick={() => onSort("dispatchQuantity")}>Dispatch QTY</button></th>
-                  <th><button className="dispatch-sort-btn" onClick={() => onSort("remainingQuantity")}>Remaining QTY</button></th>
-                  <th>Unit of Measurement</th>
-                  <th>Expected Delivery Date</th>
-                  <th>City</th>
-                  <th>Pincode</th>
-                  <th>State</th>
-                  <th>Country Code</th>
-                  <th><button className="dispatch-sort-btn" onClick={() => onSort("dispatchDate")}>Dispatch Date</button></th>
-                  <th><button className="dispatch-sort-btn" onClick={() => onSort("status")}>Status</button></th>
-                  <th>Order Status</th>
-                  <th>Prod Comp Date</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paginatedDispatchRows.map((row, index) => {
-                  const order = row.order;
-                  const shipment = row.dispatch ? mapShipmentStatus(row.dispatch.shipmentStatus) : { label: "Pending", className: "pending" };
+            <div className="dispatch-table-wrap" ref={tableWrapRef}>
+              <div className="dispatch-table-meta">
+                Showing {firstRecord}-{lastRecord} of {totalRecords} records
+              </div>
+              <table className="dispatch-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Client Code</th>
+                    <th>Packaging Size</th>
+                    <th><button className="dispatch-sort-btn" onClick={() => onSort("orderNo")}>Order No</button></th>
+                    <th><button className="dispatch-sort-btn" onClick={() => onSort("salesOrderNumber")}>Sales ID</button></th>
+                    <th><button className="dispatch-sort-btn" onClick={() => onSort("product")}>Product</button></th>
+                    <th><button className="dispatch-sort-btn" onClick={() => onSort("orderQuantity")}>Order QUANTITY</button></th>
+                    <th><button className="dispatch-sort-btn" onClick={() => onSort("dispatchQuantity")}>Dispatch QUANTITY</button></th>
+                    <th><button className="dispatch-sort-btn" onClick={() => onSort("remainingQuantity")}>Remaining QUANTITY</button></th>
+                    <th>Unit of Measurement</th>
+                    <th>Expected Delivery Date</th>
+                    <th>City</th>
+                    <th>Pincode</th>
+                    <th>State</th>
+                    <th>Country Code</th>
+                    <th><button className="dispatch-sort-btn" onClick={() => onSort("dispatchDate")}>Dispatch Date</button></th>
+                    <th><button className="dispatch-sort-btn" onClick={() => onSort("status")}>Status</button></th>
+                    <th>Prod Comp Date</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+              <VirtualizedTableBody
+                rows={sortedDispatchRows}
+                colSpan={19}
+                rowHeight={52}
+                overscan={8}
+                scrollContainerRef={tableWrapRef}
+                getRowKey={(row) => row.key}
+                renderRow={(row, index) => {
+                  const order = row.order || {};
+                  const shipment = getDispatchRowStatus(row);
+                  const remainingQty = getOrderRemainingQuantity(order, row.dispatch);
+
                   return (
                     <tr key={row.key}>
                       <td>{(currentPage - 1) * PAGE_SIZE + index + 1}</td>
                       <td>{getClientCode(order.clientName, order.id)}</td>
                       <td>{order.packingSize || "-"}</td>
-                      <td>{order.salesOrderNumber}</td>
-                      <td>{order.product}</td>
-                      <td>{order.quantity}</td>
+                      <td>{order.orderNo || "-"}</td>
+                      <td>{getDisplaySalesNumber(order) || "-"}</td>
+                      <td>{order.product || "-"}</td>
+                      <td>{order.quantity || 0}</td>
                       <td>{row.dispatch ? (row.dispatch.dispatchedQuantity || 0) : 0}</td>
-                      <td>{row.dispatch ? Math.max((order.quantity || 0) - ((order.dispatches || []).reduce((sum, d) => sum + (d.dispatchedQuantity || 0), 0)), 0) : (order.remainingQuantity ?? order.quantity)}</td>
-                      <td>{order.unit}</td>
+                      <td>{remainingQty}</td>
+                      <td>{order.unit || "-"}</td>
                       <td>{formatDate(order.deliveryDate)}</td>
                       <td>{order.city || "-"}</td>
                       <td>{order.pincode || "-"}</td>
@@ -456,7 +498,6 @@ function DispatchPage() {
                       <td>
                         <span className={`dispatch-status ${shipment.className}`}>{shipment.label}</span>
                       </td>
-                      <td>{getOrderStatusLabel(order.status)}</td>
                       <td>{formatDate(order.production?.productionCompletionDate)}</td>
                       <td>
                         <div className="dispatch-actions">
@@ -472,17 +513,17 @@ function DispatchPage() {
                       </td>
                     </tr>
                   );
-                })}
-              </tbody>
-            </table>
-            <div className="dispatch-pagination">
-              <div className="dispatch-pagination-info">Page {currentPage} of {totalPages}</div>
-              <div className="dispatch-page-controls">
-                <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1}>Prev</button>
-                <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Next</button>
+                }}
+              />
+              </table>
+              <div className="dispatch-pagination">
+                <div className="dispatch-pagination-info">Page {currentPage} of {totalPages}</div>
+                <div className="dispatch-page-controls">
+                  <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1}>Prev</button>
+                  <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Next</button>
+                </div>
               </div>
             </div>
-          </div>
           </>
         ) : (
           <div className="dispatch-empty-state compact">
@@ -498,7 +539,7 @@ function DispatchPage() {
             <div className="dispatch-modal-head">
               <div>
                 <h3>Shipment Details</h3>
-                <p>{selectedOrder.salesOrderNumber} - {selectedOrder.clientName}</p>
+                <p>{getDisplaySalesNumber(selectedOrder)} - {selectedOrder.clientName}</p>
               </div>
               <button className="dispatch-modal-close" onClick={() => setSelectedOrder(null)} disabled={saving}>
                 Close
@@ -515,9 +556,14 @@ function DispatchPage() {
                   onChange={(event) => setDispatchForm((prev) => ({ ...prev, dispatch_quantity: event.target.value }))}
                   required
                 />
-                {!editingDispatchId && (
-                  <small>Remaining: {selectedOrder.remainingQuantity ?? selectedOrder.quantity} {selectedOrder.unit || ""}</small>
-                )}
+              </div>
+              <div>
+                <label>Remaining Quantity</label>
+                <input
+                  type="number"
+                  value={selectedOrder.remainingQuantity ?? selectedOrder.quantity ?? 0}
+                  readOnly
+                />
               </div>
               <div>
                 <label>Dispatch Date</label>
@@ -536,20 +582,13 @@ function DispatchPage() {
                   required
                 >
                   <option value="" disabled>Select status</option>
-                  {masterData.shipmentStatuses.map((item) => (
+                  {shipmentStatusOptions.map((item) => (
                     <option key={item.value} value={item.value}>{item.label}</option>
                   ))}
                 </select>
               </div>
               <div className="full-row">
-                <label className="dispatch-checkbox-row">
-                  <input
-                    type="checkbox"
-                    checked={dispatchForm.packing_done}
-                    onChange={(event) => setDispatchForm((prev) => ({ ...prev, packing_done: event.target.checked }))}
-                  />
-                  Packing Done
-                </label>
+                
               </div>
               <div className="full-row">
                 <label>Remarks</label>
@@ -571,7 +610,6 @@ function DispatchPage() {
           </div>
         </div>
       )}
-
     </div>
   );
 }

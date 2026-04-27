@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import api from "../api/axiosClient";
 import { useAuth } from "../context/AuthContext";
 import ErpCard from "../components/erp/ErpCard";
-import { BoxesIcon, CheckIcon, CircleCheckIcon, ClipboardIcon, FactoryIcon, HomeIcon, HourglassIcon, InboxIcon, TruckIcon } from "../components/erp/ErpIcons";
+import { BoxesIcon, CheckIcon, ClipboardIcon, FactoryIcon, HomeIcon, HourglassIcon, InboxIcon, TruckIcon } from "../components/erp/ErpIcons";
 import { logApiError } from "../utils/apiError";
 
 const actions = [
@@ -14,32 +14,133 @@ const actions = [
   { title: "Dispatch", desc: "Ship completed orders and update status.", to: "/dispatch", icon: <TruckIcon />, tone: "danger", roles: ["admin", "sales", "production", "dispatch"] }
 ];
 
-function getDateFromRecord(record, keys) {
-  for (const key of keys) {
-    const value = record?.[key];
-    if (!value) continue;
-    const parsed = new Date(value);
-    if (!Number.isNaN(parsed.getTime())) return parsed;
+function normalizeDashboardSummary(data) {
+  const counts = data?.counts || {};
+  return {
+    counts: {
+      totalEnquiries: Number(counts.totalEnquiries || 0),
+      pendingApprovals: Number(counts.pendingApprovals || 0),
+      totalOrders: Number(counts.totalOrders || 0),
+      createdOrders: Number(counts.createdOrders || 0),
+      inProductionOrders: Number(counts.inProductionOrders || 0),
+      readyForDispatchOrders: Number(counts.readyForDispatchOrders || 0),
+      partiallyDispatchedOrders: Number(counts.partiallyDispatchedOrders || 0),
+      completedOrders: Number(counts.completedOrders || 0),
+    },
+    trendData: Array.isArray(data?.trendData) ? data.trendData : [],
+    statusMix: Array.isArray(data?.statusMix) ? data.statusMix : []
+  };
+}
+
+function buildSummaryFromLists(enquiries = [], orders = []) {
+  const buckets = [];
+  const bucketMap = new Map();
+  const now = new Date();
+
+  for (let offset = 5; offset >= 0; offset -= 1) {
+    const monthDate = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+    const key = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, "0")}`;
+    const bucket = {
+      key,
+      month: monthDate.toLocaleDateString(undefined, { month: "short" }),
+      enquiries: 0,
+      orders: 0
+    };
+    buckets.push(bucket);
+    bucketMap.set(key, bucket);
   }
-  return null;
+
+  enquiries.forEach((item) => {
+    const rawDate = item?.createdAt || item?.enquiryDate;
+    const parsed = rawDate ? new Date(rawDate) : null;
+    if (!parsed || Number.isNaN(parsed.getTime())) return;
+    const key = `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}`;
+    const bucket = bucketMap.get(key);
+    if (bucket) bucket.enquiries += 1;
+  });
+
+  orders.forEach((item) => {
+    const rawDate = item?.createdAt || item?.orderDate;
+    const parsed = rawDate ? new Date(rawDate) : null;
+    if (!parsed || Number.isNaN(parsed.getTime())) return;
+    const key = `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}`;
+    const bucket = bucketMap.get(key);
+    if (bucket) bucket.orders += 1;
+  });
+
+  const pendingApprovals = enquiries.filter((item) => item.status === "PENDING").length;
+  const orderStatusCounts = orders.reduce((acc, item) => {
+    const status = item?.status;
+    if (status === "CREATED") acc.createdOrders += 1;
+    else if (status === "IN_PRODUCTION") acc.inProductionOrders += 1;
+    else if (status === "READY_FOR_DISPATCH") acc.readyForDispatchOrders += 1;
+    else if (status === "PARTIALLY_DISPATCHED") acc.partiallyDispatchedOrders += 1;
+    else if (status === "COMPLETED" || status === "DISPATCHED") acc.completedOrders += 1;
+    return acc;
+  }, {
+    createdOrders: 0,
+    inProductionOrders: 0,
+    readyForDispatchOrders: 0,
+    partiallyDispatchedOrders: 0,
+    completedOrders: 0
+  });
+
+  return {
+    counts: {
+      totalEnquiries: enquiries.length,
+      pendingApprovals,
+      totalOrders: orders.length,
+      createdOrders: orderStatusCounts.createdOrders,
+      inProductionOrders: orderStatusCounts.inProductionOrders,
+      readyForDispatchOrders: orderStatusCounts.readyForDispatchOrders,
+      partiallyDispatchedOrders: orderStatusCounts.partiallyDispatchedOrders,
+      completedOrders: orderStatusCounts.completedOrders,
+    },
+    trendData: buckets,
+    statusMix: [
+      { label: "Created", value: orderStatusCounts.createdOrders, color: "#2563eb" },
+      { label: "In Production", value: orderStatusCounts.inProductionOrders, color: "#ea580c" },
+      { label: "Ready for Dispatch", value: orderStatusCounts.readyForDispatchOrders, color: "#7c3aed" },
+      { label: "Partially Dispatched", value: orderStatusCounts.partiallyDispatchedOrders, color: "#16a34a" },
+      { label: "Completed", value: orderStatusCounts.completedOrders, color: "#0f766e" }
+    ]
+  };
+}
+
+function normalizeListResponse(data) {
+  if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data)) return data;
+  return [];
 }
 
 function DashboardPage() {
   const { user } = useAuth();
-  const [enquiries, setEnquiries] = useState([]);
-  const [orders, setOrders] = useState([]);
+  const [summary, setSummary] = useState(() => normalizeDashboardSummary());
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     const fetchDashboardData = async () => {
+      setLoading(true);
+      setError("");
       try {
-        const [enquiriesRes, ordersRes] = await Promise.all([
-          api.get("/enquiries"),
-          api.get("/orders")
-        ]);
-        setEnquiries(enquiriesRes.data || []);
-        setOrders(ordersRes.data || []);
+        const { data } = await api.get("/dashboard/summary");
+        setSummary(normalizeDashboardSummary(data));
       } catch (error) {
-        logApiError(error, "Failed to load dashboard data");
+        try {
+          const [enquiriesRes, ordersRes] = await Promise.all([
+            api.get("/enquiries"),
+            api.get("/orders")
+          ]);
+          const enquiries = normalizeListResponse(enquiriesRes.data);
+          const orders = normalizeListResponse(ordersRes.data);
+          setSummary(buildSummaryFromLists(enquiries, orders));
+        } catch (fallbackError) {
+          setError("Failed to load dashboard data.");
+          logApiError(fallbackError, "Failed to load dashboard data");
+        }
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -47,87 +148,45 @@ function DashboardPage() {
   }, []);
 
   const stats = useMemo(() => {
-    const pendingApprovals = enquiries.filter((item) => item.status === "PENDING").length;
-    const inProduction = orders.filter((item) => item.status === "IN_PRODUCTION").length;
-    const dispatched = orders.filter((item) => item.status === "DISPATCHED").length;
+    const counts = summary.counts;
 
     return [
-      { label: "Total Enquiries", value: enquiries.length, accent: "blue", icon: <ClipboardIcon /> },
-      { label: "Pending Approvals", value: pendingApprovals, accent: "orange", icon: <HourglassIcon /> },
-      { label: "In Production", value: inProduction, accent: "purple", icon: <FactoryIcon /> },
-      { label: "Dispatched Orders", value: dispatched, accent: "green", icon: <CircleCheckIcon /> }
+      { label: "Total Enquiries", value: counts.totalEnquiries, accent: "blue", icon: <ClipboardIcon /> },
+      { label: "Pending Approvals", value: counts.pendingApprovals, accent: "orange", icon: <HourglassIcon /> },
+      { label: "In Production", value: counts.inProductionOrders, accent: "purple", icon: <FactoryIcon /> },
+      { label: "Ready for Dispatch", value: counts.readyForDispatchOrders, accent: "green", icon: <TruckIcon /> }
     ];
-  }, [enquiries, orders]);
+  }, [summary.counts]);
 
-  const trendData = useMemo(() => {
-    const buckets = [];
-    const bucketMap = new Map();
-    const now = new Date();
-
-    for (let offset = 5; offset >= 0; offset -= 1) {
-      const monthDate = new Date(now.getFullYear(), now.getMonth() - offset, 1);
-      const key = `${monthDate.getFullYear()}-${monthDate.getMonth()}`;
-      const bucket = {
-        key,
-        month: monthDate.toLocaleDateString(undefined, { month: "short" }),
-        enquiries: 0,
-        orders: 0
-      };
-      buckets.push(bucket);
-      bucketMap.set(key, bucket);
-    }
-
-    enquiries.forEach((item) => {
-      const date = getDateFromRecord(item, ["createdAt", "enquiryDate"]);
-      if (!date) return;
-      const key = `${date.getFullYear()}-${date.getMonth()}`;
-      const bucket = bucketMap.get(key);
-      if (bucket) bucket.enquiries += 1;
-    });
-
-    orders.forEach((item) => {
-      const date = getDateFromRecord(item, ["createdAt", "orderDate"]);
-      if (!date) return;
-      const key = `${date.getFullYear()}-${date.getMonth()}`;
-      const bucket = bucketMap.get(key);
-      if (bucket) bucket.orders += 1;
-    });
-
-    return buckets;
-  }, [enquiries, orders]);
-
-  const statusMix = useMemo(() => {
-    const created = orders.filter((item) => item.status === "CREATED").length;
-    const inProduction = orders.filter((item) => item.status === "IN_PRODUCTION").length;
-    const completed = orders.filter((item) => item.status === "COMPLETED").length;
-    const dispatched = orders.filter((item) => item.status === "DISPATCHED").length;
-
-    return [
-      { label: "Created", value: created, color: "#2563eb" },
-      { label: "In Production", value: inProduction, color: "#ea580c" },
-      { label: "Completed", value: completed, color: "#7c3aed" },
-      { label: "Dispatched", value: dispatched, color: "#16a34a" }
-    ];
-  }, [orders]);
+  const trendData = summary.trendData;
+  const statusMix = summary.statusMix;
 
   const maxTrendValue = Math.max(1, ...trendData.flatMap((item) => [item.enquiries, item.orders]));
   const totalStatus = Math.max(1, statusMix.reduce((sum, item) => sum + item.value, 0));
 
   return (
     <div className="erp-dashboard">
-      <section className="erp-panel">
-        <div className="erp-welcome">
-          <div className="erp-welcome-icon"><HomeIcon /></div>
-          <div>
-            <h2>Hey, {user.name || "Admin User"}</h2>
+      {error && (
+        <section className="erp-panel" style={{ borderColor: "#fecaca", background: "#fff7f7" }}>
+          <div className="erp-section-head">
+            <h3>Dashboard load failed</h3>
+            <p>{error}</p>
           </div>
-        </div>
-        <span className="erp-role-badge">{(user.role || "admin").toUpperCase()}</span>
-      </section>
+        </section>
+      )}
+
+      {loading && (
+        <section className="erp-panel">
+          <div className="erp-section-head">
+            <h3>Loading dashboard</h3>
+            <p>Fetching summary data...</p>
+          </div>
+        </section>
+      )}
 
       <section className="erp-stats-grid">
         {stats.map((card) => (
-          <ErpCard key={card.label} icon={card.icon} value={card.value} label={card.label} accent={card.accent} />
+          <ErpCard key={card.label} icon={card.icon} value={card.value} label={card.label} accent={card.accent} size="lg" />
         ))}
       </section>
 

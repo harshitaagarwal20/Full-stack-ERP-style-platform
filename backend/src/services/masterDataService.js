@@ -2,6 +2,10 @@ import prisma from "../config/prisma.js";
 import defaultMasterData, { MASTER_DATA_CATEGORIES } from "../config/masterData.js";
 
 let hasInitialized = false;
+const MASTER_DATA_CACHE_TTL_MS = 30 * 1000;
+let masterDataCache = null;
+let masterDataCacheAt = 0;
+let masterDataInFlight = null;
 const EDITABLE_MASTER_DATA_CATEGORIES = Object.freeze([
   "products",
   "assignedPersons",
@@ -116,6 +120,29 @@ function toMasterDataObject(rows) {
     }
   }
 
+  grouped.productionStatuses = grouped.productionStatuses.map((item) => {
+    if (item.value === "PENDING") return { ...item, label: "Not Started" };
+    if (item.value === "IN_PROGRESS") return { ...item, label: "Started" };
+    if (item.value === "COMPLETED") return { ...item, label: "Completed" };
+    return item;
+  });
+
+  grouped.shipmentStatuses = grouped.shipmentStatuses.map((item) => {
+    if (item.value === "PACKING") return { ...item, label: "Packed" };
+    if (item.value === "SHIPPED") return { ...item, label: "Dispatched" };
+    return item;
+  });
+
+  grouped.orderStatuses = grouped.orderStatuses.map((item) => {
+    if (item.value === "CREATED") return { ...item, label: "Created" };
+    if (item.value === "IN_PRODUCTION") return { ...item, label: "In Production" };
+    if (item.value === "READY_FOR_DISPATCH") return { ...item, label: "Ready for Dispatch" };
+    if (item.value === "PARTIALLY_DISPATCHED") return { ...item, label: "Partially Dispatched" };
+    if (item.value === "COMPLETED") return { ...item, label: "Completed" };
+    if (item.value === "DISPATCHED") return { ...item, label: "Completed" };
+    return item;
+  });
+
   return grouped;
 }
 
@@ -128,30 +155,7 @@ function mergeOptionValue(target, category, value) {
   }
 }
 
-export async function getMasterData() {
-  await ensureMasterDataInitialized();
-  const [rows, enquiryRows, customerRows] = await Promise.all([
-    prisma.$queryRaw`
-    SELECT \`category\`, \`value\`, \`label\`, \`sortOrder\`
-    FROM \`MasterDataItem\`
-    WHERE \`isActive\` = 1
-    ORDER BY \`category\` ASC, \`sortOrder\` ASC, \`id\` ASC
-  `,
-    prisma.$queryRaw`
-      SELECT \`id\`, \`modeOfEnquiry\`, \`companyName\`, \`product\`, \`assignedPerson\`
-      FROM \`EnquiryMaster\`
-      WHERE \`isActive\` = 1
-      ORDER BY \`id\` DESC
-    `,
-    prisma.$queryRaw`
-      SELECT \`id\`, \`customerName\`, \`gstn\`, \`country\`, \`countryCode\`, \`custInitials\`, \`sNoCode\`, \`customerCode\`,
-             \`contactPerson\`, \`contactPersonNumber\`, \`companyEmail\`, \`address\`, \`pincode\`, \`state\`, \`city\`
-      FROM \`CustomerMaster\`
-      WHERE \`isActive\` = 1
-      ORDER BY \`id\` DESC
-    `
-  ]);
-
+function buildMasterData(rows, enquiryRows, customerRows) {
   const base = toMasterDataObject(rows);
   const enquiryMaster = enquiryRows.map((row) => ({
     id: Number(row.id),
@@ -196,6 +200,62 @@ export async function getMasterData() {
   return base;
 }
 
+async function loadMasterDataSnapshot() {
+  await ensureMasterDataInitialized();
+  const [rows, enquiryRows, customerRows] = await Promise.all([
+    prisma.$queryRaw`
+    SELECT \`category\`, \`value\`, \`label\`, \`sortOrder\`
+    FROM \`MasterDataItem\`
+    WHERE \`isActive\` = 1
+    ORDER BY \`category\` ASC, \`sortOrder\` ASC, \`id\` ASC
+  `,
+    prisma.$queryRaw`
+      SELECT \`id\`, \`modeOfEnquiry\`, \`companyName\`, \`product\`, \`assignedPerson\`
+      FROM \`EnquiryMaster\`
+      WHERE \`isActive\` = 1
+      ORDER BY \`id\` DESC
+    `,
+    prisma.$queryRaw`
+      SELECT \`id\`, \`customerName\`, \`gstn\`, \`country\`, \`countryCode\`, \`custInitials\`, \`sNoCode\`, \`customerCode\`,
+             \`contactPerson\`, \`contactPersonNumber\`, \`companyEmail\`, \`address\`, \`pincode\`, \`state\`, \`city\`
+      FROM \`CustomerMaster\`
+      WHERE \`isActive\` = 1
+      ORDER BY \`id\` DESC
+    `
+  ]);
+
+  return buildMasterData(rows, enquiryRows, customerRows);
+}
+
+export function invalidateMasterDataCache() {
+  masterDataCache = null;
+  masterDataCacheAt = 0;
+}
+
+export async function getMasterData({ force = false } = {}) {
+  const now = Date.now();
+
+  if (!force && masterDataCache && now - masterDataCacheAt < MASTER_DATA_CACHE_TTL_MS) {
+    return masterDataCache;
+  }
+
+  if (!force && masterDataInFlight) {
+    return masterDataInFlight;
+  }
+
+  masterDataInFlight = loadMasterDataSnapshot()
+    .then((data) => {
+      masterDataCache = data;
+      masterDataCacheAt = Date.now();
+      return data;
+    })
+    .finally(() => {
+      masterDataInFlight = null;
+    });
+
+  return masterDataInFlight;
+}
+
 export async function addMasterDataValue(categoryInput, payload, user) {
   const category = normalizeCategory(categoryInput);
   if (!isValidCategory(category)) {
@@ -234,6 +294,7 @@ export async function addMasterDataValue(categoryInput, payload, user) {
       \`label\` = VALUES(\`label\`),
       \`isActive\` = 1
   `;
+  invalidateMasterDataCache();
 
   return {
     category,
@@ -263,6 +324,7 @@ export async function addEnquiryMasterRow(payload, user) {
     ON DUPLICATE KEY UPDATE
       \`isActive\` = 1
   `;
+  invalidateMasterDataCache();
 
   return {
     modeOfEnquiry,
@@ -273,7 +335,7 @@ export async function addEnquiryMasterRow(payload, user) {
   };
 }
 
-export async function addCustomerMasterRow(payload, user) {
+export async function addCustomerMasterRow(payload, user, options = {}) {
   await ensureMasterDataInitialized();
 
   const customerName = String(payload.customer_name || "").trim();
@@ -320,11 +382,44 @@ export async function addCustomerMasterRow(payload, user) {
       \`city\` = VALUES(\`city\`),
       \`isActive\` = 1
   `;
+  if (!options.skipCacheInvalidation) {
+    invalidateMasterDataCache();
+  }
 
   return {
     customerName,
     customerCode,
     updatedBy: user?.email || null
+  };
+}
+
+export async function deleteCustomerMasterRow(customerId, user) {
+  await ensureMasterDataInitialized();
+
+  const id = Number(customerId);
+  if (!Number.isInteger(id) || id <= 0) {
+    const error = new Error("Invalid customer id.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const result = await prisma.$executeRaw`
+    UPDATE \`CustomerMaster\`
+    SET \`isActive\` = 0
+    WHERE \`id\` = ${id} AND \`isActive\` = 1
+  `;
+
+  if (!result) {
+    const notFoundError = new Error("Customer master row not found.");
+    notFoundError.statusCode = 404;
+    throw notFoundError;
+  }
+
+  invalidateMasterDataCache();
+
+  return {
+    id,
+    deletedBy: user?.email || null
   };
 }
 
@@ -335,7 +430,7 @@ export async function importCustomerMasterRows(rows, user) {
   for (let index = 0; index < rows.length; index += 1) {
     const row = rows[index];
     try {
-      await addCustomerMasterRow(row, user);
+      await addCustomerMasterRow(row, user, { skipCacheInvalidation: true });
       imported += 1;
     } catch (error) {
       errors.push({
@@ -344,6 +439,7 @@ export async function importCustomerMasterRows(rows, user) {
       });
     }
   }
+  invalidateMasterDataCache();
 
   return {
     total: rows.length,

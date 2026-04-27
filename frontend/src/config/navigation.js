@@ -5,7 +5,7 @@ const NAV_ITEMS = [
   { to: "/orders", label: "Orders", icon: "cart", roles: ["admin", "sales", "production", "dispatch"] },
   { to: "/production", label: "Production", icon: "factory", roles: ["admin", "sales", "production", "dispatch"] },
   { to: "/dispatch", label: "Dispatch", icon: "truck", roles: ["admin", "sales", "production", "dispatch"] },
-  { to: "/pending-export-date", label: "Pending Export Date", icon: "clipboard", roles: ["admin", "dispatch"] },
+  { to: "/pending-dispatch-date", label: "Dispatch Date", icon: "clipboard", roles: ["admin", "dispatch"] },
   { to: "/activity-log", label: "Activity Log", icon: "clipboard", roles: ["admin"] },
   { to: "/master-data", label: "Master Data", icon: "clipboard", roles: ["admin"] },
   { to: "/users", label: "Users", icon: "users", roles: ["admin"] }

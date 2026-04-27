@@ -3,6 +3,7 @@ import { createEnquiry, deleteEnquiry, listEnquiries, updateEnquiry, updateEnqui
 export async function getEnquiries(req, res, next) {
   try {
     const enquiries = await listEnquiries(req.query);
+    res.setHeader("Cache-Control", "private, max-age=10");
 
     return res.json(enquiries);
   } catch (error) {

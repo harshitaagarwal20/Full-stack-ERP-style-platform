@@ -1,18 +1,116 @@
 import prisma from "../config/prisma.js";
 import { recordAuditEvent } from "./auditService.js";
 import { buildPagination } from "../utils/pagination.js";
+import { buildCacheKey, getOrLoadCached, invalidateCacheByPrefix } from "../utils/responseCache.js";
 import { ORDER_LIST_SELECT } from "../utils/selects.js";
+import { getPrimaryEnquiryProduct } from "../utils/enquiryProducts.js";
+import { ensureProductsExist } from "../utils/productCatalog.js";
+import { getCustomerMasterProfileByName } from "../utils/customerCatalog.js";
+import { normalizeCurrencyInput, normalizePriceInput } from "../utils/commerce.js";
+import {
+  extractSalesGroupSequence,
+  formatSalesGroupNumber,
+  formatSalesOrderNumber,
+  normalizeSalesGroupNumber
+} from "../utils/businessNumbers.js";
+
+const ORDER_CACHE_PREFIX = "orders:list";
+const ORDER_CACHE_TTL_MS = 12 * 1000;
 
 function generateOrderNo(id) {
   return `ORD-${String(id).padStart(6, "0")}`;
 }
 
-function generateSalesOrderNumber(id) {
-  return `SO-${String(id).padStart(6, "0")}`;
-}
-
 function isNonEmpty(value) {
   return typeof value === "string" ? value.trim().length > 0 : Boolean(value);
+}
+
+function isDispatchLifecycleStatus(status) {
+  return ["READY_FOR_DISPATCH", "PARTIALLY_DISPATCHED", "COMPLETED", "DISPATCHED"].includes(status);
+}
+
+function invalidateOrderReadCaches() {
+  invalidateCacheByPrefix("orders:");
+  invalidateCacheByPrefix("dispatch:");
+  invalidateCacheByPrefix("production:");
+  invalidateCacheByPrefix("dashboard:");
+}
+
+async function getNextSalesGroupNumber() {
+  const existing = await prisma.order.findMany({
+    select: {
+      salesGroupNumber: true
+    }
+  });
+  const maxSequence = existing.reduce((max, row) => Math.max(max, extractSalesGroupSequence(row.salesGroupNumber)), 0);
+  return formatSalesGroupNumber(maxSequence + 1);
+}
+
+export function buildOrderCreateData({
+  payload,
+  enquiry,
+  createdByUser,
+  customerProfile,
+  salesGroupNumber,
+  product
+}) {
+  const resolvedAddress = customerProfile?.address || payload.address || null;
+  const resolvedCity = customerProfile?.city || payload.city || null;
+  const resolvedPincode = customerProfile?.pincode || payload.pincode || null;
+  const resolvedState = customerProfile?.state || payload.state || null;
+  const resolvedCountryCode = customerProfile?.countryCode || payload.country_code || null;
+  const resolvedPrice = payload.price !== undefined
+    ? normalizePriceInput(payload.price)
+    : enquiry?.price ?? null;
+  const resolvedCurrency = payload.currency !== undefined
+    ? normalizeCurrencyInput(payload.currency)
+    : enquiry?.currency ?? null;
+
+  return {
+    enquiryId: enquiry?.id ?? null,
+    createdById: createdByUser.id,
+    salesGroupNumber,
+    salesOrderNumber: `TSO-${Date.now()}`,
+    orderNo: `TMP-${Date.now()}`,
+    product,
+    grade: payload.grade,
+    quantity: payload.quantity,
+    price: resolvedPrice,
+    currency: resolvedCurrency,
+    unit: payload.unit,
+    packingType: payload.packing_type,
+    packingSize: payload.packing_size,
+    deliveryDate: new Date(payload.delivery_date),
+    clientName: payload.client_name,
+    address: resolvedAddress,
+    city: resolvedCity,
+    pincode: resolvedPincode,
+    state: resolvedState,
+    countryCode: resolvedCountryCode,
+    remarks: payload.remarks,
+    status: "CREATED"
+  };
+}
+
+export function buildOrderUpdateData(payload, customerProfile = null) {
+  return {
+    product: payload.product !== undefined ? payload.product : undefined,
+    grade: payload.grade,
+    quantity: payload.quantity,
+    price: payload.price !== undefined ? normalizePriceInput(payload.price) : undefined,
+    currency: payload.currency !== undefined ? normalizeCurrencyInput(payload.currency) : undefined,
+    unit: payload.unit,
+    packingType: payload.packing_type,
+    packingSize: payload.packing_size,
+    deliveryDate: payload.delivery_date ? new Date(payload.delivery_date) : undefined,
+    clientName: payload.client_name,
+    address: customerProfile?.address || payload.address,
+    city: customerProfile?.city || payload.city,
+    pincode: customerProfile?.pincode || payload.pincode,
+    state: customerProfile?.state || payload.state,
+    countryCode: customerProfile?.countryCode || payload.country_code,
+    remarks: payload.remarks
+  };
 }
 
 export async function createOrder(payload, createdByUser) {
@@ -26,8 +124,12 @@ export async function createOrder(payload, createdByUser) {
         id: true,
         status: true,
         companyName: true,
+        enquiryNumber: true,
         product: true,
+        products: true,
         quantity: true,
+        price: true,
+        currency: true,
         grade: true,
         order: {
           select: {
@@ -56,58 +158,50 @@ export async function createOrder(payload, createdByUser) {
     }
   }
 
+  const customerProfile = await getCustomerMasterProfileByName(payload.client_name);
+
   let finalOrder;
 
   if (enquiryId) {
+    const existingGroup = await prisma.order.findFirst({
+      where: {
+        enquiry: {
+          enquiryNumber: enquiry.enquiryNumber
+        }
+      },
+      select: {
+        salesGroupNumber: true
+      },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }]
+    });
+    const salesGroupNumber = normalizeSalesGroupNumber(existingGroup?.salesGroupNumber) || await getNextSalesGroupNumber();
+    const product = isNonEmpty(payload.product)
+      ? (await ensureProductsExist(payload.product))[0]
+      : getPrimaryEnquiryProduct(enquiry);
+
     const order = await prisma.order.create({
-      data: {
-        enquiryId,
-        createdById: createdByUser.id,
-        salesOrderNumber: `TSO-${Date.now()}`,
-        orderNo: `TMP-${Date.now()}`,
-        product: payload.product,
-        grade: payload.grade,
-        quantity: payload.quantity,
-        unit: payload.unit,
-        packingType: payload.packing_type,
-        packingSize: payload.packing_size,
-        deliveryDate: new Date(payload.delivery_date),
-        clientName: payload.client_name,
-        address: payload.address,
-        city: payload.city,
-        pincode: payload.pincode,
-        state: payload.state,
-        countryCode: payload.country_code,
-        remarks: payload.remarks,
-        status: "CREATED"
-      }
+      data: buildOrderCreateData({
+        payload,
+        enquiry,
+        createdByUser,
+        customerProfile,
+        salesGroupNumber,
+        product
+      })
     });
 
     finalOrder = await prisma.order.update({
       where: { id: order.id },
       data: {
-        salesOrderNumber: generateSalesOrderNumber(order.id),
+        salesOrderNumber: formatSalesOrderNumber(order.id),
         orderNo: generateOrderNo(order.id)
       },
       select: ORDER_LIST_SELECT
     });
   } else {
-    await prisma.$executeRaw`
-      INSERT INTO \`Order\`
-        (\`enquiryId\`, \`salesOrderNumber\`, \`orderNo\`, \`product\`, \`grade\`, \`quantity\`, \`unit\`, \`packingType\`, \`packingSize\`, \`deliveryDate\`, \`clientName\`, \`address\`, \`city\`, \`pincode\`, \`state\`, \`countryCode\`, \`status\`, \`orderDate\`, \`remarks\`, \`createdAt\`, \`updatedAt\`, \`createdById\`)
-      VALUES
-        (NULL, ${`TSO-${Date.now()}`}, ${`TMP-${Date.now()}`}, ${payload.product}, ${payload.grade}, ${payload.quantity}, ${payload.unit}, ${payload.packing_type}, ${payload.packing_size}, ${new Date(payload.delivery_date)}, ${payload.client_name}, ${payload.address || null}, ${payload.city || null}, ${payload.pincode || null}, ${payload.state || null}, ${payload.country_code || null}, 'CREATED', NOW(3), ${payload.remarks || null}, NOW(3), NOW(3), ${createdByUser.id})
-    `;
-
-    const insertedRow = await prisma.$queryRaw`
-      SELECT LAST_INSERT_ID() AS id
-    `;
-    const insertedId = Number(insertedRow?.[0]?.id);
-
-    finalOrder = await prisma.order.findUnique({
-      where: { id: insertedId },
-      select: ORDER_LIST_SELECT
-    });
+    const error = new Error("Manual orders must be created through manual order requests.");
+    error.statusCode = 400;
+    throw error;
   }
 
   await recordAuditEvent({
@@ -121,23 +215,32 @@ export async function createOrder(payload, createdByUser) {
       : `Created manual order #${finalOrder.id}`
   });
 
+  invalidateOrderReadCaches();
   return finalOrder;
 }
 
 export async function listOrders(filters = {}) {
-  const { status, q } = filters;
+  const { status, q, client, date } = filters;
   const { page, take, skip } = buildPagination(filters, { defaultLimit: 0, maxLimit: 100 });
+  const normalizedClient = String(client || "").trim();
+  const normalizedDate = String(date || "").trim();
+  const dateFrom = normalizedDate ? new Date(`${normalizedDate}T00:00:00.000Z`) : null;
+  const dateTo = normalizedDate ? new Date(`${normalizedDate}T23:59:59.999Z`) : null;
 
   const where = {
     ...(status ? { status } : {}),
+    ...(normalizedClient ? { clientName: { contains: normalizedClient } } : {}),
+    ...(normalizedDate && dateFrom && dateTo ? { deliveryDate: { gte: dateFrom, lte: dateTo } } : {}),
     ...(q
       ? {
           OR: [
             { salesOrderNumber: { contains: q } },
+            { salesGroupNumber: { contains: q } },
             { orderNo: { contains: q } },
             { clientName: { contains: q } },
             { product: { contains: q } },
             { grade: { contains: q } },
+            { enquiry: { enquiryNumber: { contains: q } } },
             { enquiry: { companyName: { contains: q } } }
           ]
         }
@@ -150,28 +253,40 @@ export async function listOrders(filters = {}) {
     orderBy: [{ createdAt: "desc" }, { id: "desc" }]
   };
 
-  if (take > 0) {
-    const [items, total] = await Promise.all([
-      prisma.order.findMany({
-        ...query,
-        skip,
-        take
-      }),
-      prisma.order.count({ where })
-    ]);
+  const cacheKey = buildCacheKey(ORDER_CACHE_PREFIX, {
+    status: status || null,
+    q: q || null,
+    client: normalizedClient || null,
+    date: normalizedDate || null,
+    page,
+    take,
+    skip
+  });
 
-    return {
-      items,
-      pagination: {
-        page,
-        limit: take,
-        total,
-        totalPages: Math.max(1, Math.ceil(total / take))
-      }
-    };
-  }
+  return getOrLoadCached(cacheKey, ORDER_CACHE_TTL_MS, async () => {
+    if (take > 0) {
+      const [items, total] = await Promise.all([
+        prisma.order.findMany({
+          ...query,
+          skip,
+          take
+        }),
+        prisma.order.count({ where })
+      ]);
 
-  return prisma.order.findMany(query);
+      return {
+        items,
+        pagination: {
+          page,
+          limit: take,
+          total,
+          totalPages: Math.max(1, Math.ceil(total / take))
+        }
+      };
+    }
+
+    return prisma.order.findMany(query);
+  });
 }
 
 export async function moveOrderToProduction(orderId, actorUser) {
@@ -204,7 +319,7 @@ export async function moveOrderToProduction(orderId, actorUser) {
     throw error;
   }
 
-  if (order.status === "DISPATCHED" || order.status === "COMPLETED") {
+  if (isDispatchLifecycleStatus(order.status) || order.status === "IN_PRODUCTION") {
     const error = new Error("Only active orders can move to production.");
     error.statusCode = 400;
     throw error;
@@ -238,6 +353,7 @@ export async function moveOrderToProduction(orderId, actorUser) {
     note: `Moved order #${orderId} to production`
   });
 
+  invalidateOrderReadCaches();
   return updatedOrder;
 }
 
@@ -246,6 +362,8 @@ export async function updateOrder(orderId, payload, actorUser) {
     where: { id: orderId },
     select: {
       id: true,
+      price: true,
+      currency: true,
       production: {
         select: {
           id: true
@@ -271,23 +389,15 @@ export async function updateOrder(orderId, payload, actorUser) {
     throw error;
   }
 
+  const customerProfile = payload.client_name
+    ? await getCustomerMasterProfileByName(payload.client_name)
+    : null;
+
   const updatedOrder = await prisma.order.update({
     where: { id: orderId },
     data: {
-      product: payload.product,
-      grade: payload.grade,
-      quantity: payload.quantity,
-      unit: payload.unit,
-      packingType: payload.packing_type,
-      packingSize: payload.packing_size,
-      deliveryDate: payload.delivery_date ? new Date(payload.delivery_date) : undefined,
-      clientName: payload.client_name,
-      address: payload.address,
-      city: payload.city,
-      pincode: payload.pincode,
-      state: payload.state,
-      countryCode: payload.country_code,
-      remarks: payload.remarks
+      ...buildOrderUpdateData(payload, customerProfile),
+      product: payload.product !== undefined ? (await ensureProductsExist(payload.product))[0] : undefined
     },
     select: ORDER_LIST_SELECT
   });
@@ -302,6 +412,7 @@ export async function updateOrder(orderId, payload, actorUser) {
     note: `Updated order #${orderId}`
   });
 
+  invalidateOrderReadCaches();
   return updatedOrder;
 }
 
@@ -335,7 +446,7 @@ export async function deleteOrder(orderId, actorUser) {
     throw error;
   }
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     await recordAuditEvent({
       tx,
       action: "DELETE_ORDER",
@@ -352,4 +463,7 @@ export async function deleteOrder(orderId, actorUser) {
 
     return { id: orderId };
   });
+
+  invalidateOrderReadCaches();
+  return result;
 }

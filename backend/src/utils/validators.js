@@ -1,4 +1,14 @@
 import { z } from "zod";
+import { normalizeEnquiryProductRows } from "./enquiryProducts.js";
+
+const manualOrderRequestProductsInputSchema = z.preprocess((value) => {
+  return normalizeEnquiryProductRows(value);
+}, z.array(z.object({
+  product: z.string().min(1),
+  grade: z.string().optional().default(""),
+  quantity: z.union([z.string(), z.number()]).optional().nullable(),
+  unit_of_measurement: z.string().optional().nullable()
+}))).optional();
 
 export const loginSchema = z.object({
   email: z.string().email(),
@@ -19,28 +29,52 @@ export const updateUserSchema = z.object({
   role: z.enum(["admin", "sales", "production", "dispatch"]).optional()
 });
 
-export const createEnquirySchema = z.object({
+const enquiryProductsInputSchema = z.preprocess((value) => {
+  return normalizeEnquiryProductRows(value);
+}, z.array(z.object({
+  product: z.string().min(1),
+  grade: z.string().optional().default(""),
+  quantity: z.union([z.string(), z.number()]).optional().nullable(),
+  unit_of_measurement: z.string().optional().nullable()
+}))).optional();
+
+const enquiryBaseSchema = z.object({
   enquiry_date: z.string().min(4),
   mode_of_enquiry: z.string().min(1).optional().nullable(),
   company_name: z.string().min(2),
-  product: z.string().min(1),
-  quantity: z.number().int().positive(),
+  product: z.string().min(1).optional(),
+  products: enquiryProductsInputSchema,
+  quantity: z.number().int().positive().optional(),
+  price: z.number().nonnegative().optional().nullable(),
+  currency: z.string().length(3).optional().nullable(),
   unit_of_measurement: z.string().optional().nullable(),
   expected_timeline: z.string().min(2),
   assigned_person: z.string().min(1),
   notes_for_production: z.string().optional().nullable()
 });
 
-export const updateEnquirySchema = z.object({
-  enquiry_date: z.string().min(4).optional(),
-  mode_of_enquiry: z.string().min(1).optional().nullable(),
-  company_name: z.string().min(2).optional(),
-  product: z.string().min(1).optional(),
-  quantity: z.number().int().positive().optional(),
-  unit_of_measurement: z.string().optional().nullable(),
-  expected_timeline: z.string().min(2).optional(),
-  assigned_person: z.string().min(1).optional(),
-  notes_for_production: z.string().optional().nullable()
+export const createEnquirySchema = enquiryBaseSchema.superRefine((data, ctx) => {
+  const products = normalizeEnquiryProductRows(data.products ?? data.product);
+  if (products.length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["products"],
+      message: "Select at least one product."
+    });
+  }
+});
+
+export const updateEnquirySchema = enquiryBaseSchema.partial().superRefine((data, ctx) => {
+  if (data.product !== undefined || data.products !== undefined) {
+    const products = normalizeEnquiryProductRows(data.products ?? data.product);
+    if (products.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["products"],
+        message: "Select at least one product."
+      });
+    }
+  }
 });
 
 export const updateEnquiryStatusSchema = z.object({
@@ -52,6 +86,8 @@ export const createOrderSchema = z.object({
   product: z.string().min(2),
   grade: z.string().min(1),
   quantity: z.number().int().positive(),
+  price: z.number().nonnegative().optional().nullable(),
+  currency: z.string().length(3).optional().nullable(),
   unit: z.string().min(1),
   packing_type: z.string().min(1),
   packing_size: z.string().min(1),
@@ -65,10 +101,56 @@ export const createOrderSchema = z.object({
   remarks: z.string().optional().nullable()
 });
 
+export const createManualOrderRequestSchema = z.object({
+  product: z.string().min(2).optional(),
+  products: manualOrderRequestProductsInputSchema,
+  grade: z.string().min(1).optional(),
+  quantity: z.number().int().positive().optional(),
+  unit: z.string().min(1).optional(),
+  delivery_date: z.string().min(4).optional().or(z.literal("")),
+  dispatch_date: z.string().min(4).optional().or(z.literal("")),
+  packing_type: z.string().min(1).optional().or(z.literal("")),
+  packing_size: z.string().min(1).optional().or(z.literal("")),
+  client_name: z.string().min(2),
+  address: z.string().min(2).optional().or(z.literal("")),
+  city: z.string().min(2).optional(),
+  pincode: z.string().min(4).optional(),
+  state: z.string().min(2).optional(),
+  country_code: z.string().min(2).optional().or(z.literal("")),
+  remarks: z.string().optional().nullable()
+}).superRefine((data, ctx) => {
+  const products = normalizeEnquiryProductRows(data.products ?? data.product);
+  if (products.length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["products"],
+      message: "Select at least one product."
+    });
+  }
+
+  if (!String(data.delivery_date || data.dispatch_date || "").trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["delivery_date"],
+      message: "Expected timeline is required."
+    });
+  }
+});
+
+export const updateManualOrderRequestStatusSchema = z.object({
+  status: z.enum(["APPROVED", "REJECTED"])
+});
+
+export const setManualOrderRequestDispatchDateSchema = z.object({
+  dispatch_date: z.string().min(4)
+});
+
 export const updateOrderSchema = z.object({
   product: z.string().min(2).optional(),
   grade: z.string().min(1).optional(),
   quantity: z.number().int().positive().optional(),
+  price: z.number().nonnegative().optional().nullable(),
+  currency: z.string().length(3).optional().nullable(),
   unit: z.string().min(1).optional(),
   packing_type: z.string().min(1).optional(),
   packing_size: z.string().min(1).optional(),
@@ -112,7 +194,7 @@ export const updateProductionSchema = z.object({
   blower_rpm: z.number().int().positive().optional(),
   raw_materials: z.string().min(2).optional().or(z.literal("")),
   remarks: z.string().optional().nullable(),
-  status: z.enum(["PENDING", "IN_PROGRESS", "COMPLETED"]).optional(),
+  status: z.enum(["PENDING", "IN_PROGRESS", "HOLD", "COMPLETED"]).optional(),
   state: z.string().optional().nullable()
 });
 
@@ -139,8 +221,8 @@ export const updateDispatchSchema = z.object({
   remarks: z.string().optional().nullable()
 });
 
-export const updateOrderExportDateSchema = z.object({
-  export_date: z.string().min(4)
+export const updateOrderDispatchDateSchema = z.object({
+  dispatch_date: z.string().min(4)
 });
 
 export const createMasterDataValueSchema = z.object({
@@ -156,7 +238,7 @@ export const createEnquiryMasterSchema = z.object({
 });
 
 export const createCustomerMasterSchema = z.object({
-  customer_name: z.string().min(1),
+  customer_name: z.preprocess((value) => String(value ?? "").trim(), z.string().min(1)),
   gstn: z.string().optional().nullable(),
   country: z.string().optional().nullable(),
   country_code: z.string().optional().nullable(),

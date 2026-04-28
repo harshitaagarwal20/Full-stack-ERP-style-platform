@@ -32,7 +32,16 @@ self.addEventListener("fetch", (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put("/index.html", responseClone));
           return response;
         })
-        .catch(() => caches.match("/index.html"))
+        .catch(async () => {
+          const cachedIndex = await caches.match("/index.html");
+          if (cachedIndex) return cachedIndex;
+          return new Response("Offline and no cached app shell is available.", {
+            status: 503,
+            headers: {
+              "Content-Type": "text/plain; charset=utf-8"
+            }
+          });
+        })
     );
     return;
   }
@@ -53,7 +62,7 @@ self.addEventListener("fetch", (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone));
           return response;
         })
-        .catch(() => cachedResponse);
+        .catch(() => cachedResponse || Response.error());
     })
   );
 });

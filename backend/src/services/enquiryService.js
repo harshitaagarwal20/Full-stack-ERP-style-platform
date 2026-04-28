@@ -10,6 +10,10 @@ import { normalizeCurrencyInput, normalizePriceInput } from "../utils/commerce.j
 
 const ENQUIRY_CACHE_PREFIX = "enquiries:list";
 const ENQUIRY_CACHE_TTL_MS = 12 * 1000;
+const ENQUIRY_TRANSACTION_OPTIONS = {
+  maxWait: 5000,
+  timeout: 15000
+};
 
 function invalidateEnquiryReadCaches() {
   invalidateCacheByPrefix("enquiries:");
@@ -140,7 +144,7 @@ export async function createEnquiry(payload, userId) {
     }
 
     return createdRows.length === 1 ? createdRows[0] : createdRows;
-  });
+  }, ENQUIRY_TRANSACTION_OPTIONS);
   invalidateEnquiryReadCaches();
   return created;
 }
@@ -274,7 +278,7 @@ export async function updateEnquiryStatus(enquiryId, status, approvedByUser) {
       where: { id: enquiryId },
       select: ENQUIRY_LIST_SELECT
     });
-  });
+  }, ENQUIRY_TRANSACTION_OPTIONS);
 
   invalidateEnquiryReadCaches();
   return updatedEnquiry;
@@ -380,7 +384,7 @@ export async function updateEnquiry(enquiryId, payload) {
       }
 
       return rows;
-    });
+    }, ENQUIRY_TRANSACTION_OPTIONS);
 
     invalidateEnquiryReadCaches();
     return createdRows.length === 1 ? createdRows[0] : createdRows;
@@ -447,7 +451,7 @@ export async function deleteEnquiry(enquiryId, actorUser) {
 
     await tx.enquiry.delete({ where: { id: enquiryId } });
     return { id: enquiryId };
-  });
+  }, ENQUIRY_TRANSACTION_OPTIONS);
   invalidateEnquiryReadCaches();
   return result;
 }

@@ -104,7 +104,31 @@ await assert.rejects(
   () => setManualOrderDispatchDate(
     2,
     { dispatch_date: "2026-05-04" },
-    { id: 1, name: "Test Admin", role: "admin" }
+    { id: 1, name: "Test Admin", role: "admin" },
+    {
+      manualOrderRequest: {
+        findUnique: async () => ({
+          id: 2,
+          requestNumber: "MOR_0002",
+          product: "GMS 90",
+          grade: "AB",
+          quantity: 150,
+          unit: "KG",
+          packingType: "NA",
+          packingSize: "NA",
+          clientName: "ALGOL CHEMICAL INDIA PVT. LTD.",
+          address: "Some Address",
+          city: "Mumbai",
+          pincode: "421302",
+          state: "Maharashtra",
+          countryCode: "IN",
+          remarks: "Created from manual request MOR_0002: GMS 90 - AB - 150 KG",
+          status: "APPROVED",
+          dispatchDate: null,
+          orderId: 7
+        })
+      }
+    }
   ),
   (error) => error.statusCode === 409 && error.message === "Order already created for this manual request."
 );

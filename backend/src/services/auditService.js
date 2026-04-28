@@ -24,12 +24,25 @@ const AUDIT_TABLE_SQL = `
 
 let auditTableReady;
 
-async function ensureAuditLogTable(client = prisma) {
+async function ensureAuditLogTable(client = prisma, { suppressErrors = false } = {}) {
   if (!auditTableReady) {
-    auditTableReady = client.$executeRawUnsafe(AUDIT_TABLE_SQL);
+    auditTableReady = client.$executeRawUnsafe(AUDIT_TABLE_SQL).catch((error) => {
+      auditTableReady = undefined;
+      throw error;
+    });
   }
 
-  await auditTableReady;
+  try {
+    await auditTableReady;
+    return true;
+  } catch (error) {
+    if (suppressErrors) {
+      console.warn("Audit log table initialization skipped:", error?.message || error);
+      return false;
+    }
+
+    throw error;
+  }
 }
 
 function toJsonString(value) {
@@ -115,18 +128,22 @@ export async function recordAuditEvent({
 }) {
   const client = tx || prisma;
 
-  await client.$executeRawUnsafe(
-    `INSERT INTO \`AuditLog\` (\`action\`, \`entityType\`, \`entityId\`, \`actorId\`, \`actorName\`, \`actorRole\`, \`oldValue\`, \`newValue\`, \`note\`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    action,
-    entityType,
-    entityId,
-    user?.id ?? null,
-    user?.name ?? null,
-    user?.role ?? null,
-    toJsonString(oldValue),
-    toJsonString(newValue),
-    note
-  );
+  try {
+    await client.$executeRawUnsafe(
+      `INSERT INTO \`AuditLog\` (\`action\`, \`entityType\`, \`entityId\`, \`actorId\`, \`actorName\`, \`actorRole\`, \`oldValue\`, \`newValue\`, \`note\`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      action,
+      entityType,
+      entityId,
+      user?.id ?? null,
+      user?.name ?? null,
+      user?.role ?? null,
+      toJsonString(oldValue),
+      toJsonString(newValue),
+      note
+    );
+  } catch (error) {
+    console.warn("Failed to record audit event:", error?.message || error);
+  }
 }
 
 export async function listAuditLogs(filters = {}) {

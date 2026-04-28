@@ -334,7 +334,7 @@ export async function updateManualOrderRequestStatus(requestId, status, actorUse
   return updated;
 }
 
-export async function setManualOrderDispatchDate(requestId, payload, actorUser) {
+export async function setManualOrderDispatchDate(requestId, payload, actorUser, client = prisma) {
   const dispatchDate = parseDateInput(payload.dispatch_date);
   if (!dispatchDate) {
     const error = new Error("Dispatch date is required.");
@@ -342,7 +342,7 @@ export async function setManualOrderDispatchDate(requestId, payload, actorUser) 
     throw error;
   }
 
-  const request = await prisma.manualOrderRequest.findUnique({
+  const request = await client.manualOrderRequest.findUnique({
     where: { id: requestId },
     select: {
       id: true,
@@ -385,7 +385,7 @@ export async function setManualOrderDispatchDate(requestId, payload, actorUser) 
   }
 
   const order = await createOrderFromManualRequest({ ...request, dispatchDate }, actorUser);
-  const updatedRequest = await prisma.manualOrderRequest.findUnique({
+  const updatedRequest = await client.manualOrderRequest.findUnique({
     where: { id: requestId },
     select: MANUAL_ORDER_REQUEST_SELECT
   });

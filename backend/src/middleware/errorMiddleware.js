@@ -15,7 +15,13 @@ function getStatusCode(error) {
     case "P2000":
     case "P2011":
       return 400;
+    case "P1001":
+    case "P1002":
+    case "P1008":
+    case "P1017":
+      return 503;
     default:
+      if (error?.name === "PrismaClientInitializationError") return 503;
       return 500;
   }
 }
@@ -27,6 +33,15 @@ function getMessage(error) {
   if (error?.code === "P2025") return "Requested record not found.";
   if (error?.code === "P2000") return "One or more values are too long for the database field.";
   if (error?.code === "P2011") return "A required field is missing.";
+  if (
+    error?.code === "P1001" ||
+    error?.code === "P1002" ||
+    error?.code === "P1008" ||
+    error?.code === "P1017" ||
+    error?.name === "PrismaClientInitializationError"
+  ) {
+    return "Database connection is unavailable.";
+  }
   if (error?.name === "SyntaxError" && String(error.message || "").includes("JSON")) {
     return "Invalid JSON payload.";
   }

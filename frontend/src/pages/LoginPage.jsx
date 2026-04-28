@@ -35,7 +35,7 @@ function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-200 via-white to-slate-200 p-4">
       <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl sm:p-8">
-        <h1 className="text-2xl font-bold text-slate-900">FMS Login</h1>
+        <h1 className="text-2xl font-bold text-slate-900">Login</h1>
         <p className="mt-1 text-sm text-slate-500">Sign in with your role credentials.</p>
 
         <form className="mt-6 space-y-4" onSubmit={onSubmit}>

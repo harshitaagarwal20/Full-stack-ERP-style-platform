@@ -233,19 +233,22 @@ async function createSeedManualOrderRequestGroup(tx, request, createdById) {
 async function main() {
   await prisma.$executeRawUnsafe(AUDIT_TABLE_SQL);
 
-  const cleanupTasks = [
-    prisma.dispatch.deleteMany(),
-    prisma.production.deleteMany(),
-    prisma.order.deleteMany(),
-    prisma.enquiry.deleteMany(),
-    prisma.user.deleteMany()
-  ];
+  const cleanupTasks = [];
 
   if (prisma.auditLog?.deleteMany) {
     cleanupTasks.push(prisma.auditLog.deleteMany());
   } else {
     cleanupTasks.push(prisma.$executeRawUnsafe("DELETE FROM `AuditLog`"));
   }
+
+  cleanupTasks.push(
+    prisma.dispatch.deleteMany(),
+    prisma.production.deleteMany(),
+    prisma.manualOrderRequest.deleteMany(),
+    prisma.order.deleteMany(),
+    prisma.enquiry.deleteMany(),
+    prisma.user.deleteMany()
+  );
 
   await prisma.$transaction(cleanupTasks);
 

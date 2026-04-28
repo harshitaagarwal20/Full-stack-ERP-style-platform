@@ -14,6 +14,10 @@ import {
 let hasDispatchDateColumnCache;
 const DISPATCH_CACHE_PREFIX = "dispatch:dashboard";
 const DISPATCH_CACHE_TTL_MS = 12 * 1000;
+const DISPATCH_TRANSACTION_OPTIONS = {
+  maxWait: 5000,
+  timeout: 15000
+};
 
 function getDeliveredQuantity(dispatches = []) {
   return dispatches.reduce((sum, item) => sum + (item.dispatchedQuantity || 0), 0);
@@ -481,8 +485,9 @@ export async function updateOrderDispatchDate(enquiryId, payload, actorUser) {
     throw error;
   }
 
+  const hasDispatchDateColumn = await hasOrderDispatchDateColumn();
+
   const result = await prisma.$transaction(async (tx) => {
-    const hasDispatchDateColumn = await hasOrderDispatchDateColumn();
     const validUnits = new Set(["KG", "MT", "LTR"]);
     const unit = validUnits.has(enquiry.unitOfMeasurement) ? enquiry.unitOfMeasurement : "KG";
 
@@ -548,7 +553,7 @@ export async function updateOrderDispatchDate(enquiryId, payload, actorUser) {
     });
 
     return updated;
-  });
+  }, DISPATCH_TRANSACTION_OPTIONS);
   invalidateDispatchReadCaches();
   return result;
 }
@@ -633,7 +638,7 @@ export async function createDispatch(payload, actorUser) {
       note: `Created dispatch for order #${payload.order_id}`
     });
     return created;
-  });
+  }, DISPATCH_TRANSACTION_OPTIONS);
 
   invalidateDispatchReadCaches();
   return dispatch;
@@ -718,7 +723,7 @@ export async function updateDispatch(dispatchId, payload, actorUser) {
       note: `Updated dispatch #${dispatchId}`
     });
     return updated;
-  });
+  }, DISPATCH_TRANSACTION_OPTIONS);
   invalidateDispatchReadCaches();
   return result;
 }
@@ -751,7 +756,7 @@ export async function deleteDispatch(dispatchId, actorUser) {
 
     await tx.dispatch.delete({ where: { id: dispatchId } });
     await syncOrderDispatchStatus(tx, dispatch.orderId);
-  });
+  }, DISPATCH_TRANSACTION_OPTIONS);
 
   invalidateDispatchReadCaches();
   return { id: dispatchId };

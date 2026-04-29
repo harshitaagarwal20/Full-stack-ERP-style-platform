@@ -12,6 +12,8 @@ function MasterDataCustomerModal({
 }) {
   if (!isOpen) return null;
 
+  const getInputClassName = (fieldName) => `input ${formErrors[fieldName] ? "input-error" : ""}`;
+
   return (
     <div className="masterdata-modal-overlay">
       <div className="masterdata-modal-card">
@@ -41,7 +43,7 @@ function MasterDataCustomerModal({
               <div>
                 <label className="label">Customer Name <span className="req">*</span></label>
                 <input
-                  className="input"
+                  className={getInputClassName("customer_name")}
                   placeholder="Enter customer name"
                   value={customerForm.customer_name}
                   onChange={(e) => onFieldChange("customer_name", e.target.value)}
@@ -52,7 +54,7 @@ function MasterDataCustomerModal({
               <div>
                 <label className="label">Customer Code</label>
                 <input
-                  className="input"
+                  className={getInputClassName("customer_code")}
                   placeholder="Enter customer code"
                   value={customerForm.customer_code}
                   onChange={(e) => onFieldChange("customer_code", e.target.value)}
@@ -78,7 +80,7 @@ function MasterDataCustomerModal({
               <div>
                 <label className="label">Country</label>
                 <select
-                  className="input"
+                  className={getInputClassName("country")}
                   value={customerForm.country}
                   onChange={(e) => {
                     const selectedCountry = e.target.value;
@@ -96,7 +98,7 @@ function MasterDataCustomerModal({
               <div>
                 <label className="label">Country Code</label>
                 <input
-                  className="input"
+                  className={getInputClassName("country_code")}
                   placeholder="IN"
                   value={customerForm.country_code}
                   onChange={(e) => onFieldChange("country_code", e.target.value)}
@@ -105,7 +107,7 @@ function MasterDataCustomerModal({
               <div>
                 <label className="label">State</label>
                 <select
-                  className="input"
+                  className={getInputClassName("state")}
                   value={customerForm.state}
                   onChange={(e) => onFieldChange("state", e.target.value)}
                 >
@@ -118,7 +120,7 @@ function MasterDataCustomerModal({
               <div>
                 <label className="label">City</label>
                 <input
-                  className="input"
+                  className={getInputClassName("city")}
                   placeholder="Enter city"
                   value={customerForm.city}
                   onChange={(e) => onFieldChange("city", e.target.value)}
@@ -127,7 +129,7 @@ function MasterDataCustomerModal({
               <div>
                 <label className="label">Pincode</label>
                 <input
-                  className="input"
+                  className={getInputClassName("pincode")}
                   placeholder="Enter pincode"
                   value={customerForm.pincode}
                   onChange={(e) => onFieldChange("pincode", e.target.value)}
@@ -136,7 +138,7 @@ function MasterDataCustomerModal({
               <div className="full-row">
                 <label className="label">Address</label>
                 <input
-                  className="input"
+                  className={getInputClassName("address")}
                   placeholder="Enter full address"
                   value={customerForm.address}
                   onChange={(e) => onFieldChange("address", e.target.value)}
@@ -151,7 +153,7 @@ function MasterDataCustomerModal({
               <div>
                 <label className="label">GSTN</label>
                 <input
-                  className="input"
+                  className={getInputClassName("gstn")}
                   placeholder="Enter GSTN"
                   value={customerForm.gstn}
                   onChange={(e) => onFieldChange("gstn", e.target.value)}
@@ -160,7 +162,7 @@ function MasterDataCustomerModal({
               <div>
                 <label className="label">Serial Code</label>
                 <input
-                  className="input"
+                  className={getInputClassName("s_no_code")}
                   placeholder="Enter serial code"
                   value={customerForm.s_no_code}
                   onChange={(e) => onFieldChange("s_no_code", e.target.value)}
@@ -175,7 +177,7 @@ function MasterDataCustomerModal({
               <div>
                 <label className="label">Contact Person</label>
                 <input
-                  className="input"
+                  className={getInputClassName("contact_person")}
                   placeholder="Enter contact person"
                   value={customerForm.contact_person}
                   onChange={(e) => onFieldChange("contact_person", e.target.value)}
@@ -184,7 +186,7 @@ function MasterDataCustomerModal({
               <div>
                 <label className="label">Phone Number</label>
                 <input
-                  className="input"
+                  className={getInputClassName("contact_person_number")}
                   placeholder="Enter phone number"
                   value={customerForm.contact_person_number}
                   onChange={(e) => onFieldChange("contact_person_number", e.target.value)}
@@ -193,7 +195,7 @@ function MasterDataCustomerModal({
               <div className="full-row">
                 <label className="label">Company Email</label>
                 <input
-                  className="input"
+                  className={getInputClassName("company_email")}
                   type="email"
                   placeholder="name@company.com"
                   value={customerForm.company_email}

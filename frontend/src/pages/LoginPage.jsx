@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import LoadingSpinner from "../components/LoadingSpinner";
 import { useAuth } from "../context/AuthContext";
-import { getUserFacingErrorMessage } from "../utils/errorMessages";
+import { getUserFacingErrorMessage, getValidationFieldErrors } from "../utils/errorMessages";
 
 function LoginPage() {
   const navigate = useNavigate();
@@ -14,6 +14,7 @@ function LoginPage() {
     password: ""
   });
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
   const authMessage = location.state?.message || "";
 
   const onChange = (event) => {
@@ -23,15 +24,19 @@ function LoginPage() {
   const onSubmit = async (event) => {
     event.preventDefault();
     setError("");
+    setFieldErrors({});
 
     try {
       await login(form.email, form.password);
       navigate("/");
     } catch (err) {
       console.error(err);
+      setFieldErrors(getValidationFieldErrors(err));
       setError(getUserFacingErrorMessage(err, "Login failed. Please try again."));
     }
   };
+
+  const hasFieldError = (field) => Boolean(fieldErrors[field]?.length);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-200 via-white to-slate-200 p-4">
@@ -46,7 +51,7 @@ function LoginPage() {
               id="email"
               name="email"
               type="email"
-              className="input"
+              className={`input ${hasFieldError("email") ? "input-error" : ""}`}
               value={form.email}
               onChange={onChange}
               autoComplete="off"
@@ -55,6 +60,9 @@ function LoginPage() {
               spellCheck={false}
               required
             />
+            {hasFieldError("email") ? (
+              <small className="field-error">{fieldErrors.email[0]}</small>
+            ) : null}
           </div>
 
           <div>
@@ -63,12 +71,15 @@ function LoginPage() {
               id="password"
               name="password"
               type="password"
-              className="input"
+              className={`input ${hasFieldError("password") ? "input-error" : ""}`}
               value={form.password}
               onChange={onChange}
               autoComplete="new-password"
               required
             />
+            {hasFieldError("password") ? (
+              <small className="field-error">{fieldErrors.password[0]}</small>
+            ) : null}
           </div>
 
           {(authMessage || error) && (

@@ -6,6 +6,8 @@ import useMasterData from "../hooks/useMasterData";
 import { logApiError } from "../utils/apiError";
 import { exportRowsToExcel } from "../utils/exportExcel";
 import { sortByNewestFirst } from "../utils/recordOrdering";
+import { getValidationFieldErrors, getUserFacingErrorMessage } from "../utils/errorMessages";
+import { validateUserForm } from "../utils/userValidation";
 
 function getInitials(name) {
   return (name || "")
@@ -28,6 +30,8 @@ function UsersPage() {
   const [roleFilter, setRoleFilter] = useState("all");
   const [users, setUsers] = useState([]);
   const [form, setForm] = useState({ name: "", email: "", password: "", role: "sales" });
+  const [formErrors, setFormErrors] = useState({});
+  const [formErrorMessage, setFormErrorMessage] = useState("");
   const canManageUsers = user?.role === "admin";
   const roleOptions = useMemo(
     () => [
@@ -73,10 +77,36 @@ function UsersPage() {
     return users.filter((user) => user.role === roleFilter);
   }, [users, roleFilter]);
 
+  const resetUserForm = () => {
+    setForm({ name: "", email: "", password: "", role: "sales" });
+    setFormErrors({});
+    setFormErrorMessage("");
+  };
+
+  const updateFormField = (field, value) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+    setFormErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+    setFormErrorMessage("");
+  };
+
   const submitUser = async (event) => {
     event.preventDefault();
     if (!canManageUsers) return;
+    const validationErrors = validateUserForm(form, { isEditing: Boolean(editingUserId) });
+    if (Object.keys(validationErrors).length > 0) {
+      setFormErrors(validationErrors);
+      setFormErrorMessage("Please review the highlighted fields.");
+      return;
+    }
+
     setSubmitting(true);
+    setFormErrors({});
+    setFormErrorMessage("");
     try {
       if (editingUserId) {
         const payload = {
@@ -89,12 +119,20 @@ function UsersPage() {
       } else {
         await api.post("/users", form);
       }
-      setForm({ name: "", email: "", password: "", role: "sales" });
       setEditingUserId(null);
       setIsCreateModalOpen(false);
+      resetUserForm();
       await fetchUsers();
     } catch (error) {
-      logApiError(error, "User save failed");
+      const validationFieldErrors = getValidationFieldErrors(error);
+      if (Object.keys(validationFieldErrors).length > 0) {
+        setFormErrors(validationFieldErrors);
+        setFormErrorMessage(getUserFacingErrorMessage(error, "Please review the highlighted fields."));
+      } else {
+        const message = getUserFacingErrorMessage(error, "Unable to save user. Please try again.");
+        setFormErrorMessage(message);
+        console.error(error);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -135,6 +173,8 @@ function UsersPage() {
       password: "",
       role: user.role || "sales"
     });
+    setFormErrors({});
+    setFormErrorMessage("");
     setIsCreateModalOpen(true);
     setActiveMenuUserId(null);
   };
@@ -162,7 +202,7 @@ function UsersPage() {
                 className="users-btn users-btn-primary"
                 onClick={() => {
                   setEditingUserId(null);
-                  setForm({ name: "", email: "", password: "", role: "sales" });
+                  resetUserForm();
                   setIsCreateModalOpen(true);
                 }}
               >
@@ -246,33 +286,66 @@ function UsersPage() {
               </div>
               <button
                 className="users-modal-close-btn"
-                onClick={() => setIsCreateModalOpen(false)}
+                onClick={() => {
+                  setIsCreateModalOpen(false);
+                  resetUserForm();
+                  setEditingUserId(null);
+                }}
                 disabled={submitting}
               >
                 Close
               </button>
             </div>
 
-            <form className="users-form-grid" onSubmit={submitUser}>
+            {formErrorMessage ? <p className="users-form-error">{formErrorMessage}</p> : null}
+
+            <form className="users-form-grid" onSubmit={submitUser} noValidate>
               <div>
                 <label className="users-field-label">Name</label>
-                <input className="users-input" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} required />
+                <input
+                  className={`users-input ${formErrors.name ? "input-error" : ""}`}
+                  value={form.name}
+                  onChange={(e) => updateFormField("name", e.target.value)}
+                  aria-invalid={Boolean(formErrors.name)}
+                />
+                {formErrors.name ? <small className="field-error">{formErrors.name[0]}</small> : null}
               </div>
               <div>
                 <label className="users-field-label">Email</label>
-                <input className="users-input" type="email" value={form.email} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))} required />
+                <input
+                  className={`users-input ${formErrors.email ? "input-error" : ""}`}
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => updateFormField("email", e.target.value)}
+                  aria-invalid={Boolean(formErrors.email)}
+                />
+                {formErrors.email ? <small className="field-error">{formErrors.email[0]}</small> : null}
               </div>
               <div>
                 <label className="users-field-label">Password</label>
-                <input className="users-input" type="password" value={form.password} onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))} required={!editingUserId} />
+                <input
+                  className={`users-input ${formErrors.password ? "input-error" : ""}`}
+                  type="password"
+                  value={form.password}
+                  onChange={(e) => updateFormField("password", e.target.value)}
+                  aria-invalid={Boolean(formErrors.password)}
+                  autoComplete="new-password"
+                />
+                {formErrors.password ? <small className="field-error">{formErrors.password[0]}</small> : null}
               </div>
               <div>
                 <label className="users-field-label">Role</label>
-                <select className="users-input" value={form.role} onChange={(e) => setForm((p) => ({ ...p, role: e.target.value }))}>
+                <select
+                  className={`users-input ${formErrors.role ? "input-error" : ""}`}
+                  value={form.role}
+                  onChange={(e) => updateFormField("role", e.target.value)}
+                  aria-invalid={Boolean(formErrors.role)}
+                >
                   {masterData.roles.map((role) => (
                     <option key={role.value} value={role.value}>{role.label}</option>
                   ))}
                 </select>
+                {formErrors.role ? <small className="field-error">{formErrors.role[0]}</small> : null}
               </div>
               <div className="users-form-actions">
                 <button

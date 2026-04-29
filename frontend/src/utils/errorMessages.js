@@ -7,6 +7,20 @@ function extractValidationMessages(errors) {
     .filter(Boolean);
 }
 
+export function getValidationFieldErrors(error) {
+  const rawErrors = error?.response?.data?.errors;
+  if (!rawErrors || typeof rawErrors !== "object") return {};
+
+  return Object.entries(rawErrors).reduce((acc, [field, messages]) => {
+    const fieldMessages = Array.isArray(messages) ? messages : [messages];
+    const normalized = fieldMessages.map((message) => String(message || "").trim()).filter(Boolean);
+    if (normalized.length > 0) {
+      acc[field] = normalized;
+    }
+    return acc;
+  }, {});
+}
+
 function isTechnicalMessage(message) {
   const text = String(message || "").toLowerCase();
   return (

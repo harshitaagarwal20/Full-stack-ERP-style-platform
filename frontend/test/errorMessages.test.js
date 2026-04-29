@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getUserFacingErrorMessage } from "../src/utils/errorMessages.js";
+import { getUserFacingErrorMessage, getValidationFieldErrors } from "../src/utils/errorMessages.js";
 
 test("maps network failures to a plain-language message", () => {
   const message = getUserFacingErrorMessage({ message: "Network Error" }, "Fallback");
@@ -45,4 +45,23 @@ test("hides technical route not found messages", () => {
   });
 
   assert.equal(message, "The requested item could not be found.");
+});
+
+test("extracts backend field validation errors", () => {
+  const fieldErrors = getValidationFieldErrors({
+    response: {
+      status: 400,
+      data: {
+        errors: {
+          email: ["Email is required."],
+          password: ["Password is required."]
+        }
+      }
+    }
+  });
+
+  assert.deepStrictEqual(fieldErrors, {
+    email: ["Email is required."],
+    password: ["Password is required."]
+  });
 });

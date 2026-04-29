@@ -22,6 +22,16 @@ body {
   @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-sm outline-none ring-brand-200 transition focus:ring;
 }
 
+.input-error {
+  border-color: #dc2626 !important;
+  background: #fff1f2;
+}
+
+.input-error:focus {
+  border-color: #dc2626 !important;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.14);
+}
+
 .label {
   @apply mb-1 block text-sm font-medium text-slate-700;
 }
@@ -2253,6 +2263,27 @@ body {
   background: #ffffff;
   padding: 0 12px;
   color: #0f172a;
+}
+
+.users-input.input-error {
+  border-color: #dc2626 !important;
+  background: #fff1f2;
+}
+
+.users-input.input-error:focus {
+  border-color: #dc2626 !important;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.14);
+}
+
+.users-form-error {
+  margin: 12px 0 0;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #b91c1c;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .users-form-actions {

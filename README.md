@@ -76,11 +76,13 @@ npx prisma migrate dev --name init
 npx prisma generate
 ```
 
-6. Seed sample users:
+6. Seed user accounts only:
 
 ```bash
 npm run seed
 ```
+
+The seed script clears operational demo rows and keeps only user-management seed data. Master data is initialized separately by the app.
 
 7. Start backend:
 

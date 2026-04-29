@@ -7,6 +7,7 @@ import useMasterData from "../hooks/useMasterData";
 import { logApiError } from "../utils/apiError";
 import { exportRowsToExcel } from "../utils/exportExcel";
 import { getDisplaySalesNumber } from "../utils/businessNumbers";
+import { getDispatchSortPriority } from "../utils/dispatchOrdering";
 
 function formatDate(dateValue) {
   return dateValue ? new Date(dateValue).toLocaleDateString() : "-";
@@ -301,6 +302,11 @@ function DispatchPage() {
     };
 
     sorted.sort((a, b) => {
+      const priorityDifference = getDispatchSortPriority(a) - getDispatchSortPriority(b);
+      if (priorityDifference !== 0) {
+        return priorityDifference;
+      }
+
       const va = getValue(a);
       const vb = getValue(b);
       if (va < vb) return -1 * sign;

@@ -8,6 +8,7 @@ import { logApiError } from "../utils/apiError";
 import { findCustomerProfile } from "../utils/customerLookup";
 import { formatPriceValue } from "../utils/commerce";
 import { getDisplaySalesNumber } from "../utils/businessNumbers";
+import { sortByNewestFirst } from "../utils/recordOrdering";
 
 function formatDate(dateValue) {
   return dateValue ? new Date(dateValue).toLocaleDateString() : "-";
@@ -40,7 +41,7 @@ function PendingExportDatePage() {
     setLoading(true);
     try {
       const { data } = await api.get("/dispatch");
-      setDispatchDateOrders(data.dispatchDateOrders || []);
+      setDispatchDateOrders(sortByNewestFirst(Array.isArray(data?.dispatchDateOrders) ? data.dispatchDateOrders : []));
     } catch (error) {
       logApiError(error, "Failed to load approved requests pending dispatch date");
     } finally {

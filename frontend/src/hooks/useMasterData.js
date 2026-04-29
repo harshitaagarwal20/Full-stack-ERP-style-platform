@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import api from "../api/axiosClient";
+import { sortByNewestFirst } from "../utils/recordOrdering";
 
 const DEFAULT_MASTER_DATA = {
   roles: [
@@ -136,8 +137,8 @@ function buildMasterDataFromResponse(previousData, responseData) {
     modeOfEnquiry: normalizeOptions(data.modeOfEnquiry, prev.modeOfEnquiry),
     assignedPersons: normalizeOptions(data.assignedPersons, prev.assignedPersons),
     companyNames: normalizeOptions(data.companyNames, prev.companyNames),
-    enquiryMaster: Array.isArray(data.enquiryMaster) ? data.enquiryMaster : prev.enquiryMaster,
-    customerMaster: Array.isArray(data.customerMaster) ? data.customerMaster : prev.customerMaster,
+    enquiryMaster: sortByNewestFirst(Array.isArray(data.enquiryMaster) ? data.enquiryMaster : prev.enquiryMaster),
+    customerMaster: sortByNewestFirst(Array.isArray(data.customerMaster) ? data.customerMaster : prev.customerMaster),
     countryCodes: normalizeOptions(data.countryCodes, prev.countryCodes),
     products: normalizeOptions(data.products, prev.products)
   };

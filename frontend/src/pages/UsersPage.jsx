@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import useMasterData from "../hooks/useMasterData";
 import { logApiError } from "../utils/apiError";
 import { exportRowsToExcel } from "../utils/exportExcel";
+import { sortByNewestFirst } from "../utils/recordOrdering";
 
 function getInitials(name) {
   return (name || "")
@@ -43,7 +44,8 @@ function UsersPage() {
     setLoading(true);
     try {
       const { data } = await api.get("/users");
-      setUsers(data);
+      const items = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
+      setUsers(sortByNewestFirst(items));
     } catch (error) {
       logApiError(error, "Failed to load users");
     } finally {

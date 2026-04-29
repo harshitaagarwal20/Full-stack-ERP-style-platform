@@ -10,8 +10,8 @@ function LoginPage() {
   const { login, loading } = useAuth();
 
   const [form, setForm] = useState({
-    email: "admin@fms.com",
-    password: "Admin@123"
+    email: "",
+    password: ""
   });
   const [error, setError] = useState("");
   const authMessage = location.state?.message || "";
@@ -38,15 +38,36 @@ function LoginPage() {
         <h1 className="text-2xl font-bold text-slate-900">Login</h1>
         <p className="mt-1 text-sm text-slate-500">Sign in with your role credentials.</p>
 
-        <form className="mt-6 space-y-4" onSubmit={onSubmit}>
+        <form className="mt-6 space-y-4" onSubmit={onSubmit} autoComplete="off">
           <div>
             <label className="label" htmlFor="email">Email</label>
-            <input id="email" name="email" type="email" className="input" value={form.email} onChange={onChange} required />
+            <input
+              id="email"
+              name="email"
+              type="email"
+              className="input"
+              value={form.email}
+              onChange={onChange}
+              autoComplete="off"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+              required
+            />
           </div>
 
           <div>
             <label className="label" htmlFor="password">Password</label>
-            <input id="password" name="password" type="password" className="input" value={form.password} onChange={onChange} required />
+            <input
+              id="password"
+              name="password"
+              type="password"
+              className="input"
+              value={form.password}
+              onChange={onChange}
+              autoComplete="new-password"
+              required
+            />
           </div>
 
           {(authMessage || error) && (

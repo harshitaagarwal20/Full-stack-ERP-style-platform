@@ -3,6 +3,7 @@ import api from "../api/axiosClient";
 import VirtualizedTableBody from "../components/common/VirtualizedTableBody";
 import { ClipboardIcon, SearchIcon } from "../components/erp/ErpIcons";
 import { logApiError } from "../utils/apiError";
+import { sortByNewestFirst } from "../utils/recordOrdering";
 
 const actionLabels = {
   APPROVE_ENQUIRY: "Approve Enquiry",
@@ -55,7 +56,7 @@ function ActivityLogPage() {
     setLoading(true);
     try {
       const { data } = await api.get("/audit-logs");
-      setLogs(data || []);
+      setLogs(sortByNewestFirst(Array.isArray(data) ? data : []));
     } catch (error) {
       logApiError(error, "Failed to load activity log");
     } finally {

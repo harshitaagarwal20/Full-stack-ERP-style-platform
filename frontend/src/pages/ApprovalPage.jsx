@@ -6,6 +6,7 @@ import { logApiError } from "../utils/apiError";
 import { getDisplayEnquiryNumber, getDisplayManualOrderRequestNumber } from "../utils/businessNumbers";
 import { formatPriceValue } from "../utils/commerce";
 import { formatEnquiryProducts } from "../utils/enquiryProducts";
+import { sortByNewestFirst } from "../utils/recordOrdering";
 
 const approvalTabs = [
   { label: "All", value: "ALL" },
@@ -99,9 +100,7 @@ function ApprovalPage() {
         }))
       ];
 
-      combined.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-
-      const filtered = combined.filter((item) => {
+      const filtered = sortByNewestFirst(combined).filter((item) => {
         if (statusFilter === "ALL") return true;
         return normalizeApprovalStatus(item.source, item.raw.status) === statusFilter;
       });

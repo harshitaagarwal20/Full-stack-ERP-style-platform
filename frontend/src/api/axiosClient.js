@@ -1,15 +1,7 @@
 import axios from "axios";
 
 function resolveApiBaseUrl() {
-  const fallbackBaseUrl = import.meta.env.VITE_API_URL || "/api";
-  if (typeof window === "undefined") return fallbackBaseUrl;
-
-  const localHostPattern = /^(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+)$/.test(window.location.hostname);
-  if (localHostPattern) {
-    return `http://${window.location.hostname}:5001/api`;
-  }
-
-  return fallbackBaseUrl;
+  return import.meta.env.VITE_API_URL || "/api";
 }
 
 const api = axios.create({

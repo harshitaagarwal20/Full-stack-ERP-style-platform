@@ -1,5 +1,5 @@
 export function notFoundMiddleware(req, res) {
-  res.status(404).json({ message: `Route not found: ${req.originalUrl}` });
+  res.status(404).json({ message: "The requested resource could not be found." });
 }
 
 function getStatusCode(error) {
@@ -27,7 +27,7 @@ function getStatusCode(error) {
 }
 
 function getMessage(error) {
-  if (error?.details) return error.message || "Validation failed";
+  if (error?.details) return "Please review the highlighted fields.";
   if (error?.code === "P2002") return "A record with this value already exists.";
   if (error?.code === "P2003") return "A related record is missing.";
   if (error?.code === "P2025") return "Requested record not found.";
@@ -46,7 +46,9 @@ function getMessage(error) {
     return "Invalid JSON payload.";
   }
   if (error?.name === "PrismaClientValidationError") return "Invalid data provided to the database.";
-  return error?.message || "Internal server error";
+  const message = String(error?.message || "").trim();
+  if (message && !message.toLowerCase().includes("route not found")) return message;
+  return "Something went wrong on the server.";
 }
 
 export function errorMiddleware(error, req, res, next) {

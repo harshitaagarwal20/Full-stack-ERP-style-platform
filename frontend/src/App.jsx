@@ -1,5 +1,6 @@
 import { Suspense, lazy } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
+import GlobalNotification from "./components/common/GlobalNotification";
 import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { useAuth } from "./context/AuthContext";
@@ -43,49 +44,52 @@ function App() {
   const { isAuthenticated } = useAuth();
 
   return (
-    <Routes>
-      <Route path="/login" element={isAuthenticated ? <Navigate to="/" replace /> : withSuspense(<LoginPage />)} />
+    <>
+      <GlobalNotification />
+      <Routes>
+        <Route path="/login" element={isAuthenticated ? <Navigate to="/" replace /> : withSuspense(<LoginPage />)} />
 
-      <Route element={<ProtectedRoute />}>
-        <Route element={<Layout />}>
-          <Route path="/" element={withSuspense(<DashboardPage />)} />
+        <Route element={<ProtectedRoute />}>
+          <Route element={<Layout />}>
+            <Route path="/" element={withSuspense(<DashboardPage />)} />
 
-          <Route element={<ProtectedRoute roles={VIEW_ROLES} />}>
-            <Route path="/enquiries" element={withSuspense(<EnquiryPage />)} />
+            <Route element={<ProtectedRoute roles={VIEW_ROLES} />}>
+              <Route path="/enquiries" element={withSuspense(<EnquiryPage />)} />
+            </Route>
+
+            <Route element={<ProtectedRoute roles={[ROLES.ADMIN]} />}>
+              <Route path="/approval" element={withSuspense(<ApprovalPage />)} />
+              <Route path="/activity-log" element={withSuspense(<ActivityLogPage />)} />
+              <Route path="/master-data" element={withSuspense(<MasterDataPage />)} />
+              <Route path="/users" element={withSuspense(<UsersPage />)} />
+            </Route>
+
+            <Route element={<ProtectedRoute roles={VIEW_ROLES} />}>
+              <Route path="/orders" element={withSuspense(<OrderPage />)} />
+            </Route>
+
+            <Route element={<ProtectedRoute roles={VIEW_ROLES} />}>
+              <Route path="/production" element={withSuspense(<ProductionPage />)} />
+            </Route>
+
+            <Route element={<ProtectedRoute roles={[ROLES.ADMIN, ROLES.PRODUCTION]} />}>
+              <Route path="/production/complete/:id" element={withSuspense(<ProductionCompletePage />)} />
+            </Route>
+
+            <Route element={<ProtectedRoute roles={VIEW_ROLES} />}>
+              <Route path="/dispatch" element={withSuspense(<DispatchPage />)} />
+            </Route>
+
+            <Route element={<ProtectedRoute roles={[ROLES.ADMIN, ROLES.DISPATCH]} />}>
+              <Route path="/pending-dispatch-date" element={withSuspense(<PendingExportDatePage />)} />
+              <Route path="/pending-export-date" element={<Navigate to="/pending-dispatch-date" replace />} />
+            </Route>
+
+            <Route path="*" element={withSuspense(<NotFoundPage />)} />
           </Route>
-
-          <Route element={<ProtectedRoute roles={[ROLES.ADMIN]} />}>
-            <Route path="/approval" element={withSuspense(<ApprovalPage />)} />
-            <Route path="/activity-log" element={withSuspense(<ActivityLogPage />)} />
-            <Route path="/master-data" element={withSuspense(<MasterDataPage />)} />
-            <Route path="/users" element={withSuspense(<UsersPage />)} />
-          </Route>
-
-          <Route element={<ProtectedRoute roles={VIEW_ROLES} />}>
-            <Route path="/orders" element={withSuspense(<OrderPage />)} />
-          </Route>
-
-          <Route element={<ProtectedRoute roles={VIEW_ROLES} />}>
-            <Route path="/production" element={withSuspense(<ProductionPage />)} />
-          </Route>
-
-          <Route element={<ProtectedRoute roles={[ROLES.ADMIN, ROLES.PRODUCTION]} />}>
-            <Route path="/production/complete/:id" element={withSuspense(<ProductionCompletePage />)} />
-          </Route>
-
-          <Route element={<ProtectedRoute roles={VIEW_ROLES} />}>
-            <Route path="/dispatch" element={withSuspense(<DispatchPage />)} />
-          </Route>
-
-          <Route element={<ProtectedRoute roles={[ROLES.ADMIN, ROLES.DISPATCH]} />}>
-            <Route path="/pending-dispatch-date" element={withSuspense(<PendingExportDatePage />)} />
-            <Route path="/pending-export-date" element={<Navigate to="/pending-dispatch-date" replace />} />
-          </Route>
-
-          <Route path="*" element={withSuspense(<NotFoundPage />)} />
         </Route>
-      </Route>
-    </Routes>
+      </Routes>
+    </>
   );
 }
 

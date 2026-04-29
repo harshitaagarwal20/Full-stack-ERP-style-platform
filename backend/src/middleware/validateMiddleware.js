@@ -3,7 +3,7 @@ export function validateBody(schema) {
     const parsed = schema.safeParse(req.body);
 
     if (!parsed.success) {
-      const error = new Error("Validation failed");
+      const error = new Error("Please review the highlighted fields.");
       error.statusCode = 400;
       error.details = parsed.error.flatten().fieldErrors;
       return next(error);

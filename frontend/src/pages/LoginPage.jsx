@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import LoadingSpinner from "../components/LoadingSpinner";
 import { useAuth } from "../context/AuthContext";
-import { logApiError } from "../utils/apiError";
+import { getUserFacingErrorMessage } from "../utils/errorMessages";
 
 function LoginPage() {
   const navigate = useNavigate();
@@ -28,7 +28,8 @@ function LoginPage() {
       await login(form.email, form.password);
       navigate("/");
     } catch (err) {
-      setError(logApiError(err, "Login failed."));
+      console.error(err);
+      setError(getUserFacingErrorMessage(err, "Login failed. Please try again."));
     }
   };
 

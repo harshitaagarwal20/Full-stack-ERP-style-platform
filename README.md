@@ -113,6 +113,12 @@ npm run dev
 
 Frontend runs on `http://localhost:5173`.
 
+## Deployment Notes
+
+- Set the backend `CLIENT_ORIGIN` env var to the exact deployed frontend origin, such as `https://nimbasia.vercel.app`.
+- For Vercel preview deployments, `https://*.vercel.app` is supported by the backend CORS matcher.
+- Set the frontend `VITE_API_URL` to your Render backend base URL in production, for example `https://your-render-backend.onrender.com/api`.
+
 ## Sample Users
 
 - Admin: `admin@fms.com` / `Admin@123`

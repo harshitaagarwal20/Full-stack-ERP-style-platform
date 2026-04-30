@@ -11,9 +11,78 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/pwa-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/pwa-icon.svg" />
+    <style>
+      #root {
+        min-height: 100vh;
+      }
+
+      .boot-screen {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+        color: #0f172a;
+        font-family: "Segoe UI", Arial, sans-serif;
+      }
+
+      .boot-screen-card {
+        max-width: 420px;
+        width: 100%;
+        background: #ffffff;
+        border-radius: 20px;
+        padding: 24px;
+        box-shadow: 0 20px 45px rgba(15, 23, 42, 0.12);
+      }
+
+      .boot-screen-title {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 700;
+      }
+
+      .boot-screen-copy {
+        margin: 12px 0 0;
+        color: #475569;
+        line-height: 1.6;
+      }
+    </style>
+    <script>
+      (function () {
+        try {
+          if ("serviceWorker" in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function (registrations) {
+              registrations.forEach(function (registration) {
+                registration.unregister();
+              });
+            }).catch(function () {});
+          }
+
+          if ("caches" in window) {
+            caches.keys().then(function (keys) {
+              keys.forEach(function (key) {
+                caches.delete(key);
+              });
+            }).catch(function () {});
+          }
+        } catch (error) {
+          // Ignore cleanup errors and continue booting the app.
+        }
+      })();
+    </script>
   </head>
   <body class="bg-slate-100">
-    <div id="root"></div>
+    <div id="root">
+      <div class="boot-screen">
+        <div class="boot-screen-card">
+          <h1 class="boot-screen-title">Loading Nimbasia</h1>
+          <p class="boot-screen-copy">
+            If this screen stays here, refresh once to clear an old mobile cache.
+          </p>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

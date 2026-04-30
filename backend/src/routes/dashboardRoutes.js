@@ -7,5 +7,6 @@ const router = Router();
 
 router.use(authMiddleware);
 router.get("/", allowRoles("admin", "sales"), getDashboard);
+router.get("/summary", allowRoles("admin", "sales"), getDashboard);
 
 export default router;

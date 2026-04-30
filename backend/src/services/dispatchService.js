@@ -102,17 +102,19 @@ async function syncOrderDispatchStatus(tx, orderId) {
     where: { id: orderId },
     select: {
       id: true,
-      quantity: true,
-      dispatches: {
-        select: {
-          dispatchedQuantity: true
-        }
-      }
+      quantity: true
     }
   });
   if (!order) return;
 
-  const delivered = getDeliveredQuantity(order.dispatches);
+  const aggregate = await tx.dispatch.aggregate({
+    where: { orderId },
+    _sum: {
+      dispatchedQuantity: true
+    }
+  });
+
+  const delivered = Number(aggregate?._sum?.dispatchedQuantity || 0);
   const nextStatus = delivered <= 0
     ? "READY_FOR_DISPATCH"
     : delivered >= order.quantity
@@ -714,7 +716,16 @@ export async function createDispatch(payload, actorUser) {
         shipmentStatus: payload.shipment_status,
         remarks: payload.remarks
       },
-      select: DISPATCH_LIST_SELECT
+      select: {
+        id: true,
+        orderId: true,
+        dispatchedQuantity: true,
+        dispatchDate: true,
+        packingDone: true,
+        shipmentStatus: true,
+        remarks: true,
+        createdAt: true
+      }
     });
 
     await syncOrderDispatchStatus(tx, payload.order_id);
@@ -798,7 +809,16 @@ export async function updateDispatch(dispatchId, payload, actorUser) {
         shipmentStatus: payload.shipment_status,
         remarks: payload.remarks
       },
-      select: DISPATCH_LIST_SELECT
+      select: {
+        id: true,
+        orderId: true,
+        dispatchedQuantity: true,
+        dispatchDate: true,
+        packingDone: true,
+        shipmentStatus: true,
+        remarks: true,
+        createdAt: true
+      }
     });
 
     await syncOrderDispatchStatus(tx, dispatch.orderId);

@@ -6,6 +6,6 @@ import { allowRoles } from "../middleware/roleMiddleware.js";
 const router = Router();
 
 router.use(authMiddleware);
-router.get("/", allowRoles("admin", "sales", "production", "dispatch"), getDashboard);
+router.get("/", allowRoles("admin", "sales"), getDashboard);
 
 export default router;

@@ -8,7 +8,7 @@ import { createEnquirySchema, updateEnquirySchema, updateEnquiryStatusSchema } f
 const router = Router();
 
 router.use(authMiddleware);
-router.get("/", allowRoles("admin", "sales", "production", "dispatch"), getEnquiries);
+router.get("/", allowRoles("admin", "sales"), getEnquiries);
 router.post("/", allowRoles("admin", "sales"), validateBody(createEnquirySchema), addEnquiry);
 router.put("/:id", allowRoles("admin"), validateBody(updateEnquiryStatusSchema), approveOrRejectEnquiry);
 router.put("/:id/edit", allowRoles("admin", "sales"), validateBody(updateEnquirySchema), editEnquiry);

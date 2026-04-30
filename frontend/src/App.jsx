@@ -26,7 +26,10 @@ const ROLES = {
   DISPATCH: "dispatch"
 };
 
-const VIEW_ROLES = [ROLES.ADMIN, ROLES.SALES, ROLES.PRODUCTION, ROLES.DISPATCH];
+const ENQUIRY_ROLES = [ROLES.ADMIN, ROLES.SALES];
+const ORDER_ROLES = [ROLES.ADMIN, ROLES.SALES];
+const PRODUCTION_ROLES = [ROLES.ADMIN, ROLES.PRODUCTION];
+const DISPATCH_ROLES = [ROLES.ADMIN, ROLES.DISPATCH];
 
 function RouteFallback() {
   return (
@@ -40,6 +43,20 @@ function withSuspense(node) {
   return <Suspense fallback={<RouteFallback />}>{node}</Suspense>;
 }
 
+function HomeRedirect() {
+  const { user } = useAuth();
+
+  if (user?.role === ROLES.PRODUCTION) {
+    return <Navigate to="/production" replace />;
+  }
+
+  if (user?.role === ROLES.DISPATCH) {
+    return <Navigate to="/dispatch" replace />;
+  }
+
+  return withSuspense(<DashboardPage />);
+}
+
 function App() {
   const { isAuthenticated } = useAuth();
 
@@ -51,9 +68,9 @@ function App() {
 
         <Route element={<ProtectedRoute />}>
           <Route element={<Layout />}>
-            <Route path="/" element={withSuspense(<DashboardPage />)} />
+            <Route path="/" element={<HomeRedirect />} />
 
-            <Route element={<ProtectedRoute roles={VIEW_ROLES} />}>
+            <Route element={<ProtectedRoute roles={ENQUIRY_ROLES} />}>
               <Route path="/enquiries" element={withSuspense(<EnquiryPage />)} />
             </Route>
 
@@ -64,23 +81,23 @@ function App() {
               <Route path="/users" element={withSuspense(<UsersPage />)} />
             </Route>
 
-            <Route element={<ProtectedRoute roles={VIEW_ROLES} />}>
+            <Route element={<ProtectedRoute roles={ORDER_ROLES} />}>
               <Route path="/orders" element={withSuspense(<OrderPage />)} />
             </Route>
 
-            <Route element={<ProtectedRoute roles={VIEW_ROLES} />}>
+            <Route element={<ProtectedRoute roles={PRODUCTION_ROLES} />}>
               <Route path="/production" element={withSuspense(<ProductionPage />)} />
             </Route>
 
-            <Route element={<ProtectedRoute roles={[ROLES.ADMIN, ROLES.PRODUCTION]} />}>
+            <Route element={<ProtectedRoute roles={PRODUCTION_ROLES} />}>
               <Route path="/production/complete/:id" element={withSuspense(<ProductionCompletePage />)} />
             </Route>
 
-            <Route element={<ProtectedRoute roles={VIEW_ROLES} />}>
+            <Route element={<ProtectedRoute roles={DISPATCH_ROLES} />}>
               <Route path="/dispatch" element={withSuspense(<DispatchPage />)} />
             </Route>
 
-            <Route element={<ProtectedRoute roles={[ROLES.ADMIN, ROLES.DISPATCH]} />}>
+            <Route element={<ProtectedRoute roles={DISPATCH_ROLES} />}>
               <Route path="/pending-dispatch-date" element={withSuspense(<PendingExportDatePage />)} />
               <Route path="/pending-export-date" element={<Navigate to="/pending-dispatch-date" replace />} />
             </Route>

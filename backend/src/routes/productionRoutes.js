@@ -8,7 +8,7 @@ import { completeProductionSchema, createProductionSchema, updateProductionSchem
 const router = Router();
 
 router.use(authMiddleware);
-router.get("/", allowRoles("admin", "sales", "production", "dispatch"), getProductionOrders);
+router.get("/", allowRoles("admin", "production"), getProductionOrders);
 router.post("/", allowRoles("admin", "production"), validateBody(createProductionSchema), addProduction);
 router.put("/:id/edit", allowRoles("admin", "production"), validateBody(updateProductionSchema), editProduction);
 router.put("/:id", allowRoles("admin", "production"), validateBody(completeProductionSchema), completeProduction);

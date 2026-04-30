@@ -4,12 +4,28 @@ import api from "../api/axiosClient";
 
 const AuthContext = createContext(null);
 
+function safeParseStoredUser(raw) {
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function readStoredUser() {
+  try {
+    return safeParseStoredUser(localStorage.getItem("fms_user"));
+  } catch {
+    return null;
+  }
+}
+
 export function AuthProvider({ children }) {
   const navigate = useNavigate();
-  const [user, setUser] = useState(() => {
-    const raw = localStorage.getItem("fms_user");
-    return raw ? JSON.parse(raw) : null;
-  });
+  const [user, setUser] = useState(readStoredUser);
 
   const [loading, setLoading] = useState(false);
 

@@ -15,7 +15,7 @@ import { createDispatchSchema, updateDispatchSchema, updateOrderDispatchDateSche
 const router = Router();
 
 router.use(authMiddleware);
-router.get("/", allowRoles("admin", "sales", "production", "dispatch"), getDispatch);
+router.get("/", allowRoles("admin", "dispatch"), getDispatch);
 router.put(
   "/dispatch-date/:enquiryId",
   allowRoles("admin", "dispatch"),

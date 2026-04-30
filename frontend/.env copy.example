@@ -1,0 +1,5 @@
+# API Base URL Configuration
+# For local development: /api (relative URL, backend on same server)
+# For network access: http://<your-machine-ip>:5000 (absolute URL)
+# For production: https://your-render-backend.onrender.com/api
+VITE_API_URL=/api

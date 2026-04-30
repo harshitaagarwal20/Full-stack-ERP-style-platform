@@ -8,7 +8,7 @@ import { createOrderSchema, moveOrderToProductionSchema, updateOrderSchema } fro
 const router = Router();
 
 router.use(authMiddleware);
-router.get("/", allowRoles("admin", "sales", "production", "dispatch"), getOrders);
+router.get("/", allowRoles("admin", "sales"), getOrders);
 router.post("/", allowRoles("admin", "sales"), validateBody(createOrderSchema), addOrder);
 router.put("/:id", allowRoles("admin", "sales"), validateBody(updateOrderSchema), editOrder);
 router.delete("/:id", allowRoles("admin", "sales"), removeOrder);

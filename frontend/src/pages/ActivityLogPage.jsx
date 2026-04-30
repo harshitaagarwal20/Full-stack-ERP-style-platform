@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import api from "../api/axiosClient";
 import VirtualizedTableBody from "../components/common/VirtualizedTableBody";
 import { ClipboardIcon, SearchIcon } from "../components/erp/ErpIcons";
+import { sanitizeAuditValue } from "../utils/auditLog";
 import { logApiError } from "../utils/apiError";
 import { sortByNewestFirst } from "../utils/recordOrdering";
 
@@ -217,11 +218,11 @@ function ActivityLogPage() {
             <div className="activity-json-grid">
               <div>
                 <p>Old Value</p>
-                <pre>{prettyValue(selectedLog.oldValue)}</pre>
+                <pre>{prettyValue(sanitizeAuditValue(selectedLog.oldValue, selectedLog.entityType))}</pre>
               </div>
               <div>
                 <p>New Value</p>
-                <pre>{prettyValue(selectedLog.newValue)}</pre>
+                <pre>{prettyValue(sanitizeAuditValue(selectedLog.newValue, selectedLog.entityType))}</pre>
               </div>
             </div>
           </div>

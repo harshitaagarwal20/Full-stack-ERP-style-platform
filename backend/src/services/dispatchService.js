@@ -16,7 +16,7 @@ const DISPATCH_CACHE_PREFIX = "dispatch:dashboard";
 const DISPATCH_CACHE_TTL_MS = 12 * 1000;
 const DISPATCH_TRANSACTION_OPTIONS = {
   maxWait: 5000,
-  timeout: 15000
+  timeout: 30000
 };
 
 function getDeliveredQuantity(dispatches = []) {
@@ -125,7 +125,7 @@ async function syncOrderDispatchStatus(tx, orderId) {
   });
 }
 
-export async function getDispatchDashboard(query = {}) {
+async function buildDispatchDashboardData(query = {}, client = prisma) {
   const q = String(query.q || "").trim();
   const statusFilter = String(query.status || "all").trim().toLowerCase();
   const clientFilter = String(query.client || "").trim().toLowerCase();
@@ -143,9 +143,9 @@ export async function getDispatchDashboard(query = {}) {
     skip
   });
 
-  return getOrLoadCached(cacheKey, DISPATCH_CACHE_TTL_MS, async () => {
-    const [dispatchableOrders, dispatches, approvedEnquiriesPendingDispatchDate, approvedManualRequestsPendingDispatchDate, existingOrdersForSalesGroups] = await Promise.all([
-      prisma.order.findMany({
+  const loadPaginatedDashboard = async () => {
+    const [dispatchableOrders, dispatches] = await Promise.all([
+      client.order.findMany({
         where: {
           status: {
             in: ["READY_FOR_DISPATCH", "PARTIALLY_DISPATCHED"]
@@ -207,7 +207,7 @@ export async function getDispatchDashboard(query = {}) {
         },
         orderBy: [{ updatedAt: "desc" }, { id: "desc" }]
       }),
-      prisma.dispatch.findMany({
+      client.dispatch.findMany({
         where: {
           ...(q
             ? {
@@ -223,80 +223,8 @@ export async function getDispatchDashboard(query = {}) {
         },
         select: DISPATCH_LIST_SELECT,
         orderBy: [{ createdAt: "desc" }, { id: "desc" }]
-      }),
-      prisma.enquiry.findMany({
-        where: {
-          status: "ACCEPTED",
-          order: null,
-          ...(q
-            ? {
-                OR: [
-                  { companyName: { contains: q } },
-                  { enquiryNumber: { contains: q } },
-                  { product: { contains: q } }
-                ]
-              }
-            : {})
-        },
-        select: {
-          id: true,
-          enquiryNumber: true,
-          companyName: true,
-          product: true,
-          products: true,
-          quantity: true,
-          price: true,
-          currency: true,
-          unitOfMeasurement: true,
-          expectedTimeline: true,
-          assignedPerson: true,
-          status: true,
-          createdAt: true
-        },
-        orderBy: [{ createdAt: "desc" }, { id: "desc" }]
-      }),
-      prisma.manualOrderRequest.findMany({
-        where: {
-          status: "APPROVED",
-          orderId: null,
-          ...(q
-            ? {
-                OR: [
-                  { requestNumber: { contains: q } },
-                  { clientName: { contains: q } },
-                  { product: { contains: q } }
-                ]
-              }
-            : {})
-        },
-        select: MANUAL_ORDER_REQUEST_SELECT,
-        orderBy: [{ createdAt: "desc" }, { id: "desc" }]
-      }),
-      prisma.order.findMany({
-        select: {
-          salesGroupNumber: true,
-          enquiry: {
-            select: {
-              enquiryNumber: true
-            }
-          }
-        }
       })
     ]);
-
-    const salesGroupByKey = new Map();
-    let nextSalesGroupSequence = existingOrdersForSalesGroups.reduce(
-      (max, row) => Math.max(max, extractSalesGroupSequence(row.salesGroupNumber)),
-      0
-    ) + 1;
-
-    for (const order of existingOrdersForSalesGroups) {
-      const key = String(order.enquiry?.enquiryNumber || "").trim();
-      const normalized = normalizeSalesGroupNumber(order.salesGroupNumber);
-      if (key && normalized && !salesGroupByKey.has(key)) {
-        salesGroupByKey.set(key, normalized);
-      }
-    }
 
     const readyOrders = dispatchableOrders
       .map((order) => {
@@ -330,6 +258,193 @@ export async function getDispatchDashboard(query = {}) {
       const matchesDate = dateFilter ? normalizeDateKey(dispatch.dispatchDate) === dateFilter : true;
       return matchesStatus && matchesClient && matchesDate;
     });
+
+    if (take > 0) {
+      const autoRows = filteredDispatches.map((dispatch) => ({
+        key: `dispatch-${dispatch.id}`,
+        order: dispatch.order,
+        dispatch
+      }));
+      const manualRows = filteredReadyOrders.map((order) => ({
+        key: `ready-${order.id}`,
+        order,
+        dispatch: null
+      }));
+      const combinedRows = [...autoRows, ...manualRows];
+      const pagedItems = combinedRows.slice(skip, skip + take);
+
+      return {
+        items: pagedItems,
+        pagination: {
+          page,
+          limit: take,
+          total: combinedRows.length,
+          totalPages: Math.max(1, Math.ceil(combinedRows.length / take))
+        }
+      };
+    }
+
+    return {
+      readyOrders: filteredReadyOrders,
+      dispatches: filteredDispatches,
+      dispatchDateOrders: []
+    };
+  };
+
+  const loadFullDashboard = async () => {
+    const [dispatchableOrders, dispatches, approvedEnquiriesPendingDispatchDate, approvedManualRequestsPendingDispatchDate, existingOrdersForSalesGroups] = await Promise.all([
+      client.order.findMany({
+        where: {
+          status: {
+            in: ["READY_FOR_DISPATCH", "PARTIALLY_DISPATCHED"]
+          },
+          production: {
+            status: "COMPLETED"
+          },
+          ...(q
+            ? {
+                OR: [
+                  { salesOrderNumber: { contains: q } },
+                  { salesGroupNumber: { contains: q } },
+                  { orderNo: { contains: q } },
+                  { clientName: { contains: q } },
+                  { product: { contains: q } },
+                  { enquiry: { enquiryNumber: { contains: q } } }
+                ]
+              }
+            : {})
+        },
+        select: {
+          id: true,
+          salesOrderNumber: true,
+          salesGroupNumber: true,
+          orderNo: true,
+          product: true,
+          quantity: true,
+          price: true,
+          currency: true,
+          unit: true,
+          packingType: true,
+          packingSize: true,
+          deliveryDate: true,
+          clientName: true,
+          city: true,
+          pincode: true,
+          state: true,
+          countryCode: true,
+          status: true,
+          updatedAt: true,
+          production: {
+            select: {
+              id: true,
+              status: true,
+              productionCompletionDate: true
+            }
+          },
+          dispatches: {
+            select: {
+              id: true,
+              dispatchedQuantity: true,
+              dispatchDate: true,
+              shipmentStatus: true
+            },
+            orderBy: {
+              createdAt: "desc"
+            }
+          }
+        },
+        orderBy: [{ updatedAt: "desc" }, { id: "desc" }]
+      }),
+      client.dispatch.findMany({
+        where: {
+          ...(q
+            ? {
+                OR: [
+                  { order: { salesOrderNumber: { contains: q } } },
+                  { order: { salesGroupNumber: { contains: q } } },
+                  { order: { orderNo: { contains: q } } },
+                  { order: { clientName: { contains: q } } },
+                  { order: { enquiry: { enquiryNumber: { contains: q } } } }
+                ]
+              }
+            : {})
+        },
+        select: DISPATCH_LIST_SELECT,
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }]
+      }),
+      client.enquiry.findMany({
+        where: {
+          status: "ACCEPTED",
+          order: null,
+          ...(q
+            ? {
+                OR: [
+                  { companyName: { contains: q } },
+                  { enquiryNumber: { contains: q } },
+                  { product: { contains: q } }
+                ]
+              }
+            : {})
+        },
+        select: {
+          id: true,
+          enquiryNumber: true,
+          companyName: true,
+          product: true,
+          products: true,
+          quantity: true,
+          price: true,
+          currency: true,
+          unitOfMeasurement: true,
+          expectedTimeline: true,
+          assignedPerson: true,
+          status: true,
+          createdAt: true
+        },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }]
+      }),
+      client.manualOrderRequest.findMany({
+        where: {
+          status: "APPROVED",
+          orderId: null,
+          ...(q
+            ? {
+                OR: [
+                  { requestNumber: { contains: q } },
+                  { clientName: { contains: q } },
+                  { product: { contains: q } }
+                ]
+              }
+            : {})
+        },
+        select: MANUAL_ORDER_REQUEST_SELECT,
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }]
+      }),
+      client.order.findMany({
+        select: {
+          salesGroupNumber: true,
+          enquiry: {
+            select: {
+              enquiryNumber: true
+            }
+          }
+        }
+      })
+    ]);
+
+    const salesGroupByKey = new Map();
+    let nextSalesGroupSequence = existingOrdersForSalesGroups.reduce(
+      (max, row) => Math.max(max, extractSalesGroupSequence(row.salesGroupNumber)),
+      0
+    ) + 1;
+
+    for (const order of existingOrdersForSalesGroups) {
+      const key = String(order.enquiry?.enquiryNumber || "").trim();
+      const normalized = normalizeSalesGroupNumber(order.salesGroupNumber);
+      if (key && normalized && !salesGroupByKey.has(key)) {
+        salesGroupByKey.set(key, normalized);
+      }
+    }
 
     const dispatchDateOrders = approvedEnquiriesPendingDispatchDate.map((enquiry) => {
       const key = String(enquiry.enquiryNumber || "").trim();
@@ -397,46 +512,21 @@ export async function getDispatchDashboard(query = {}) {
       (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
     );
 
-    if (!paginated) {
-      return { readyOrders: filteredReadyOrders, dispatches: filteredDispatches, dispatchDateOrders: combinedDispatchDateOrders };
-    }
+    return { readyOrders: filteredReadyOrders, dispatches: filteredDispatches, dispatchDateOrders: combinedDispatchDateOrders };
+  };
 
-    const autoRows = filteredDispatches.map((dispatch) => ({
-      key: `dispatch-${dispatch.id}`,
-      order: dispatch.order,
-      dispatch
-    }));
-    const manualRows = filteredReadyOrders.map((order) => ({
-      key: `ready-${order.id}`,
-      order,
-      dispatch: null
-    }));
-    const combinedRows = [...autoRows, ...manualRows];
+  if (paginated) {
+    return loadPaginatedDashboard();
+  }
 
-    if (take > 0) {
-      const pagedItems = combinedRows.slice(skip, skip + take);
-      return {
-        items: pagedItems,
-        pagination: {
-          page,
-          limit: take,
-          total: combinedRows.length,
-          totalPages: Math.max(1, Math.ceil(combinedRows.length / take))
-        }
-      };
-    }
-
-    return {
-      items: combinedRows,
-      pagination: {
-        page: 1,
-        limit: 0,
-        total: combinedRows.length,
-        totalPages: 1
-      }
-    };
-  });
+  return getOrLoadCached(cacheKey, DISPATCH_CACHE_TTL_MS, async () => loadFullDashboard());
 }
+
+export async function getDispatchDashboard(query = {}) {
+  return buildDispatchDashboardData(query, prisma);
+}
+
+export { buildDispatchDashboardData };
 
 export async function updateOrderDispatchDate(enquiryId, payload, actorUser) {
   const dispatchDate = parseDateInput(payload.dispatch_date);

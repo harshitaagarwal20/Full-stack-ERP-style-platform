@@ -1,68 +1,18 @@
-const CACHE_NAME = "nimbasia-pwa-v1";
-const APP_SHELL = ["/", "/index.html", "/manifest.webmanifest", "/pwa-icon.svg"];
-
 self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)).then(() => self.skipWaiting())
-  );
+  event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     (async () => {
       const cacheKeys = await caches.keys();
-      await Promise.all(cacheKeys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)));
+      await Promise.all(cacheKeys.map((key) => caches.delete(key)));
       await self.clients.claim();
+      await self.registration.unregister();
     })()
   );
 });
 
-self.addEventListener("fetch", (event) => {
-  const { request } = event;
-
-  if (request.method !== "GET") return;
-
-  const url = new URL(request.url);
-
-  if (request.mode === "navigate") {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put("/index.html", responseClone));
-          return response;
-        })
-        .catch(async () => {
-          const cachedIndex = await caches.match("/index.html");
-          if (cachedIndex) return cachedIndex;
-          return new Response("Offline and no cached app shell is available.", {
-            status: 503,
-            headers: {
-              "Content-Type": "text/plain; charset=utf-8"
-            }
-          });
-        })
-    );
-    return;
-  }
-
-  if (url.origin !== self.location.origin) return;
-
-  event.respondWith(
-    caches.match(request).then((cachedResponse) => {
-      if (cachedResponse) return cachedResponse;
-
-      return fetch(request)
-        .then((response) => {
-          if (!response || response.status !== 200 || response.type !== "basic") {
-            return response;
-          }
-
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone));
-          return response;
-        })
-        .catch(() => cachedResponse || Response.error());
-    })
-  );
+self.addEventListener("fetch", () => {
+  // Intentionally no-op. This worker exists only to retire older PWA registrations.
 });

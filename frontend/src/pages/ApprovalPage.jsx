@@ -3,6 +3,7 @@ import api from "../api/axiosClient";
 import LoadingSpinner from "../components/LoadingSpinner";
 import { useAuth } from "../context/AuthContext";
 import { logApiError } from "../utils/apiError";
+import { getApprovalListParams, normalizeApprovalStatus } from "../utils/approvalFilters";
 import { getDisplayEnquiryNumber, getDisplayManualOrderRequestNumber } from "../utils/businessNumbers";
 import { formatPriceValue } from "../utils/commerce";
 import { formatEnquiryProducts } from "../utils/enquiryProducts";
@@ -28,15 +29,6 @@ function CalendarIcon() {
   );
 }
 
-function normalizeApprovalStatus(source, status) {
-  if (source === "manual") {
-    if (status === "REQUESTED") return "PENDING";
-    if (status === "APPROVED" || status === "ORDER_CREATED") return "ACCEPTED";
-    if (status === "REJECTED") return "REJECTED";
-  }
-  return status || "PENDING";
-}
-
 function ApprovalPage() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -50,9 +42,10 @@ function ApprovalPage() {
     }
     try {
       const cacheBust = Date.now();
+      const { enquiryParams, manualParams } = getApprovalListParams(statusFilter);
       const [enquiriesRes, manualRes] = await Promise.all([
-        api.get("/enquiries", { params: { _: cacheBust } }),
-        api.get("/manual-orders", { params: { _: cacheBust } })
+        api.get("/enquiries", { params: { ...enquiryParams, _: cacheBust } }),
+        api.get("/manual-orders", { params: { ...manualParams, _: cacheBust } })
       ]);
 
       const enquiryItems = Array.isArray(enquiriesRes.data)

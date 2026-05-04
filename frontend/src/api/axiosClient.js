@@ -1,8 +1,5 @@
 import axios from "axios";
-
-function resolveApiBaseUrl() {
-  return import.meta.env.VITE_API_URL || "/api";
-}
+import { resolveApiBaseUrl } from "./apiBaseUrl";
 
 function safeGetItem(key) {
   try {

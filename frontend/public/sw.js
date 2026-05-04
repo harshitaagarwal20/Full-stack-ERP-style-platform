@@ -13,6 +13,7 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-self.addEventListener("fetch", () => {
-  // Intentionally no-op. This worker exists only to retire older PWA registrations.
+self.addEventListener("fetch", (event) => {
+  // Keep all requests on the network so navigation and API calls do not fail.
+  event.respondWith(fetch(event.request));
 });

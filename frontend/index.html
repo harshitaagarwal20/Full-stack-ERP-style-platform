@@ -54,20 +54,83 @@
     <script>
       (function () {
         try {
-          if ("serviceWorker" in navigator) {
+          var isLocalhost =
+            window.location.hostname === "localhost" ||
+            window.location.hostname === "127.0.0.1";
+          var cleanupVersion = "2026-05-01";
+          var cleanupKey = "nimbasia_cleanup_version";
+
+          if (!isLocalhost) {
+            var originalFetch = window.fetch ? window.fetch.bind(window) : null;
+            var originalOpen = window.XMLHttpRequest && window.XMLHttpRequest.prototype.open;
+
+            function rewriteLocalhostUrl(input) {
+              try {
+                var rawUrl = typeof input === "string" ? input : input && input.url;
+                if (!rawUrl) return input;
+
+                var parsedUrl = new URL(rawUrl, window.location.origin);
+                if (
+                  (parsedUrl.hostname === "localhost" || parsedUrl.hostname === "127.0.0.1") &&
+                  parsedUrl.port === "5174"
+                ) {
+                  parsedUrl.protocol = window.location.protocol;
+                  parsedUrl.host = window.location.host;
+                  return typeof input === "string" ? parsedUrl.toString() : new Request(parsedUrl.toString(), input);
+                }
+              } catch (error) {
+                // Ignore URL parsing failures and keep the original request untouched.
+              }
+
+              return input;
+            }
+
+            if (originalFetch) {
+              window.fetch = function (input, init) {
+                return originalFetch(rewriteLocalhostUrl(input), init);
+              };
+            }
+
+            if (originalOpen) {
+              window.XMLHttpRequest.prototype.open = function (method, url) {
+                return originalOpen.apply(this, [method, rewriteLocalhostUrl(url)].concat([].slice.call(arguments, 2)));
+              };
+            }
+          }
+
+          var shouldRunCleanup = true;
+          try {
+            shouldRunCleanup = window.localStorage.getItem(cleanupKey) !== cleanupVersion;
+          } catch (storageError) {
+            shouldRunCleanup = true;
+          }
+
+          if (shouldRunCleanup && "serviceWorker" in navigator) {
             navigator.serviceWorker.getRegistrations().then(function (registrations) {
-              registrations.forEach(function (registration) {
-                registration.unregister();
-              });
+              return Promise.all(
+                registrations.map(function (registration) {
+                  return registration.unregister();
+                })
+              );
             }).catch(function () {});
           }
 
-          if ("caches" in window) {
+          if (shouldRunCleanup && "caches" in window) {
             caches.keys().then(function (keys) {
-              keys.forEach(function (key) {
-                caches.delete(key);
-              });
+              return Promise.all(
+                keys.map(function (key) {
+                  return caches.delete(key);
+                })
+              );
             }).catch(function () {});
+          }
+
+          if (shouldRunCleanup) {
+            try {
+              window.localStorage.setItem(cleanupKey, cleanupVersion);
+            } catch (storageError) {
+              // Ignore storage failures and keep booting.
+            }
           }
         } catch (error) {
           // Ignore cleanup errors and continue booting the app.

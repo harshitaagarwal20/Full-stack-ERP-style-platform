@@ -44,7 +44,7 @@ function LoginPage() {
         <h1 className="text-2xl font-bold text-slate-900">Login</h1>
         <p className="mt-1 text-sm text-slate-500">Sign in with your role credentials.</p>
 
-        <form className="mt-6 space-y-4" onSubmit={onSubmit} autoComplete="off">
+        <form className="mt-6 space-y-4" onSubmit={onSubmit} autoComplete="on">
           <div>
             <label className="label" htmlFor="email">Email</label>
             <input
@@ -54,7 +54,7 @@ function LoginPage() {
               className={`input ${hasFieldError("email") ? "input-error" : ""}`}
               value={form.email}
               onChange={onChange}
-              autoComplete="off"
+              autoComplete="username"
               autoCapitalize="off"
               autoCorrect="off"
               spellCheck={false}
@@ -74,7 +74,7 @@ function LoginPage() {
               className={`input ${hasFieldError("password") ? "input-error" : ""}`}
               value={form.password}
               onChange={onChange}
-              autoComplete="new-password"
+              autoComplete="current-password"
               required
             />
             {hasFieldError("password") ? (

@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { ADMIN_SEED_USER, getBootstrapSeedUsers, LEGACY_SEED_USER_EMAILS } from "./seedConfig.js";
 
 const prisma = new PrismaClient();
 
@@ -20,46 +21,38 @@ const AUDIT_TABLE_SQL = `
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 `;
 
-const DEMO_USERS = [
-  { name: "Admin User", email: "admin@fms.com", password: "Admin@123", role: "admin" },
-  { name: "Sales Lead", email: "sales1@fms.com", password: "Sales@123", role: "sales" },
-  { name: "Sales Executive", email: "sales2@fms.com", password: "Sales@123", role: "sales" },
-  { name: "Production Lead", email: "production@fms.com", password: "Prod@123", role: "production" },
-  { name: "Dispatch Lead", email: "dispatch@fms.com", password: "Dispatch@123", role: "dispatch" }
-];
-
-async function createUser({ name, email, password, role }) {
-  const hashed = await bcrypt.hash(password, 10);
-  return prisma.user.create({
-    data: { name, email, password: hashed, role }
-  });
-}
-
 async function main() {
   await prisma.$executeRawUnsafe(AUDIT_TABLE_SQL);
 
-  const cleanupTasks = [];
+  await prisma.user.deleteMany({
+    where: {
+      email: {
+        in: LEGACY_SEED_USER_EMAILS
+      }
+    }
+  });
 
-  if (prisma.auditLog?.deleteMany) {
-    cleanupTasks.push(prisma.auditLog.deleteMany());
-  } else {
-    cleanupTasks.push(prisma.$executeRawUnsafe("DELETE FROM `AuditLog`"));
-  }
+  const [adminSeedUser] = getBootstrapSeedUsers();
+  const hashedPassword = await bcrypt.hash(adminSeedUser.password, 10);
 
-  cleanupTasks.push(
-    prisma.dispatch.deleteMany(),
-    prisma.production.deleteMany(),
-    prisma.manualOrderRequest.deleteMany(),
-    prisma.order.deleteMany(),
-    prisma.enquiry.deleteMany(),
-    prisma.user.deleteMany()
-  );
+  await prisma.user.upsert({
+    where: {
+      email: ADMIN_SEED_USER.email
+    },
+    update: {
+      name: adminSeedUser.name,
+      password: hashedPassword,
+      role: adminSeedUser.role
+    },
+    create: {
+      name: adminSeedUser.name,
+      email: adminSeedUser.email,
+      password: hashedPassword,
+      role: adminSeedUser.role
+    }
+  });
 
-  await prisma.$transaction(cleanupTasks);
-
-  await Promise.all(DEMO_USERS.map((user) => createUser(user)));
-
-  console.log("Seed reset complete: 5 demo users were created. Operational modules were cleared.");
+  console.log("Seed bootstrap complete: admin@gmail.com / 123456 is available. Legacy demo users were removed.");
 }
 
 main()

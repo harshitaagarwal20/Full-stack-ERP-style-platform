@@ -63,7 +63,17 @@ app.use(
 );
 
 app.get("/", (req, res) => {
-  res.json({ message: "Nimbasia backend is running. Use /api/health or start the frontend on port 5174." });
+  res.json({
+    message:
+      "Nimbasia backend is running. Production frontend: https://nimbasia.vercel.app. Health check: /api/health. Local dev frontend: http://localhost:5174."
+  });
+});
+
+app.get("/api", (req, res) => {
+  res.json({
+    ok: true,
+    message: "Nimbasia API is running. Use /api/health for health checks."
+  });
 });
 
 app.get("/api/health", (req, res) => {

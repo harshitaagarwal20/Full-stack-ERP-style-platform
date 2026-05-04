@@ -76,13 +76,13 @@ npx prisma migrate dev --name init
 npx prisma generate
 ```
 
-6. Seed user accounts only:
+6. Seed the bootstrap admin account:
 
 ```bash
 npm run seed
 ```
 
-The seed script clears operational demo rows and keeps only user-management seed data. Master data is initialized separately by the app.
+The seed script removes the legacy demo users and ensures the bootstrap admin account exists.
 
 7. Start backend:
 
@@ -121,13 +121,9 @@ Frontend runs on `http://localhost:5173`.
 - For Vercel preview deployments, `https://*.vercel.app` is supported by the backend CORS matcher.
 - Set the frontend `VITE_API_URL` to your Render backend base URL in production, for example `https://your-render-backend.onrender.com/api`.
 
-## Sample Users
+## Bootstrap Login
 
-- Admin: `admin@fms.com` / `Admin@123`
-- Sales Lead: `sales1@fms.com` / `Sales@123`
-- Sales Executive: `sales2@fms.com` / `Sales@123`
-- Production: `production@fms.com` / `Prod@123`
-- Dispatch: `dispatch@fms.com` / `Dispatch@123`
+- Admin: `admin@gmail.com` / `123456`
 
 ## API Modules
 

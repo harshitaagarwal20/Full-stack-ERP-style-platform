@@ -19,6 +19,13 @@ try {
     message: "Nimbasia API is running. Use /api/health for health checks."
   });
 
+  const rootResponse = await fetch(`${baseUrl}/`);
+  assert.equal(rootResponse.status, 200);
+  assert.deepEqual(await rootResponse.json(), {
+    message:
+      "Nimbasia backend is running. Production frontend: https://app.nimbasia.com. Health check: /api/health. Local dev frontend: http://localhost:5174."
+  });
+
   const healthResponse = await fetch(`${baseUrl}/api/health`);
   assert.equal(healthResponse.status, 200);
   assert.deepEqual(await healthResponse.json(), {

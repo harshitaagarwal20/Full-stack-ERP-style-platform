@@ -65,7 +65,7 @@ app.use(
 app.get("/", (req, res) => {
   res.json({
     message:
-      "Nimbasia backend is running. Production frontend: https://nimbasia.vercel.app. Health check: /api/health. Local dev frontend: http://localhost:5174."
+      "Nimbasia backend is running. Production frontend: https://app.nimbasia.com. Health check: /api/health. Local dev frontend: http://localhost:5174."
   });
 });
 

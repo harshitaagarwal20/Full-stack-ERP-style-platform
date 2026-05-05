@@ -9,7 +9,9 @@
     "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "seed": "node prisma/seed.js"
+    "prisma:deploy": "prisma migrate deploy",
+    "seed": "node prisma/seed.js",
+    "db:deploy": "npm run prisma:deploy && npm run seed"
   },
   "dependencies": {
     "@prisma/client": "^6.6.0",

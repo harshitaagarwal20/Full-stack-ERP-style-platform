@@ -9,7 +9,7 @@ const env = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "30d",
   clientOrigin:
     process.env.CLIENT_ORIGIN ||
-    "https://nimbasia.vercel.app,http://localhost:5174,http://127.0.0.1:5174,http://localhost:4173,http://127.0.0.1:4173,http://app.nimbasia.com"
+    "https://nimbasia.vercel.app,http://localhost:5174,http://127.0.0.1:5174,http://localhost:4173,http://127.0.0.1:4173,http://app.nimbasia.com,https://app.nimbasia.com"
 };
 
 export default env;

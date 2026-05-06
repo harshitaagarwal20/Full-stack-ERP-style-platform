@@ -6,6 +6,7 @@ async function start() {
   app.listen(env.port, "0.0.0.0", () => {
     console.log(`Access from this machine: http://localhost:${env.port}`);
     console.log(`Access from network: http://<your-machine-ip>:${env.port}`);
+    console.log("DATABASE_URL:", process.env.DATABASE_URL); /
   });
 }
 

@@ -6,7 +6,11 @@ let server;
 
 async function start() {
   try {
-    await prisma.$connect();
+    if (env.prismaStartupCheck) {
+      await prisma.$connect();
+    } else {
+      console.warn("Prisma startup check disabled. Running in diagnostics mode.");
+    }
 
     server = app.listen(env.port, "0.0.0.0", () => {
       console.log(`Access from this machine: http://localhost:${env.port}`);

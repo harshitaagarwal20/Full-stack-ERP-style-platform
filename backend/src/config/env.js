@@ -5,6 +5,7 @@ dotenv.config();
 const env = {
   port: process.env.PORT || 5001,
   dbUrl: process.env.DATABASE_URL,
+  prismaStartupCheck: process.env.PRISMA_STARTUP_CHECK !== "false",
   jwtSecret: process.env.JWT_SECRET || "dev_secret_change_me",
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "30d",
   clientOrigin:

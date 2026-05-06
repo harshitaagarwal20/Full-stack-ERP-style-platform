@@ -6,5 +6,6 @@ const prisma = new PrismaClient();
 export default prisma;
 
 export async function closePrisma() {
-  await prisma.$disconnect();
+  // await prisma.$disconnect();
+  await prisma.$connect();
 }

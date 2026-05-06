@@ -18,34 +18,10 @@ import productionRoutes from "./routes/productionRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 
 const app = express();
-const allowedOriginRules = String(env.clientOrigin || "")
-  .split(",")
-  .map((origin) => origin.trim())
-  .filter(Boolean);
-
-function isOriginAllowed(requestOrigin) {
-  if (!requestOrigin) return true;
-  if (allowedOriginRules.length === 0) return true;
-
-  return allowedOriginRules.some((rule) => {
-    if (rule === requestOrigin) return true;
-
-    if (rule.includes("*")) {
-      const escapedRule = rule.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
-      const wildcardRegex = new RegExp(`^${escapedRule.replace(/\\\*/g, ".*")}$`);
-      return wildcardRegex.test(requestOrigin);
-    }
-
-    return false;
-  });
-}
 
 app.use(
   cors({
-    origin: (origin, callback) => {
-      if (isOriginAllowed(origin)) return callback(null, true);
-      return callback(new Error("CORS blocked for this origin."));
-    },
+    origin: true,
     credentials: true
   })
 );

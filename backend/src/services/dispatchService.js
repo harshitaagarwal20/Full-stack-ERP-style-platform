@@ -204,7 +204,7 @@ async function buildDispatchDashboardData(query = {}, client = prisma) {
               shipmentStatus: true
             },
             orderBy: {
-              createdAt: "desc"
+              createdAt: "asc"
             }
           }
         },
@@ -225,7 +225,7 @@ async function buildDispatchDashboardData(query = {}, client = prisma) {
             : {})
         },
         select: DISPATCH_LIST_SELECT,
-        orderBy: [{ createdAt: "desc" }, { id: "desc" }]
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }]
       })
     ]);
 
@@ -268,7 +268,9 @@ async function buildDispatchDashboardData(query = {}, client = prisma) {
         order: dispatch.order,
         dispatch
       }));
-      const manualRows = filteredReadyOrders.map((order) => ({
+    const manualRows = filteredReadyOrders
+      .filter((order) => (order.dispatches || []).length === 0)
+      .map((order) => ({
         key: `ready-${order.id}`,
         order,
         dispatch: null
@@ -352,7 +354,7 @@ async function buildDispatchDashboardData(query = {}, client = prisma) {
               shipmentStatus: true
             },
             orderBy: {
-              createdAt: "desc"
+              createdAt: "asc"
             }
           }
         },
@@ -373,7 +375,7 @@ async function buildDispatchDashboardData(query = {}, client = prisma) {
             : {})
         },
         select: DISPATCH_LIST_SELECT,
-        orderBy: [{ createdAt: "desc" }, { id: "desc" }]
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }]
       }),
       client.enquiry.findMany({
         where: {

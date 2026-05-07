@@ -515,7 +515,39 @@ async function buildDispatchDashboardData(query = {}, client = prisma) {
       (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
     );
 
-    return { readyOrders: filteredReadyOrders, dispatches: filteredDispatches, dispatchDateOrders: combinedDispatchDateOrders };
+    const readyOrders = dispatchableOrders
+      .map((order) => {
+        const deliveredQuantity = getDeliveredQuantity(order.dispatches);
+        const remainingQuantity = Math.max(order.quantity - deliveredQuantity, 0);
+        return {
+          ...order,
+          deliveredQuantity,
+          remainingQuantity
+        };
+      })
+      .filter((order) => order.remainingQuantity > 0)
+      .filter((order) => {
+        const matchesStatus = statusFilter === "all" || statusFilter === "pending";
+        const matchesClient = clientFilter ? String(order.clientName || "").toLowerCase().includes(clientFilter) : true;
+        const matchesDate = dateFilter ? normalizeDateKey(order.deliveryDate) === dateFilter : true;
+        return matchesStatus && matchesClient && matchesDate;
+      });
+
+    const filteredDispatches = dispatches.filter((dispatch) => {
+      const currentStatus = String(dispatch.shipmentStatus || "").toLowerCase();
+      const matchesStatus = statusFilter === "all"
+        ? true
+        : statusFilter === "pending"
+          ? currentStatus === "packing"
+          : currentStatus === statusFilter;
+      const matchesClient = clientFilter
+        ? String(dispatch.order?.clientName || "").toLowerCase().includes(clientFilter)
+        : true;
+      const matchesDate = dateFilter ? normalizeDateKey(dispatch.dispatchDate) === dateFilter : true;
+      return matchesStatus && matchesClient && matchesDate;
+    });
+
+    return { readyOrders, dispatches: filteredDispatches, dispatchDateOrders: combinedDispatchDateOrders };
   };
 
   if (paginated) {

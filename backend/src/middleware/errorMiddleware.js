@@ -22,6 +22,7 @@ function getStatusCode(error) {
       return 503;
     default:
       if (error?.name === "PrismaClientInitializationError") return 503;
+      if (error?.name === "PrismaClientRustPanicError") return 503;
       return 500;
   }
 }
@@ -39,9 +40,10 @@ function getMessage(error) {
     error?.code === "P1002" ||
     error?.code === "P1008" ||
     error?.code === "P1017" ||
-    error?.name === "PrismaClientInitializationError"
+    error?.name === "PrismaClientInitializationError" ||
+    error?.name === "PrismaClientRustPanicError"
   ) {
-    return "Database connection is unavailable.";
+    return "Database connection is temporarily unavailable.";
   }
   if (error?.name === "SyntaxError" && String(error.message || "").includes("JSON")) {
     return "Invalid JSON payload.";

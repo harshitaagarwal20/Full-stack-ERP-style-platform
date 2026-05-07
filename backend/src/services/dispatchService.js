@@ -4,6 +4,7 @@ import { buildPagination } from "../utils/pagination.js";
 import { buildCacheKey, getOrLoadCached, invalidateCacheByPrefix } from "../utils/responseCache.js";
 import { DISPATCH_LIST_SELECT, MANUAL_ORDER_REQUEST_SELECT } from "../utils/selects.js";
 import { formatEnquiryProducts, getPrimaryEnquiryProduct } from "../utils/enquiryProducts.js";
+import { normalizeOrderUnit } from "../utils/orderUnits.js";
 import {
   extractSalesGroupSequence,
   formatSalesGroupNumber,
@@ -580,8 +581,7 @@ export async function updateOrderDispatchDate(enquiryId, payload, actorUser) {
   const hasDispatchDateColumn = await hasOrderDispatchDateColumn();
 
   const result = await prisma.$transaction(async (tx) => {
-    const validUnits = new Set(["KG", "MT", "LTR"]);
-    const unit = validUnits.has(enquiry.unitOfMeasurement) ? enquiry.unitOfMeasurement : "KG";
+    const unit = normalizeOrderUnit(enquiry.unitOfMeasurement);
 
     const salesGroupNumber = await resolveSalesGroupNumberForEnquiry(enquiry, tx);
 

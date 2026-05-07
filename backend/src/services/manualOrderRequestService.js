@@ -6,6 +6,7 @@ import { MANUAL_ORDER_REQUEST_SELECT, ORDER_LIST_SELECT } from "../utils/selects
 import { formatEnquiryProducts, normalizeEnquiryProductRows } from "../utils/enquiryProducts.js";
 import { ensureProductsExist } from "../utils/productCatalog.js";
 import { getCustomerMasterProfileByName } from "../utils/customerCatalog.js";
+import { normalizeOrderUnit } from "../utils/orderUnits.js";
 import {
   extractSalesGroupSequence,
   formatManualOrderRequestNumber,
@@ -40,7 +41,7 @@ function normalizeText(value, fallback = "") {
 function buildManualOrderCreateData(request, actorUser, customerProfile, salesGroupNumber) {
   const product = normalizeText(request.product, "NA");
   const grade = normalizeText(request.grade, "NA");
-  const unit = normalizeText(request.unit, "KG");
+  const unit = normalizeOrderUnit(request.unit);
   const packingType = normalizeText(request.packingType, "NA");
   const packingSize = normalizeText(request.packingSize, "NA");
   const clientName = normalizeText(request.clientName, customerProfile?.customerName || "Unknown Customer");
@@ -179,7 +180,7 @@ export async function createManualOrderRequest(payload, createdByUser) {
     product,
     grade: normalizeText(productRows[index]?.grade || payload.grade, "NA"),
     quantity: Number(productRows[index]?.quantity || payload.quantity || 0) || 1,
-    unit: normalizeText(productRows[index]?.unit_of_measurement || payload.unit, "KG")
+    unit: normalizeOrderUnit(productRows[index]?.unit_of_measurement || payload.unit)
   }));
   const requestDispatchDate = parseDateInput(payload.delivery_date || payload.dispatch_date);
   if (!requestDispatchDate) {

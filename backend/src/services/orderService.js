@@ -7,6 +7,7 @@ import { getPrimaryEnquiryProduct } from "../utils/enquiryProducts.js";
 import { ensureProductsExist } from "../utils/productCatalog.js";
 import { getCustomerMasterProfileByName } from "../utils/customerCatalog.js";
 import { normalizeCurrencyInput, normalizePriceInput } from "../utils/commerce.js";
+import { normalizeOrderUnit } from "../utils/orderUnits.js";
 import {
   extractSalesGroupSequence,
   formatSalesGroupNumber,
@@ -77,7 +78,7 @@ export function buildOrderCreateData({
     quantity: payload.quantity,
     price: resolvedPrice,
     currency: resolvedCurrency,
-    unit: payload.unit,
+    unit: normalizeOrderUnit(payload.unit),
     packingType: payload.packing_type,
     packingSize: payload.packing_size,
     deliveryDate: new Date(payload.delivery_date),
@@ -99,7 +100,7 @@ export function buildOrderUpdateData(payload, customerProfile = null) {
     quantity: payload.quantity,
     price: payload.price !== undefined ? normalizePriceInput(payload.price) : undefined,
     currency: payload.currency !== undefined ? normalizeCurrencyInput(payload.currency) : undefined,
-    unit: payload.unit,
+    unit: payload.unit !== undefined ? normalizeOrderUnit(payload.unit) : undefined,
     packingType: payload.packing_type,
     packingSize: payload.packing_size,
     deliveryDate: payload.delivery_date ? new Date(payload.delivery_date) : undefined,

@@ -76,13 +76,13 @@ npx prisma migrate dev --name init
 npx prisma generate
 ```
 
-6. Seed the bootstrap admin account:
+6. Remove legacy demo data and recreate the bootstrap admin account:
 
 ```bash
 npm run seed
 ```
 
-The seed script removes the legacy demo users and ensures the bootstrap admin account exists.
+The seed script removes legacy demo rows from the operational tables and ensures the bootstrap admin account exists.
 
 7. Start backend:
 

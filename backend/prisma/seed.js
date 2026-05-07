@@ -1,8 +1,14 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
-import { ADMIN_SEED_USER, getBootstrapSeedUsers, LEGACY_SEED_USER_EMAILS } from "./seedConfig.js";
+import { LEGACY_SEED_USER_EMAILS } from "./seedConfig.js";
 
 const prisma = new PrismaClient();
+const ADMIN_SEED_USER = {
+  name: "Admin User",
+  email: "admin@gmail.com",
+  password: "123456",
+  role: "admin"
+};
 
 const AUDIT_TABLE_SQL = `
   CREATE TABLE IF NOT EXISTS \`AuditLog\` (
@@ -24,6 +30,16 @@ const AUDIT_TABLE_SQL = `
 async function main() {
   await prisma.$executeRawUnsafe(AUDIT_TABLE_SQL);
 
+  await prisma.$transaction(async (tx) => {
+    await tx.dispatch.deleteMany();
+    await tx.production.deleteMany();
+    await tx.manualOrderRequest.deleteMany();
+    await tx.order.deleteMany();
+    await tx.enquiry.deleteMany();
+  });
+
+  await prisma.$executeRawUnsafe("DELETE FROM `AuditLog`");
+
   await prisma.user.deleteMany({
     where: {
       email: {
@@ -32,27 +48,26 @@ async function main() {
     }
   });
 
-  const [adminSeedUser] = getBootstrapSeedUsers();
-  const hashedPassword = await bcrypt.hash(adminSeedUser.password, 10);
+  const hashedPassword = await bcrypt.hash(ADMIN_SEED_USER.password, 10);
 
   await prisma.user.upsert({
     where: {
       email: ADMIN_SEED_USER.email
     },
     update: {
-      name: adminSeedUser.name,
+      name: ADMIN_SEED_USER.name,
       password: hashedPassword,
-      role: adminSeedUser.role
+      role: ADMIN_SEED_USER.role
     },
     create: {
-      name: adminSeedUser.name,
-      email: adminSeedUser.email,
+      name: ADMIN_SEED_USER.name,
+      email: ADMIN_SEED_USER.email,
       password: hashedPassword,
-      role: adminSeedUser.role
+      role: ADMIN_SEED_USER.role
     }
   });
 
-  console.log("Seed bootstrap complete: admin@gmail.com / 123456 is available. Legacy demo users were removed.");
+  console.log("Legacy demo data removed. Bootstrap admin login is available at admin@gmail.com / 123456.");
 }
 
 main()

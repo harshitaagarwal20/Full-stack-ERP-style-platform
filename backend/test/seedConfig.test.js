@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
-import { ADMIN_SEED_USER, LEGACY_SEED_USER_EMAILS, getBootstrapSeedUsers } from "../prisma/seedConfig.js";
+import { LEGACY_SEED_USER_EMAILS } from "../prisma/seedConfig.js";
 
-assert.equal(ADMIN_SEED_USER.email, "admin@gmail.com");
-assert.equal(ADMIN_SEED_USER.password, "123456");
-assert.equal(ADMIN_SEED_USER.role, "admin");
-
-assert.deepEqual(getBootstrapSeedUsers(), [ADMIN_SEED_USER]);
-assert(!LEGACY_SEED_USER_EMAILS.includes(ADMIN_SEED_USER.email));
+assert.deepEqual(LEGACY_SEED_USER_EMAILS, [
+  "admin@fms.com",
+  "sales1@fms.com",
+  "sales2@fms.com",
+  "production@fms.com",
+  "dispatch@fms.com"
+]);
+assert(!LEGACY_SEED_USER_EMAILS.includes("admin@gmail.com"));
 
 console.log("seedConfig assertions passed");
-

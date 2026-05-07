@@ -195,7 +195,6 @@ ALTER TABLE `Production` ADD CONSTRAINT `Production_orderId_fkey` FOREIGN KEY (`
 -- AddForeignKey
 ALTER TABLE `Dispatch` ADD CONSTRAINT `Dispatch_orderId_fkey` FOREIGN KEY (`orderId`) REFERENCES `Order`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
-
 -- Seed admin login for initial access
 INSERT INTO `User` (`name`, `email`, `password`, `role`, `createdAt`)
 VALUES ('Admin User', 'admin@gmail.com', '$2a$10$ODp/BD8xh3z8GzyXh28E.uwHqqmiHhYzo6JdpWTcHDirO3LnApPO2', 'admin', CURRENT_TIMESTAMP(3));

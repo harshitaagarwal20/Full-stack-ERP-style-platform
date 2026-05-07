@@ -33,6 +33,20 @@ try {
     message: "FMS API is running"
   });
 
+  const authRootResponse = await fetch(`${baseUrl}/api/auth`);
+  assert.equal(authRootResponse.status, 200);
+  assert.deepEqual(await authRootResponse.json(), {
+    ok: true,
+    message: "Auth API is running. Use POST /api/auth/login to sign in."
+  });
+
+  const authLoginInfoResponse = await fetch(`${baseUrl}/api/auth/login`);
+  assert.equal(authLoginInfoResponse.status, 200);
+  assert.deepEqual(await authLoginInfoResponse.json(), {
+    ok: true,
+    message: "Use POST /api/auth/login with email and password."
+  });
+
   console.log("apiRoot assertions passed");
 } finally {
   await new Promise((resolve) => server.close(resolve));

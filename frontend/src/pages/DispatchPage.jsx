@@ -10,7 +10,13 @@ import { getDisplaySalesNumber } from "../utils/businessNumbers";
 import { getDispatchSortPriority } from "../utils/dispatchOrdering";
 
 function formatDate(dateValue) {
-  return dateValue ? new Date(dateValue).toLocaleDateString() : "-";
+  if (!dateValue) return "-";
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return "-";
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+  return `${day}/${month}/${year}`;
 }
 
 function mapShipmentStatus(status) {
@@ -29,6 +35,16 @@ function getOrderRemainingQuantity(order, dispatch) {
     );
   }
   return order.remainingQuantity ?? order.quantity ?? 0;
+}
+
+function getDispatchModalRemainingQuantity(order, dispatchQty, originalDispatchQuantity = 0) {
+  if (!order) return 0;
+
+  const baseRemaining = Number(order.remainingQuantity ?? order.quantity ?? 0);
+  const currentDispatchQuantity = Number(dispatchQty || 0);
+  const previousDispatchQuantity = Number(originalDispatchQuantity || 0);
+
+  return Math.max(baseRemaining + previousDispatchQuantity - currentDispatchQuantity, 0);
 }
 
 function getDispatchRowStatus(row) {
@@ -122,6 +138,7 @@ function DispatchPage() {
     dispatch_date: "",
     shipment_status: "",
     packing_done: false,
+    original_dispatch_quantity: 0,
     remarks: ""
   });
   const tableWrapRef = useRef(null);
@@ -143,6 +160,13 @@ function DispatchPage() {
     const dispatchQty = Number(dispatchForm.dispatch_quantity || 0);
     return getAllowedShipmentStatusOptions(selectedOrder, dispatchQty, dispatchForm.shipment_status);
   }, [dispatchForm.dispatch_quantity, dispatchForm.shipment_status, selectedOrder]);
+  const dispatchModalRemainingQuantity = useMemo(() => (
+    getDispatchModalRemainingQuantity(
+      selectedOrder,
+      dispatchForm.dispatch_quantity,
+      dispatchForm.original_dispatch_quantity
+    )
+  ), [dispatchForm.dispatch_quantity, dispatchForm.original_dispatch_quantity, selectedOrder]);
 
   const fetchDispatchData = async ({
     searchQuery = query,
@@ -204,6 +228,7 @@ function DispatchPage() {
       dispatch_date: "",
       shipment_status: "",
       packing_done: false,
+      original_dispatch_quantity: 0,
       remarks: ""
     });
   };
@@ -263,6 +288,7 @@ function DispatchPage() {
       dispatch_date: dispatch.dispatchDate ? new Date(dispatch.dispatchDate).toISOString().slice(0, 10) : "",
       shipment_status: dispatch.shipmentStatus || "",
       packing_done: Boolean(dispatch.packingDone),
+      original_dispatch_quantity: Number(dispatch.dispatchedQuantity || 0),
       remarks: dispatch.remarks || ""
     });
   };
@@ -567,7 +593,7 @@ function DispatchPage() {
                 <label>Remaining Quantity</label>
                 <input
                   type="number"
-                  value={selectedOrder.remainingQuantity ?? selectedOrder.quantity ?? 0}
+                  value={dispatchModalRemainingQuantity}
                   readOnly
                 />
               </div>

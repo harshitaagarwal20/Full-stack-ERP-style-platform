@@ -25,7 +25,7 @@ try {
 
   assert.equal(
     env.clientOrigin,
-    "https://nimbasia.vercel.app,http://localhost:5174,http://127.0.0.1:5174,http://localhost:4173,http://127.0.0.1:4173,http://app.nimbasia.com,https://app.nimbasia.com"
+    "https://nimbasia.vercel.app,http://localhost:5174,http://127.0.0.1:5174,http://192.168.1.*:5174,http://localhost:4173,http://127.0.0.1:4173,http://192.168.1.*:4173,http://app.nimbasia.com,https://app.nimbasia.com"
   );
 
   console.log("envConfig assertions passed");

@@ -47,6 +47,14 @@ try {
     message: "Use POST /api/auth/login with email and password."
   });
 
+  const corsResponse = await fetch(`${baseUrl}/api/health`, {
+    headers: {
+      Origin: "http://192.168.1.188:5174"
+    }
+  });
+  assert.equal(corsResponse.status, 200);
+  assert.equal(corsResponse.headers.get("access-control-allow-origin"), "http://192.168.1.188:5174");
+
   console.log("apiRoot assertions passed");
 } finally {
   await new Promise((resolve) => server.close(resolve));

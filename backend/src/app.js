@@ -24,6 +24,15 @@ const allowedOriginRules = String(env.clientOrigin || "")
   .map((origin) => origin.trim())
   .filter(Boolean);
 
+function wildcardRuleToRegExp(rule) {
+  const escaped = rule
+    .split("*")
+    .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&"))
+    .join(".*");
+
+  return new RegExp(`^${escaped}$`);
+}
+
 function isOriginAllowed(requestOrigin) {
   if (!requestOrigin) return true;
   if (allowedOriginRules.length === 0) return true;
@@ -32,9 +41,7 @@ function isOriginAllowed(requestOrigin) {
     if (rule === requestOrigin) return true;
 
     if (rule.includes("*")) {
-      const escapedRule = rule.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
-      const wildcardRegex = new RegExp(`^${escapedRule.replace(/\\\*/g, ".*")}$`);
-      return wildcardRegex.test(requestOrigin);
+      return wildcardRuleToRegExp(rule).test(requestOrigin);
     }
 
     return false;

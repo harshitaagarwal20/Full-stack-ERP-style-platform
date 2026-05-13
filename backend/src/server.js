@@ -1,13 +1,25 @@
 import app from "./app.js";
 import env from "./config/env.js";
 import prisma, { closePrisma } from "./config/prisma.js";
+import { isRecoverablePrismaPanicError } from "./utils/prismaClientProxy.js";
 
 let server;
 
 async function start() {
   try {
     if (env.prismaStartupCheck) {
-      await prisma.$connect();
+      try {
+        await prisma.$connect();
+      } catch (error) {
+        if (!isRecoverablePrismaPanicError(error)) {
+          throw error;
+        }
+
+        console.warn(
+          "Prisma startup check hit a recoverable panic. Continuing startup so the app can serve requests:",
+          error?.message || error
+        );
+      }
     } else {
       console.warn("Prisma startup check disabled. Running in diagnostics mode.");
     }

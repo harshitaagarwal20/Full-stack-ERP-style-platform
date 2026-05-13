@@ -2,7 +2,7 @@ import prisma from "../config/prisma.js";
 import { recordAuditEvent } from "./auditService.js";
 import { buildPagination } from "../utils/pagination.js";
 import { buildCacheKey, getOrLoadCached, invalidateCacheByPrefix } from "../utils/responseCache.js";
-import { PRODUCTION_LIST_SELECT } from "../utils/selects.js";
+import { ORDER_LIST_SELECT, PRODUCTION_LIST_SELECT } from "../utils/selects.js";
 
 const PRODUCTION_CACHE_PREFIX = "production:list";
 const PRODUCTION_CACHE_TTL_MS = 12 * 1000;
@@ -52,6 +52,34 @@ function normalizeNullableTrimmedInput(value) {
   if (value === null) return null;
   const trimmed = String(value).trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+export function buildProductionCreateData(order, payload = {}) {
+  const assignedPersonnel = normalizeTrimmedInput(payload.assigned_personnel) || order.clientName || "Production Team";
+  const parsedDeliveryDate = parseDateInput(payload.delivery_date);
+  const deliveryDateValue = parsedDeliveryDate || new Date(order.deliveryDate || new Date());
+  const productSpecs = normalizeTrimmedInput(payload.product_specs) || `${order.product} ${order.grade ? `(${order.grade})` : ""}`.trim();
+  const capacity = normalizePositiveIntegerInput(payload.capacity, "Capacity") ?? normalizePositiveIntegerInput(order.quantity, "Order quantity") ?? 1;
+  const particleSize = normalizeTrimmedInput(payload.particle_size) || "NA";
+  const acmRpm = normalizePositiveIntegerInput(payload.acm_rpm, "ACM RPM") ?? 1000;
+  const classifierRpm = normalizePositiveIntegerInput(payload.classifier_rpm, "Classifier RPM") ?? 1000;
+  const blowerRpm = normalizePositiveIntegerInput(payload.blower_rpm, "Blower RPM") ?? 1000;
+  const rawMaterials = normalizeTrimmedInput(payload.raw_materials) || order.packingType || "NA";
+  const remarks = payload.remarks ?? `Auto-generated from order ${order.salesOrderNumber}`;
+
+  return {
+    assignedPersonnel,
+    deliveryDate: deliveryDateValue,
+    productSpecs,
+    capacity,
+    particleSize,
+    acmRpm,
+    classifierRpm,
+    blowerRpm,
+    rawMaterials,
+    remarks,
+    state: payload.state || null
+  };
 }
 
 async function hasProductionStatusChangeCountColumn() {
@@ -177,8 +205,8 @@ export function buildProductionUpdateData(payload = {}, production = {}) {
   return updateData;
 }
 
-export async function createProduction(payload, actorUser) {
-  const order = await prisma.order.findUnique({
+export async function createProduction(payload, actorUser, client = prisma) {
+  const order = await client.order.findUnique({
     where: { id: payload.order_id },
     select: {
       id: true,
@@ -202,6 +230,11 @@ export async function createProduction(payload, actorUser) {
     }
   });
 
+  const { production } = await startProductionFromOrder(order, actorUser, payload, client);
+  return production;
+}
+
+export async function startProductionFromOrder(order, actorUser, payload = {}, client = prisma) {
   if (!order) {
     const error = new Error("Cannot start production without valid order.");
     error.statusCode = 400;
@@ -232,40 +265,19 @@ export async function createProduction(payload, actorUser) {
     throw error;
   }
 
-  const assignedPersonnel = normalizeTrimmedInput(payload.assigned_personnel) || order.clientName || "Production Team";
-  const parsedDeliveryDate = parseDateInput(payload.delivery_date);
-  const deliveryDateValue = parsedDeliveryDate || new Date(order.deliveryDate || new Date());
-  const productSpecs = normalizeTrimmedInput(payload.product_specs) || `${order.product} ${order.grade ? `(${order.grade})` : ""}`.trim();
-  const capacity = normalizePositiveIntegerInput(payload.capacity, "Capacity") ?? normalizePositiveIntegerInput(order.quantity, "Order quantity") ?? 1;
-  const particleSize = normalizeTrimmedInput(payload.particle_size) || "NA";
-  const acmRpm = normalizePositiveIntegerInput(payload.acm_rpm, "ACM RPM") ?? 1000;
-  const classifierRpm = normalizePositiveIntegerInput(payload.classifier_rpm, "Classifier RPM") ?? 1000;
-  const blowerRpm = normalizePositiveIntegerInput(payload.blower_rpm, "Blower RPM") ?? 1000;
-  const rawMaterials = normalizeTrimmedInput(payload.raw_materials) || order.packingType || "NA";
-  const remarks = payload.remarks ?? `Auto-generated from order ${order.salesOrderNumber}`;
-
-  const production = await prisma.production.create({
+  const production = await client.production.create({
     data: {
-      orderId: payload.order_id,
-      assignedPersonnel,
-      deliveryDate: deliveryDateValue,
-      productSpecs,
-      capacity,
-      particleSize,
-      acmRpm,
-      classifierRpm,
-      blowerRpm,
-      rawMaterials,
-      remarks,
-      status: "PENDING",
-      state: payload.state || null
+      orderId: order.id,
+      ...buildProductionCreateData(order, payload),
+      status: "PENDING"
     },
     select: PRODUCTION_LIST_SELECT
   });
 
-  await prisma.order.update({
-    where: { id: payload.order_id },
-    data: { status: "IN_PRODUCTION" }
+  const updatedOrder = await client.order.update({
+    where: { id: order.id },
+    data: { status: "IN_PRODUCTION" },
+    select: ORDER_LIST_SELECT
   });
 
   await recordAuditEvent({
@@ -274,11 +286,12 @@ export async function createProduction(payload, actorUser) {
     entityId: production.id,
     user: actorUser,
     newValue: production,
-    note: `Started production for order #${payload.order_id}`
+    note: `Started production for order #${order.id}`,
+    tx: client
   });
 
   invalidateProductionReadCaches();
-  return production;
+  return { production, order: updatedOrder };
 }
 
 export async function listProductionOrders(filters = {}) {

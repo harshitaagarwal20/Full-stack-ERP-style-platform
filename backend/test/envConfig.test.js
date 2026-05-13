@@ -20,7 +20,7 @@ try {
   delete process.env.JWT_SECRET;
   delete process.env.JWT_EXPIRES_IN;
 
-  const envModuleUrl = pathToFileURL(path.resolve(originalCwd, "backend/src/config/env.js")).href;
+  const envModuleUrl = pathToFileURL(path.resolve(originalCwd, "src/config/env.js")).href;
   const { default: env } = await import(envModuleUrl);
 
   assert.equal(

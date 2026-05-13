@@ -1,5 +1,6 @@
 import prisma from "../config/prisma.js";
 import { recordAuditEvent } from "./auditService.js";
+import { startProductionFromOrder } from "./productionService.js";
 import { buildPagination } from "../utils/pagination.js";
 import { buildCacheKey, getOrLoadCached, invalidateCacheByPrefix } from "../utils/responseCache.js";
 import { ORDER_LIST_SELECT } from "../utils/selects.js";
@@ -290,16 +291,23 @@ export async function listOrders(filters = {}) {
   });
 }
 
-export async function moveOrderToProduction(orderId, actorUser) {
-  const order = await prisma.order.findUnique({
+export async function moveOrderToProduction(orderId, actorUser, client = prisma) {
+  const order = await client.order.findUnique({
     where: { id: orderId },
     select: {
       id: true,
       status: true,
+      clientName: true,
       city: true,
       pincode: true,
       state: true,
       countryCode: true,
+      quantity: true,
+      product: true,
+      grade: true,
+      packingType: true,
+      deliveryDate: true,
+      salesOrderNumber: true,
       production: {
         select: {
           id: true
@@ -338,11 +346,7 @@ export async function moveOrderToProduction(orderId, actorUser) {
     throw error;
   }
 
-  const updatedOrder = await prisma.order.update({
-    where: { id: orderId },
-    data: { status: "IN_PRODUCTION" },
-    select: ORDER_LIST_SELECT
-  });
+  const { order: updatedOrder } = await startProductionFromOrder(order, actorUser, {}, client);
 
   await recordAuditEvent({
     action: "START_PRODUCTION",
@@ -351,7 +355,8 @@ export async function moveOrderToProduction(orderId, actorUser) {
     user: actorUser,
     oldValue: { status: order.status },
     newValue: { status: "IN_PRODUCTION" },
-    note: `Moved order #${orderId} to production`
+    note: `Moved order #${orderId} to production`,
+    tx: client
   });
 
   invalidateOrderReadCaches();

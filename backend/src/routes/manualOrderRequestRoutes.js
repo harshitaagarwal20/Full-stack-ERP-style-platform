@@ -19,7 +19,7 @@ const router = Router();
 router.use(authMiddleware);
 router.get("/", allowRoles("admin", "sales", "dispatch"), getManualOrderRequests);
 router.post("/", allowRoles("admin", "sales"), validateBody(createManualOrderRequestSchema), addManualOrderRequest);
-router.put("/:id/status", allowRoles("admin"), validateBody(updateManualOrderRequestStatusSchema), updateManualOrderRequest);
+router.put("/:id/status", allowRoles("admin", "sales"), validateBody(updateManualOrderRequestStatusSchema), updateManualOrderRequest);
 router.put("/:id/dispatch-date", allowRoles("admin", "dispatch"), validateBody(setManualOrderRequestDispatchDateSchema), setManualOrderDate);
 
 export default router;

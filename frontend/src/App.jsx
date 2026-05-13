@@ -74,7 +74,7 @@ function App() {
               <Route path="/enquiries" element={withSuspense(<EnquiryPage />)} />
             </Route>
 
-            <Route element={<ProtectedRoute roles={[ROLES.ADMIN]} />}>
+            <Route element={<ProtectedRoute roles={[ROLES.ADMIN, ROLES.SALES]} />}>
               <Route path="/approval" element={withSuspense(<ApprovalPage />)} />
               <Route path="/activity-log" element={withSuspense(<ActivityLogPage />)} />
               <Route path="/master-data" element={withSuspense(<MasterDataPage />)} />

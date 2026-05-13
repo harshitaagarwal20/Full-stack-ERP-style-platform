@@ -12,6 +12,11 @@ test("dispatch role only sees dispatch screens", () => {
   assert.deepEqual(items, ["/dispatch", "/pending-dispatch-date"]);
 });
 
+test("sales role sees approval along with sales screens", () => {
+  const items = getNavItemsByRole("sales").map((item) => item.to);
+  assert.deepEqual(items, ["/", "/enquiries", "/approval", "/orders"]);
+});
+
 test("admin sees all navigation items", () => {
   const items = getNavItemsByRole("admin").map((item) => item.to);
   assert(items.includes("/"));
@@ -19,4 +24,3 @@ test("admin sees all navigation items", () => {
   assert(items.includes("/dispatch"));
   assert(items.includes("/users"));
 });
-

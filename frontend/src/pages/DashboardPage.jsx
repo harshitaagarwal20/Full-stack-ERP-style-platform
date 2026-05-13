@@ -8,7 +8,7 @@ import { logApiError } from "../utils/apiError";
 
 const actions = [
   { title: "Manage Enquiries", desc: "Create and track all enquiry requests.", to: "/enquiries", icon: <InboxIcon />, tone: "primary", roles: ["admin", "sales"] },
-  { title: "Approvals", desc: "Review and approve pending enquiries.", to: "/approval", icon: <CheckIcon />, tone: "warning", roles: ["admin"] },
+  { title: "Approvals", desc: "Review and approve pending enquiries.", to: "/approval", icon: <CheckIcon />, tone: "warning", roles: ["admin", "sales"] },
   { title: "Orders", desc: "Convert accepted enquiries into orders.", to: "/orders", icon: <BoxesIcon />, tone: "primary", roles: ["admin", "sales"] },
   { title: "Production", desc: "Start and monitor production execution.", to: "/production", icon: <FactoryIcon />, tone: "success", roles: ["admin"] },
   { title: "Dispatch", desc: "Ship completed orders and update status.", to: "/dispatch", icon: <TruckIcon />, tone: "danger", roles: ["admin"] }

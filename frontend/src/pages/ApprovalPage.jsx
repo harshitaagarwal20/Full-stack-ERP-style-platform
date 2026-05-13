@@ -40,7 +40,7 @@ function ApprovalPage() {
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState([]);
   const [statusFilter, setStatusFilter] = useState("PENDING");
-  const canApprove = user?.role === "admin";
+  const canApprove = user?.role === "admin" || user?.role === "sales";
 
   const fetchItems = async ({ silent = false } = {}) => {
     if (!silent) {

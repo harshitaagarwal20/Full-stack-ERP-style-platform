@@ -1,7 +1,7 @@
 const NAV_ITEMS = [
   { to: "/", label: "Dashboard", icon: "home", roles: ["admin", "sales"] },
   { to: "/enquiries", label: "Enquiries", icon: "inbox", roles: ["admin", "sales"] },
-  { to: "/approval", label: "Approval", icon: "check", roles: ["admin"] },
+  { to: "/approval", label: "Approval", icon: "check", roles: ["admin", "sales"] },
   { to: "/orders", label: "Orders", icon: "cart", roles: ["admin", "sales"] },
   { to: "/production", label: "Production", icon: "factory", roles: ["admin", "production"] },
   { to: "/dispatch", label: "Dispatch", icon: "truck", roles: ["admin", "dispatch"] },

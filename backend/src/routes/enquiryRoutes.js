@@ -10,7 +10,7 @@ const router = Router();
 router.use(authMiddleware);
 router.get("/", allowRoles("admin", "sales"), getEnquiries);
 router.post("/", allowRoles("admin", "sales"), validateBody(createEnquirySchema), addEnquiry);
-router.put("/:id", allowRoles("admin"), validateBody(updateEnquiryStatusSchema), approveOrRejectEnquiry);
+router.put("/:id", allowRoles("admin", "sales"), validateBody(updateEnquiryStatusSchema), approveOrRejectEnquiry);
 router.put("/:id/edit", allowRoles("admin", "sales"), validateBody(updateEnquirySchema), editEnquiry);
 router.delete("/:id", allowRoles("admin", "sales"), removeEnquiry);
 

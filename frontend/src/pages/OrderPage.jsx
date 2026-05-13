@@ -428,9 +428,11 @@ function OrderPage() {
           country_code: location.countryCode
         });
       }
-      await api.post("/production", { order_id: order.id });
+      await api.put(`/orders/${order.id}/status`, { status: "IN_PRODUCTION" });
       await fetchData();
-      navigate("/production");
+      if (user?.role !== "sales") {
+        navigate("/production");
+      }
     } catch (error) {
       logApiError(error, "Failed to start production");
     }

@@ -5,7 +5,7 @@ import { buildCacheKey, getOrLoadCached, invalidateCacheByPrefix } from "../util
 import { ORDER_LIST_SELECT, PRODUCTION_LIST_SELECT } from "../utils/selects.js";
 
 const PRODUCTION_CACHE_PREFIX = "production:list";
-const PRODUCTION_CACHE_TTL_MS = 12 * 1000;
+const PRODUCTION_CACHE_TTL_MS = 0;
 const MAX_PRODUCTION_STATUS_CHANGES = 2;
 let hasStatusChangeCountColumnCache;
 

@@ -12,7 +12,9 @@ export async function addProduction(req, res, next) {
 export async function getProductionOrders(req, res, next) {
   try {
     const records = await listProductionOrders(req.query);
-    res.setHeader("Cache-Control", "private, max-age=10");
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
     return res.json(records);
   } catch (error) {
     return next(error);

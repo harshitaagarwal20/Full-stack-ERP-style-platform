@@ -542,10 +542,22 @@ export async function updateProduction(productionId, payload, actorUser) {
 }
 
 export async function getProductionById(productionId) {
-  const production = await prisma.production.findUnique({
-    where: { id: productionId },
-    select: PRODUCTION_DETAIL_SELECT
-  });
+  let production;
+  try {
+    production = await prisma.production.findUnique({
+      where: { id: productionId },
+      select: PRODUCTION_DETAIL_SELECT
+    });
+  } catch (err) {
+    if (err?.code === "P2021") {
+      production = await prisma.production.findUnique({
+        where: { id: productionId },
+        select: PRODUCTION_LIST_SELECT
+      });
+    } else {
+      throw err;
+    }
+  }
   if (!production) {
     const error = new Error("Production record not found.");
     error.statusCode = 404;

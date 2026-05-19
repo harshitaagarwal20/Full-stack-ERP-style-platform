@@ -5,6 +5,7 @@ import VirtualizedTableBody from "../components/common/VirtualizedTableBody";
 import { BoxesIcon, SearchIcon } from "../components/erp/ErpIcons";
 import { logApiError } from "../utils/apiError";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { exportRowsToExcel } from "../utils/exportExcel";
 import PurchaseOrderFormPage from "./PurchaseOrderFormPage";
 
 const PAGE_SIZE = 10;
@@ -111,6 +112,49 @@ function PurchaseOrderListPage() {
   useEffect(() => { fetchData(); }, [query, statusFilter, supplierFilter, dateFilter, currentPage]);
   useEffect(() => { if (currentPage > totalPages) setCurrentPage(totalPages); }, [currentPage, totalPages]);
 
+  const exportToExcel = async () => {
+    let rows = sortedPos;
+    try {
+      const res = await api.get("/purchase-orders", {
+        params: {
+          q:         query || undefined,
+          status:    statusFilter === "all" ? undefined : statusFilter,
+          supplier:  supplierFilter || undefined,
+          date_from: dateFilter || undefined,
+          limit:     1000
+        }
+      });
+      rows = Array.isArray(res.data?.items) ? res.data.items : sortedPos;
+    } catch {
+      // fall back to current page
+    }
+    exportRowsToExcel(
+      `purchase_orders_${new Date().toISOString().slice(0, 10)}.csv`,
+      [
+        { key: "poNumber",              header: "PO Number" },
+        { key: "supplier",              header: "Supplier" },
+        { key: "orderDate",             header: "Order Date" },
+        { key: "expectedDeliveryDate",  header: "Expected Delivery" },
+        { key: "category",              header: "Category" },
+        { key: "itemCount",             header: "No. of Items" },
+        { key: "totalAmount",           header: "Total Amount (INR)" },
+        { key: "status",                header: "Status" },
+        { key: "notes",                 header: "Notes" }
+      ],
+      rows.map((po) => ({
+        poNumber:             po.poNumber || "-",
+        supplier:             po.supplier?.name || "-",
+        orderDate:            formatDate(po.orderDate),
+        expectedDeliveryDate: formatDate(po.expectedDeliveryDate),
+        category:             po.category || "-",
+        itemCount:            po._count?.items ?? "-",
+        totalAmount:          po.totalAmount ?? 0,
+        status:               STATUS_LABEL[po.status] || po.status || "-",
+        notes:                po.notes || ""
+      }))
+    );
+  };
+
   const sortedPos = useMemo(() => {
     const sorted = [...pos];
     const { key, direction } = sortConfig;
@@ -162,6 +206,9 @@ function PurchaseOrderListPage() {
               onKeyDown={(e) => { if (e.key === "Enter") onSearchSubmit(); }}
             />
           </div>
+          <button className="order-btn-secondary" onClick={exportToExcel}>
+            Export to Excel
+          </button>
           <button className="order-btn-primary" onClick={() => setShowNewModal(true)}>
             + New PO
           </button>

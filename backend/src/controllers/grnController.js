@@ -17,6 +17,9 @@ export async function createGRNHandler(req, res, next) {
     const grn = await createGRN(req.validatedBody, req.user);
     return res.status(201).json(grn);
   } catch (error) {
+    if (error?.code === "P2021") {
+      return res.status(503).json({ message: "GRN module is not yet set up on this server. Please run database migrations." });
+    }
     return next(error);
   }
 }

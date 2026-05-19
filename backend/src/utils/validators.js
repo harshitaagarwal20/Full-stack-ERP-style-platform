@@ -286,7 +286,7 @@ export const importSupplierMasterSchema = z.object({
 
 const poItemSchema = z.object({
   item_description: z.string().min(1),
-  quantity_ordered: z.number().int().positive(),
+  quantity_ordered: z.number().positive(),
   unit_price: z.number().nonnegative().optional().default(0),
   category: z.string().optional().nullable(),
   uom: z.string().optional().nullable(),

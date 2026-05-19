@@ -25,6 +25,9 @@ export async function createPO(req, res, next) {
     const po = await createPurchaseOrder(req.validatedBody, req.user);
     return res.status(201).json(po);
   } catch (error) {
+    if (error?.code === "P2021") {
+      return res.status(503).json({ message: "Purchase Order module is not yet set up on this server. Please run database migrations." });
+    }
     return next(error);
   }
 }
@@ -43,6 +46,9 @@ export async function updatePO(req, res, next) {
     const po = await updatePurchaseOrder(Number(req.params.id), req.validatedBody, req.user);
     return res.json(po);
   } catch (error) {
+    if (error?.code === "P2021") {
+      return res.status(503).json({ message: "Purchase Order module is not yet set up on this server. Please run database migrations." });
+    }
     return next(error);
   }
 }

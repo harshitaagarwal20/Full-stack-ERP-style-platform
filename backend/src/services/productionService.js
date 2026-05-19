@@ -2,7 +2,7 @@ import prisma from "../config/prisma.js";
 import { recordAuditEvent } from "./auditService.js";
 import { buildPagination } from "../utils/pagination.js";
 import { buildCacheKey, getOrLoadCached, invalidateCacheByPrefix } from "../utils/responseCache.js";
-import { ORDER_LIST_SELECT, PRODUCTION_LIST_SELECT } from "../utils/selects.js";
+import { ORDER_LIST_SELECT, PRODUCTION_LIST_SELECT, PRODUCTION_DETAIL_SELECT } from "../utils/selects.js";
 
 const PRODUCTION_CACHE_PREFIX = "production:list";
 const PRODUCTION_CACHE_TTL_MS = 0;
@@ -544,7 +544,7 @@ export async function updateProduction(productionId, payload, actorUser) {
 export async function getProductionById(productionId) {
   const production = await prisma.production.findUnique({
     where: { id: productionId },
-    select: PRODUCTION_LIST_SELECT
+    select: PRODUCTION_DETAIL_SELECT
   });
   if (!production) {
     const error = new Error("Production record not found.");

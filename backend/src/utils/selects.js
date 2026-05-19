@@ -155,7 +155,6 @@ export const PRODUCTION_LIST_SELECT = {
   deliveryDate: true,
   productSpecs: true,
   capacity: true,
-  batchNo: true,
   particleSize: true,
   acmRpm: true,
   classifierRpm: true,
@@ -207,6 +206,11 @@ export const PRODUCTION_LIST_SELECT = {
       }
     }
   }
+};
+
+export const PRODUCTION_DETAIL_SELECT = {
+  ...PRODUCTION_LIST_SELECT,
+  batchNo: true
 };
 
 export const DISPATCH_ORDER_SELECT = {

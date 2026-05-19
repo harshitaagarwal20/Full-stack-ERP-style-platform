@@ -13,6 +13,9 @@ export async function listPOs(req, res, next) {
     const result = await listPurchaseOrders(req.query);
     return res.json(result);
   } catch (error) {
+    if (error?.code === "P2021") {
+      return res.json({ items: [], pagination: { page: 1, limit: 10, total: 0, totalPages: 1 } });
+    }
     return next(error);
   }
 }
@@ -71,6 +74,7 @@ export async function getSuppliers(req, res, next) {
     const suppliers = await listSuppliers();
     return res.json(suppliers);
   } catch (error) {
+    if (error?.code === "P2021") return res.json([]);
     return next(error);
   }
 }

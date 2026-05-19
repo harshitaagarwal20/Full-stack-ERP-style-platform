@@ -197,6 +197,7 @@ export const updateProductionSchema = z.object({
   acm_rpm: z.number().int().positive().optional(),
   classifier_rpm: z.number().int().positive().optional(),
   blower_rpm: z.number().int().positive().optional(),
+  batch_no: z.string().optional().nullable().or(z.literal("")),
   raw_materials: z.string().min(2).optional().or(z.literal("")),
   remarks: z.string().optional().nullable(),
   status: z.enum(["PENDING", "IN_PROGRESS", "HOLD", "COMPLETED"]).optional(),

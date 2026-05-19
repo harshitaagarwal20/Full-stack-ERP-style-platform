@@ -5,6 +5,9 @@ export async function listGRNsHandler(req, res, next) {
     const data = await listGRNs(req.query);
     return res.json(data);
   } catch (error) {
+    if (error?.code === "P2021") {
+      return res.json({ items: [], pagination: { page: 1, limit: 10, total: 0, totalPages: 1 } });
+    }
     return next(error);
   }
 }

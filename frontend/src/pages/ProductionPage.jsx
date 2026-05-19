@@ -79,6 +79,7 @@ function ProductionPage() {
   const { user } = useAuth();
   const masterData = useMasterData();
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingProductionId, setEditingProductionId] = useState(null);
@@ -170,8 +171,10 @@ function ProductionPage() {
       setProductionRecords(items);
       setTotalPages(Math.max(1, Number(pagination?.totalPages || 1)));
       setTotalRecords(Number(pagination?.total || items.length));
+      setFetchError(false);
     } catch (error) {
       logApiError(error, "Failed to load production data");
+      setFetchError(true);
     } finally {
       setLoading(false);
     }
@@ -184,7 +187,7 @@ function ProductionPage() {
   }, [query, statusFilter, companyFilter, dateFilter, currentPage]);
 
   useEffect(() => {
-    const id = setInterval(() => fetchDataRef.current(), 30_000);
+    const id = setInterval(() => fetchDataRef.current(), 10_000);
     return () => clearInterval(id);
   }, []);
 
@@ -652,6 +655,13 @@ function ProductionPage() {
             <button className="order-btn-primary ghost" onClick={onSearchSubmit}>Search</button>
           </div>
         </div>
+
+        {fetchError && (
+          <div style={{ padding: "12px 20px", background: "#fef2f2", color: "#b91c1c", borderRadius: 6, margin: "8px 0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span>Failed to load production records. Please refresh.</span>
+            <button className="order-btn-secondary" onClick={() => fetchDataRef.current()}>Retry</button>
+          </div>
+        )}
 
         {loading ? (
           <div className="order-skeleton-list" style={{ padding: 20 }}>

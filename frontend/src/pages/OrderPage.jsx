@@ -438,7 +438,8 @@ function OrderPage() {
         await fetchData();
       }
     } catch (error) {
-      logApiError(error, "Failed to start production");
+      const msg = logApiError(error, "Failed to start production");
+      window.alert(`Start Production failed: ${msg}\n\nPlease try again or contact support.`);
     }
   };
 

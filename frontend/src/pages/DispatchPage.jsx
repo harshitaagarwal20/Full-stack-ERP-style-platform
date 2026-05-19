@@ -4,6 +4,7 @@ import VirtualizedTableBody from "../components/common/VirtualizedTableBody";
 import { EditIcon, SearchIcon, TrashIcon, TruckIcon } from "../components/erp/ErpIcons";
 import { useAuth } from "../context/AuthContext";
 import useMasterData from "../hooks/useMasterData";
+import { useIsMobile } from "../hooks/useIsMobile";
 import { logApiError } from "../utils/apiError";
 import { exportRowsToExcel } from "../utils/exportExcel";
 import { getDisplaySalesNumber } from "../utils/businessNumbers";
@@ -128,6 +129,8 @@ function DispatchPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [clientFilter, setClientFilter] = useState("");
   const [dateFilter, setDateFilter] = useState("");
+  const isMobile = useIsMobile();
+  useEffect(() => { if (isMobile) { setDateFilter(""); } }, [isMobile]);
   const [sortConfig, setSortConfig] = useState({ key: "createdAt", direction: "desc" });
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -448,14 +451,16 @@ function DispatchPage() {
               }}
               placeholder="Filter by client"
             />
-            <input
-              type="date"
-              value={dateFilter}
-              onChange={(event) => {
-                setDateFilter(event.target.value);
-                setCurrentPage(1);
-              }}
-            />
+            {!isMobile && (
+              <input
+                type="date"
+                value={dateFilter}
+                onChange={(event) => {
+                  setDateFilter(event.target.value);
+                  setCurrentPage(1);
+                }}
+              />
+            )}
           </div>
           <div className="dispatch-toolbar-actions">
             <button className="dispatch-btn-primary ghost" onClick={onSearchSubmit}>Search</button>

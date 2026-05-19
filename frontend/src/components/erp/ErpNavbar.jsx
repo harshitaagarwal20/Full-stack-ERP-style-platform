@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronDownIcon, MenuIcon } from "./ErpIcons";
 
-function ErpNavbar({ pageTitle, userName, onToggleSidebar, onLogout, canInstall = false, onInstall }) {
+function ErpNavbar({ pageTitle, userName, onToggleSidebar, onLogout, onChangePassword, canInstall = false, onInstall }) {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const profileRef = useRef(null);
 
@@ -54,19 +54,36 @@ function ErpNavbar({ pageTitle, userName, onToggleSidebar, onLogout, canInstall 
         )}
         <div className="erp-topbar-control" ref={profileRef}>
           <button
-            className={`erp-user-profile `}
-            
-           
-           
+            className="erp-user-profile"
+            onClick={toggleProfile}
+            aria-expanded={showProfileMenu}
+            aria-haspopup="menu"
           >
             <span className="erp-avatar">{initials || "AU"}</span>
             <span className="erp-user-name">{userName}</span>
-            
+            <ChevronDownIcon />
           </button>
-      
+          {showProfileMenu && (
+            <div className="erp-popover erp-profile-menu" role="menu">
+              <button
+                className="erp-profile-action"
+                role="menuitem"
+                onClick={() => { setShowProfileMenu(false); onChangePassword?.(); }}
+              >
+                Change Password
+              </button>
+              <button
+                className="erp-profile-action danger erp-profile-logout"
+                role="menuitem"
+                onClick={() => { setShowProfileMenu(false); onLogout?.(); }}
+              >
+                Logout
+              </button>
+            </div>
+          )}
         </div>
 
-        <button className="erp-btn danger soft" onClick={onLogout}>Logout</button>
+        <button className="erp-btn danger soft erp-topbar-logout" onClick={onLogout}>Logout</button>
       </div>
     </header>
   );

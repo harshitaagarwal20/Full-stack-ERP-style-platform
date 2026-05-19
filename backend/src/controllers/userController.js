@@ -1,4 +1,4 @@
-import { createUser, deleteUser, listUsers, updateUser } from "../services/userService.js";
+import { changePassword, createUser, deleteUser, listUsers, updateUser } from "../services/userService.js";
 
 export async function getUsers(req, res, next) {
   try {
@@ -31,6 +31,15 @@ export async function removeUser(req, res, next) {
   try {
     await deleteUser(Number(req.params.id));
     return res.status(204).end();
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function changeOwnPassword(req, res, next) {
+  try {
+    await changePassword(req.user.id, req.validatedBody.current_password, req.validatedBody.new_password);
+    return res.json({ message: "Password updated successfully." });
   } catch (error) {
     return next(error);
   }

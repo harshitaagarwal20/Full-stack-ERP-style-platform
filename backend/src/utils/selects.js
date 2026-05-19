@@ -155,6 +155,7 @@ export const PRODUCTION_LIST_SELECT = {
   deliveryDate: true,
   productSpecs: true,
   capacity: true,
+  batchNo: true,
   particleSize: true,
   acmRpm: true,
   classifierRpm: true,
@@ -260,6 +261,128 @@ export const DISPATCH_LIST_SELECT = {
   order: {
     select: DISPATCH_ORDER_SELECT
   }
+};
+
+export const PO_ITEM_SELECT = {
+  id: true,
+  uniqueKey: true,
+  itemId: true,
+  category: true,
+  uom: true,
+  grade: true,
+  currency: true,
+  unitPrice: true,
+  taxPercent: true,
+  expDaysDelivery: true,
+  qty: true,
+  receivedQty: true,
+  outwardKey: true,
+  batchNo: true,
+  createdAt: true,
+  receivedAt: true
+};
+
+export const PO_LIST_SELECT = {
+  id: true,
+  poNumber: true,
+  poNumberWithCategory: true,
+  category: true,
+  billTo: true,
+  orderDate: true,
+  expectedDeliveryDate: true,
+  totalDiscount: true,
+  freight: true,
+  status: true,
+  totalAmount: true,
+  notes: true,
+  department: true,
+  createdAt: true,
+  updatedAt: true,
+  supplier: { select: { id: true, name: true } },
+  createdBy: { select: USER_MIN_SELECT },
+  _count: { select: { items: true, grns: true } }
+};
+
+export const PO_DETAIL_SELECT = {
+  id: true,
+  poNumber: true,
+  poNumberWithCategory: true,
+  category: true,
+  billTo: true,
+  orderDate: true,
+  expectedDeliveryDate: true,
+  totalDiscount: true,
+  freight: true,
+  status: true,
+  totalAmount: true,
+  notes: true,
+  department: true,
+  createdAt: true,
+  updatedAt: true,
+  supplier: { select: { id: true, name: true, supplierCode: true, contactPerson: true, phone: true, email: true, address: true, pincode: true, gstNo: true, panNo: true } },
+  createdBy: { select: USER_MIN_SELECT },
+  items: { select: PO_ITEM_SELECT, orderBy: { id: "asc" } },
+  grns: { select: { id: true, grnNumber: true, receivedDate: true, status: true, warehouseLocation: true, notes: true, createdAt: true }, orderBy: { createdAt: "desc" } }
+};
+
+export const GRN_ITEM_SELECT = {
+  id:               true,
+  poItemId:         true,
+  itemId:           true,
+  category:         true,
+  grade:            true,
+  uom:              true,
+  currency:         true,
+  unitPrice:        true,
+  taxPercent:       true,
+  batchNo:          true,
+  quantityOrdered:  true,
+  quantityReceived: true,
+  remarks:          true
+};
+
+export const GRN_LIST_SELECT = {
+  id:                true,
+  grnNumber:         true,
+  poId:              true,
+  receivedDate:      true,
+  status:            true,
+  receivedBy:        true,
+  warehouseLocation: true,
+  createdAt:         true,
+  updatedAt:         true,
+  purchaseOrder: {
+    select: {
+      id:       true,
+      poNumber: true,
+      supplier: { select: { id: true, name: true } }
+    }
+  },
+  _count: { select: { items: true } }
+};
+
+export const GRN_DETAIL_SELECT = {
+  id:                true,
+  grnNumber:         true,
+  poId:              true,
+  receivedDate:      true,
+  status:            true,
+  receivedBy:        true,
+  vehicleRef:        true,
+  warehouseLocation: true,
+  remarks:           true,
+  notes:             true,
+  createdAt:         true,
+  updatedAt:         true,
+  purchaseOrder: {
+    select: {
+      id:       true,
+      poNumber: true,
+      status:   true,
+      supplier: { select: { id: true, name: true } }
+    }
+  },
+  items: { select: GRN_ITEM_SELECT, orderBy: { id: "asc" } }
 };
 
 export const AUDIT_LOG_SELECT = {

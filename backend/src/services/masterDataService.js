@@ -67,6 +67,29 @@ const CREATE_CUSTOMER_MASTER_TABLE_SQL = `
     UNIQUE KEY \`CustomerMaster_customerCode_key\` (\`customerCode\`)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 `;
+const CREATE_SUPPLIER_MASTER_TABLE_SQL = `
+  CREATE TABLE IF NOT EXISTS \`SupplierMaster\` (
+    \`id\` INT NOT NULL AUTO_INCREMENT,
+    \`supplierName\` VARCHAR(191) NOT NULL,
+    \`gstn\` VARCHAR(50) NULL,
+    \`panNo\` VARCHAR(20) NULL,
+    \`country\` VARCHAR(100) NULL,
+    \`countryCode\` VARCHAR(20) NULL,
+    \`supplierCode\` VARCHAR(80) NULL,
+    \`contactPerson\` VARCHAR(191) NULL,
+    \`contactPersonNumber\` VARCHAR(30) NULL,
+    \`companyEmail\` VARCHAR(191) NULL,
+    \`address\` VARCHAR(500) NULL,
+    \`pincode\` VARCHAR(20) NULL,
+    \`state\` VARCHAR(100) NULL,
+    \`city\` VARCHAR(100) NULL,
+    \`isActive\` TINYINT(1) NOT NULL DEFAULT 1,
+    \`createdAt\` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    \`updatedAt\` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (\`id\`),
+    UNIQUE KEY \`SupplierMaster_supplierCode_key\` (\`supplierCode\`)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+`;
 
 function normalizeCategory(category) {
   return String(category || "").trim();
@@ -83,6 +106,7 @@ async function ensureMasterDataInitialized() {
   await prisma.$executeRawUnsafe(CREATE_ENQUIRY_MASTER_TABLE_SQL);
   await prisma.$executeRawUnsafe(CREATE_CUSTOMER_MASTER_TABLE_SQL);
   await prisma.$executeRawUnsafe("ALTER TABLE `CustomerMaster` MODIFY COLUMN `customerCode` VARCHAR(80) NULL;");
+  await prisma.$executeRawUnsafe(CREATE_SUPPLIER_MASTER_TABLE_SQL);
 
   for (const category of MASTER_DATA_CATEGORIES) {
     const defaults = defaultMasterData[category] || [];
@@ -155,7 +179,7 @@ function mergeOptionValue(target, category, value) {
   }
 }
 
-function buildMasterData(rows, enquiryRows, customerRows) {
+function buildMasterData(rows, enquiryRows, customerRows, supplierRows) {
   const base = toMasterDataObject(rows);
   const enquiryMaster = enquiryRows.map((row) => ({
     id: Number(row.id),
@@ -195,14 +219,32 @@ function buildMasterData(rows, enquiryRows, customerRows) {
     mergeOptionValue(base, "countryCodes", row.countryCode);
   }
 
+  const supplierMaster = (supplierRows || []).map((row) => ({
+    id: Number(row.id),
+    supplierName: row.supplierName || "",
+    gstn: row.gstn || "",
+    panNo: row.panNo || "",
+    country: row.country || "",
+    countryCode: row.countryCode || "",
+    supplierCode: row.supplierCode || "",
+    contactPerson: row.contactPerson || "",
+    contactPersonNumber: row.contactPersonNumber || "",
+    companyEmail: row.companyEmail || "",
+    address: row.address || "",
+    pincode: row.pincode || "",
+    state: row.state || "",
+    city: row.city || ""
+  }));
+
   base.enquiryMaster = enquiryMaster;
   base.customerMaster = customerMaster;
+  base.supplierMaster = supplierMaster;
   return base;
 }
 
 async function loadMasterDataSnapshot() {
   await ensureMasterDataInitialized();
-  const [rows, enquiryRows, customerRows] = await Promise.all([
+  const [rows, enquiryRows, customerRows, supplierRows] = await Promise.all([
     prisma.$queryRaw`
     SELECT \`category\`, \`value\`, \`label\`, \`sortOrder\`
     FROM \`MasterDataItem\`
@@ -221,10 +263,17 @@ async function loadMasterDataSnapshot() {
       FROM \`CustomerMaster\`
       WHERE \`isActive\` = 1
       ORDER BY \`id\` DESC
+    `,
+    prisma.$queryRaw`
+      SELECT \`id\`, \`supplierName\`, \`gstn\`, \`panNo\`, \`country\`, \`countryCode\`, \`supplierCode\`,
+             \`contactPerson\`, \`contactPersonNumber\`, \`companyEmail\`, \`address\`, \`pincode\`, \`state\`, \`city\`
+      FROM \`SupplierMaster\`
+      WHERE \`isActive\` = 1
+      ORDER BY \`id\` DESC
     `
   ]);
 
-  return buildMasterData(rows, enquiryRows, customerRows);
+  return buildMasterData(rows, enquiryRows, customerRows, supplierRows);
 }
 
 export function invalidateMasterDataCache() {
@@ -431,6 +480,134 @@ export async function importCustomerMasterRows(rows, user) {
     const row = rows[index];
     try {
       await addCustomerMasterRow(row, user, { skipCacheInvalidation: true });
+      imported += 1;
+    } catch (error) {
+      errors.push({
+        row: index + 1,
+        message: error?.message || "Import failed"
+      });
+    }
+  }
+  invalidateMasterDataCache();
+
+  return {
+    total: rows.length,
+    imported,
+    failed: errors.length,
+    errors
+  };
+}
+
+export async function addSupplierMasterRow(payload, user, options = {}) {
+  await ensureMasterDataInitialized();
+
+  const supplierName = String(payload.supplier_name || "").trim();
+  const gstn = String(payload.gstn || "").trim();
+  const panNo = String(payload.pan_no || "").trim();
+  const country = String(payload.country || "").trim();
+  const countryCode = String(payload.country_code || "").trim();
+  let supplierCode = String(payload.supplier_code || "").trim() || null;
+  const contactPerson = String(payload.contact_person || "").trim();
+  const contactPersonNumber = String(payload.contact_person_number || "").trim();
+  const companyEmail = String(payload.company_email || "").trim();
+  const address = String(payload.address || "").trim();
+  const pincode = String(payload.pincode || "").trim();
+  const state = String(payload.state || "").trim();
+  const city = String(payload.city || "").trim();
+
+  if (!supplierName) {
+    const error = new Error("Supplier Name is required.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (!supplierCode) {
+    const existing = await prisma.$queryRaw`
+      SELECT \`supplierCode\` FROM \`SupplierMaster\`
+      WHERE \`supplierCode\` LIKE 'SO-%'
+    `;
+    const maxNum = existing.reduce((max, row) => {
+      const match = String(row.supplierCode || "").match(/^SO-(\d+)$/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        return num > max ? num : max;
+      }
+      return max;
+    }, 0);
+    supplierCode = `SO-${String(maxNum + 1).padStart(3, "0")}`;
+  }
+
+  await prisma.$executeRaw`
+    INSERT INTO \`SupplierMaster\`
+      (\`supplierName\`, \`gstn\`, \`panNo\`, \`country\`, \`countryCode\`, \`supplierCode\`,
+       \`contactPerson\`, \`contactPersonNumber\`, \`companyEmail\`, \`address\`, \`pincode\`, \`state\`, \`city\`, \`isActive\`)
+    VALUES
+      (${supplierName}, ${gstn || null}, ${panNo || null}, ${country || null}, ${countryCode || null}, ${supplierCode},
+       ${contactPerson || null}, ${contactPersonNumber || null}, ${companyEmail || null}, ${address || null}, ${pincode || null}, ${state || null}, ${city || null}, 1)
+    ON DUPLICATE KEY UPDATE
+      \`supplierName\` = VALUES(\`supplierName\`),
+      \`gstn\` = VALUES(\`gstn\`),
+      \`panNo\` = VALUES(\`panNo\`),
+      \`country\` = VALUES(\`country\`),
+      \`countryCode\` = VALUES(\`countryCode\`),
+      \`contactPerson\` = VALUES(\`contactPerson\`),
+      \`contactPersonNumber\` = VALUES(\`contactPersonNumber\`),
+      \`companyEmail\` = VALUES(\`companyEmail\`),
+      \`address\` = VALUES(\`address\`),
+      \`pincode\` = VALUES(\`pincode\`),
+      \`state\` = VALUES(\`state\`),
+      \`city\` = VALUES(\`city\`),
+      \`isActive\` = 1
+  `;
+  if (!options.skipCacheInvalidation) {
+    invalidateMasterDataCache();
+  }
+
+  return {
+    supplierName,
+    supplierCode,
+    updatedBy: user?.email || null
+  };
+}
+
+export async function deleteSupplierMasterRow(supplierId, user) {
+  await ensureMasterDataInitialized();
+
+  const id = Number(supplierId);
+  if (!Number.isInteger(id) || id <= 0) {
+    const error = new Error("Invalid supplier id.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const result = await prisma.$executeRaw`
+    UPDATE \`SupplierMaster\`
+    SET \`isActive\` = 0
+    WHERE \`id\` = ${id} AND \`isActive\` = 1
+  `;
+
+  if (!result) {
+    const notFoundError = new Error("Supplier master row not found.");
+    notFoundError.statusCode = 404;
+    throw notFoundError;
+  }
+
+  invalidateMasterDataCache();
+
+  return {
+    id,
+    deletedBy: user?.email || null
+  };
+}
+
+export async function importSupplierMasterRows(rows, user) {
+  let imported = 0;
+  const errors = [];
+
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index];
+    try {
+      await addSupplierMasterRow(row, user, { skipCacheInvalidation: true });
       imported += 1;
     } catch (error) {
       errors.push({

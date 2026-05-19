@@ -29,6 +29,11 @@ export const updateUserSchema = z.object({
   role: z.enum(["admin", "sales", "production", "dispatch"]).optional()
 });
 
+export const changePasswordSchema = z.object({
+  current_password: z.string().min(1, "Current password is required"),
+  new_password: z.string().min(6, "New password must be at least 6 characters")
+});
+
 const enquiryProductsInputSchema = z.preprocess((value) => {
   return normalizeEnquiryProductRows(value);
 }, z.array(z.object({
@@ -256,4 +261,97 @@ export const createCustomerMasterSchema = z.object({
 
 export const importCustomerMasterSchema = z.object({
   rows: z.array(createCustomerMasterSchema).min(1)
+});
+
+export const createSupplierMasterSchema = z.object({
+  supplier_name: z.preprocess((value) => String(value ?? "").trim(), z.string().min(1)),
+  gstn: z.string().optional().nullable(),
+  pan_no: z.string().optional().nullable(),
+  country: z.string().optional().nullable(),
+  country_code: z.string().optional().nullable(),
+  supplier_code: z.string().optional().nullable().or(z.literal("")),
+  contact_person: z.string().optional().nullable(),
+  contact_person_number: z.string().optional().nullable(),
+  company_email: z.string().optional().nullable(),
+  address: z.string().optional().nullable(),
+  pincode: z.string().optional().nullable(),
+  state: z.string().optional().nullable(),
+  city: z.string().optional().nullable()
+});
+
+export const importSupplierMasterSchema = z.object({
+  rows: z.array(createSupplierMasterSchema).min(1)
+});
+
+const poItemSchema = z.object({
+  item_description: z.string().min(1),
+  quantity_ordered: z.number().int().positive(),
+  unit_price: z.number().nonnegative().optional().default(0),
+  category: z.string().optional().nullable(),
+  uom: z.string().optional().nullable(),
+  grade: z.string().optional().nullable(),
+  currency: z.string().optional().nullable(),
+  tax_percent: z.number().nonnegative().max(100).optional().default(0),
+  exp_days_delivery: z.string().optional().nullable(),
+  batch_no: z.string().optional().nullable(),
+  outward_key: z.string().optional().nullable()
+});
+
+const poSupplierFields = {
+  supplier_email: z.string().email().optional().nullable(),
+  supplier_phone: z.string().optional().nullable(),
+  supplier_address: z.string().optional().nullable(),
+  supplier_pincode: z.string().optional().nullable(),
+  supplier_gst_no: z.string().optional().nullable(),
+  supplier_pan_no: z.string().optional().nullable()
+};
+
+export const createPurchaseOrderSchema = z.object({
+  supplier_name: z.string().min(1),
+  category: z.string().optional().nullable(),
+  po_number_with_category: z.string().optional().nullable(),
+  bill_to: z.string().optional().nullable(),
+  order_date: z.string().min(4).optional().nullable(),
+  expected_delivery_date: z.string().min(4).optional().nullable(),
+  total_discount: z.number().nonnegative().optional().nullable(),
+  freight: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  department: z.string().optional().nullable(),
+  ...poSupplierFields,
+  items: z.array(poItemSchema).min(1, "At least one item is required")
+});
+
+export const updatePurchaseOrderSchema = z.object({
+  supplier_name: z.string().min(1).optional(),
+  category: z.string().optional().nullable(),
+  po_number_with_category: z.string().optional().nullable(),
+  bill_to: z.string().optional().nullable(),
+  order_date: z.string().min(4).optional().nullable(),
+  expected_delivery_date: z.string().min(4).optional().nullable(),
+  total_discount: z.number().nonnegative().optional().nullable(),
+  freight: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  department: z.string().optional().nullable(),
+  ...poSupplierFields,
+  items: z.array(poItemSchema).min(1).optional()
+});
+
+export const updatePOStatusSchema = z.object({
+  status: z.enum([
+    "DRAFT", "SENT_TO_SUPPLIER",
+    "PARTIALLY_RECEIVED", "FULLY_RECEIVED", "CLOSED"
+  ])
+});
+
+export const createGRNSchema = z.object({
+  po_id:              z.number().int().positive(),
+  received_date:      z.string().min(4).optional().nullable(),
+  received_by:        z.string().optional().nullable(),
+  vehicle_ref:        z.string().optional().nullable(),
+  warehouse_location: z.string().optional().nullable(),
+  remarks:            z.string().optional().nullable(),
+  items: z.array(z.object({
+    po_item_id:        z.number().int().positive(),
+    quantity_received: z.number().int().min(0)
+  })).min(1, "At least one item is required")
 });

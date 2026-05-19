@@ -1,4 +1,4 @@
-import { createProduction, deleteProduction, listProductionOrders, markProductionComplete, updateProduction } from "../services/productionService.js";
+import { createProduction, deleteProduction, getProductionById, listProductionOrders, markProductionComplete, updateProduction } from "../services/productionService.js";
 
 export async function addProduction(req, res, next) {
   try {
@@ -16,6 +16,15 @@ export async function getProductionOrders(req, res, next) {
     res.setHeader("Pragma", "no-cache");
     res.setHeader("Expires", "0");
     return res.json(records);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function getProductionOrder(req, res, next) {
+  try {
+    const production = await getProductionById(Number(req.params.id));
+    return res.json(production);
   } catch (error) {
     return next(error);
   }

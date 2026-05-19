@@ -11,6 +11,9 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "seed": "node prisma/seed.js",
+    "po:renumber": "node scripts/renumberPurchaseOrders.js",
+    "supplier:backfill-codes": "node scripts/backfillSupplierCodes.js",
+    "orders:reformat-no": "node scripts/reformatOrderNumbers.js",
     "db:deploy": "npm run prisma:deploy && npm run seed"
   },
   "dependencies": {

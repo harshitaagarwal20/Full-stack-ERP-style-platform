@@ -1,0 +1,1 @@
+ALTER TABLE `Production` ADD COLUMN `batchNo` VARCHAR(191) NULL;

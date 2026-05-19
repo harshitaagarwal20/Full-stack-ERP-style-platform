@@ -4,6 +4,7 @@ import VirtualizedTableBody from "../components/common/VirtualizedTableBody";
 import { EditIcon, EyeIcon, InboxIcon, SearchIcon, TrashIcon } from "../components/erp/ErpIcons";
 import { useAuth } from "../context/AuthContext";
 import useMasterData from "../hooks/useMasterData";
+import { useIsMobile } from "../hooks/useIsMobile";
 import { logApiError } from "../utils/apiError";
 import { exportRowsToExcel } from "../utils/exportExcel";
 import { CURRENCY_OPTIONS, formatPriceValue } from "../utils/commerce";
@@ -88,6 +89,8 @@ function EnquiryPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("");
   const [assignedFilter, setAssignedFilter] = useState("");
+  const isMobile = useIsMobile();
+  useEffect(() => { if (isMobile) { setDateFilter(""); } }, [isMobile]);
   const [sortConfig, setSortConfig] = useState({ key: "id", direction: "desc" });
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -408,7 +411,7 @@ function EnquiryPage() {
                 <option key={option.value} value={option.value}>{option.label}</option>
               ))}
             </select>
-            <input type="date" value={dateFilter} onChange={(event) => { setDateFilter(event.target.value); setCurrentPage(1); }} />
+            {!isMobile && <input type="date" value={dateFilter} onChange={(event) => { setDateFilter(event.target.value); setCurrentPage(1); }} />}
             <input
               type="text"
               placeholder="Filter by assigned"

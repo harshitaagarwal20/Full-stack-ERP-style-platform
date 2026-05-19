@@ -20,7 +20,7 @@ const ORDER_CACHE_PREFIX = "orders:list";
 const ORDER_CACHE_TTL_MS = 12 * 1000;
 
 function generateOrderNo(id) {
-  return `ORD-${String(id).padStart(6, "0")}`;
+  return `ORD-${String(id).padStart(4, "0")}`;
 }
 
 function isNonEmpty(value) {

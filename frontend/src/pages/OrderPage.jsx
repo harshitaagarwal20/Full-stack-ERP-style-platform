@@ -5,6 +5,7 @@ import VirtualizedTableBody from "../components/common/VirtualizedTableBody";
 import { BoxesIcon, EditIcon, EyeIcon, SearchIcon, TrashIcon } from "../components/erp/ErpIcons";
 import { useAuth } from "../context/AuthContext";
 import useMasterData from "../hooks/useMasterData";
+import { useIsMobile } from "../hooks/useIsMobile";
 import { logApiError } from "../utils/apiError";
 import { findCustomerProfile } from "../utils/customerLookup";
 import { exportRowsToExcel } from "../utils/exportExcel";
@@ -126,6 +127,8 @@ function OrderPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [clientFilter, setClientFilter] = useState("");
   const [dateFilter, setDateFilter] = useState("");
+  const isMobile = useIsMobile();
+  useEffect(() => { if (isMobile) { setDateFilter(""); } }, [isMobile]);
   const [sortConfig, setSortConfig] = useState({ key: "createdAt", direction: "desc" });
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -429,9 +432,10 @@ function OrderPage() {
         });
       }
       await api.put(`/orders/${order.id}/status`, { status: "IN_PRODUCTION" });
-      await fetchData();
       if (user?.role !== "sales") {
         navigate("/production");
+      } else {
+        await fetchData();
       }
     } catch (error) {
       logApiError(error, "Failed to start production");
@@ -548,7 +552,7 @@ function OrderPage() {
               value={clientFilter}
               onChange={(event) => { setClientFilter(event.target.value); setCurrentPage(1); }}
             />
-            <input type="date" value={dateFilter} onChange={(event) => { setDateFilter(event.target.value); setCurrentPage(1); }} />
+            {!isMobile && <input type="date" value={dateFilter} onChange={(event) => { setDateFilter(event.target.value); setCurrentPage(1); }} />}
           </div>
           <div className="order-toolbar-actions">
             <button className="order-btn-primary ghost" onClick={onSearchSubmit}>Search</button>

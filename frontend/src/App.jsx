@@ -18,6 +18,16 @@ const ProductionPage = lazy(() => import("./pages/ProductionPage"));
 const ProductionCompletePage = lazy(() => import("./pages/ProductionCompletePage"));
 const UsersPage = lazy(() => import("./pages/UsersPage"));
 const PendingExportDatePage = lazy(() => import("./pages/PendingExportDatePage"));
+const PurchaseOrderListPage = lazy(() => import("./pages/PurchaseOrderListPage"));
+const PurchaseOrderFormPage = lazy(() => import("./pages/PurchaseOrderFormPage"));
+const PurchaseOrderDetailPage = lazy(() => import("./pages/PurchaseOrderDetailPage"));
+const GrnListPage = lazy(() => import("./pages/GrnListPage"));
+const GrnFormPage = lazy(() => import("./pages/GrnFormPage"));
+const GrnDetailPage = lazy(() => import("./pages/GrnDetailPage"));
+const PurchaseOrderPrintPage = lazy(() => import("./pages/PurchaseOrderPrintPage"));
+const SupplierMasterPage = lazy(() => import("./pages/SupplierMasterPage"));
+const RawMaterialPage = lazy(() => import("./pages/RawMaterialPage"));
+const ProductionDetailPage = lazy(() => import("./pages/ProductionDetailPage"));
 
 const ROLES = {
   ADMIN: "admin",
@@ -28,6 +38,7 @@ const ROLES = {
 
 const ENQUIRY_ROLES = [ROLES.ADMIN, ROLES.SALES];
 const ORDER_ROLES = [ROLES.ADMIN, ROLES.SALES];
+const PO_ROLES = [ROLES.ADMIN];
 const PRODUCTION_ROLES = [ROLES.ADMIN, ROLES.PRODUCTION];
 const DISPATCH_ROLES = [ROLES.ADMIN, ROLES.DISPATCH];
 
@@ -66,6 +77,11 @@ function App() {
       <Routes>
         <Route path="/login" element={isAuthenticated ? <Navigate to="/" replace /> : withSuspense(<LoginPage />)} />
 
+        {/* Print routes — no Layout/navbar */}
+        <Route element={<ProtectedRoute roles={PO_ROLES} />}>
+          <Route path="/purchase-orders/:id/print" element={withSuspense(<PurchaseOrderPrintPage />)} />
+        </Route>
+
         <Route element={<ProtectedRoute />}>
           <Route element={<Layout />}>
             <Route path="/" element={<HomeRedirect />} />
@@ -76,8 +92,12 @@ function App() {
 
             <Route element={<ProtectedRoute roles={[ROLES.ADMIN, ROLES.SALES]} />}>
               <Route path="/approval" element={withSuspense(<ApprovalPage />)} />
+            </Route>
+
+            <Route element={<ProtectedRoute roles={[ROLES.ADMIN]} />}>
               <Route path="/activity-log" element={withSuspense(<ActivityLogPage />)} />
               <Route path="/master-data" element={withSuspense(<MasterDataPage />)} />
+              <Route path="/supplier-data" element={withSuspense(<SupplierMasterPage />)} />
               <Route path="/users" element={withSuspense(<UsersPage />)} />
             </Route>
 
@@ -85,8 +105,20 @@ function App() {
               <Route path="/orders" element={withSuspense(<OrderPage />)} />
             </Route>
 
+            <Route element={<ProtectedRoute roles={PO_ROLES} />}>
+              <Route path="/purchase-orders" element={withSuspense(<PurchaseOrderListPage />)} />
+              <Route path="/purchase-orders/new" element={withSuspense(<PurchaseOrderFormPage />)} />
+              <Route path="/purchase-orders/:id" element={withSuspense(<PurchaseOrderDetailPage />)} />
+              <Route path="/purchase-orders/:id/edit" element={withSuspense(<PurchaseOrderFormPage />)} />
+              <Route path="/grns" element={withSuspense(<GrnListPage />)} />
+              <Route path="/grns/new" element={withSuspense(<GrnFormPage />)} />
+              <Route path="/grns/:id" element={withSuspense(<GrnDetailPage />)} />
+              <Route path="/raw-materials" element={withSuspense(<RawMaterialPage />)} />
+            </Route>
+
             <Route element={<ProtectedRoute roles={PRODUCTION_ROLES} />}>
               <Route path="/production" element={withSuspense(<ProductionPage />)} />
+              <Route path="/production/:id" element={withSuspense(<ProductionDetailPage />)} />
             </Route>
 
             <Route element={<ProtectedRoute roles={PRODUCTION_ROLES} />}>

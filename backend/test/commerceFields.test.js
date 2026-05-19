@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { buildEnquiryRowData } from "../src/services/enquiryService.js";
 import { buildOrderCreateData, buildOrderUpdateData } from "../src/services/orderService.js";
 import { normalizeCurrencyInput, normalizePriceInput } from "../src/utils/commerce.js";
+import { createPurchaseOrderSchema } from "../src/utils/validators.js";
 
 assert.equal(normalizePriceInput(undefined), undefined);
 assert.equal(normalizePriceInput(null), null);
@@ -113,5 +114,34 @@ const updatedOrder = buildOrderUpdateData({
 assert.equal(updatedOrder.price, 77.1);
 assert.equal(updatedOrder.currency, "INR");
 assert.equal(updatedOrder.clientName, "Acme Chemicals");
+
+const purchaseOrderInput = createPurchaseOrderSchema.parse({
+  supplier_name: "Sheel Chand Agroils Pvt. Ltd. - Uttarakhand",
+  category: "RM",
+  po_number_with_category: "PO/45958/1",
+  bill_to: "NIMBASIA STABILIZERS",
+  order_date: "2025-12-16",
+  expected_delivery_date: "2025-12-31",
+  total_discount: 0,
+  freight: "Ex works",
+  notes: "",
+  department: "RM",
+  items: [
+    {
+      item_description: "Stearic Acid RM",
+      quantity_ordered: 352500,
+      unit_price: 101,
+      category: "RM",
+      uom: "KG",
+      grade: "444",
+      currency: "INR",
+      tax_percent: 18,
+      exp_days_delivery: "As per our Schedule"
+    }
+  ]
+});
+
+assert.equal(purchaseOrderInput.category, "RM");
+assert.equal(purchaseOrderInput.items[0].exp_days_delivery, "As per our Schedule");
 
 console.log("commerceFields assertions passed");

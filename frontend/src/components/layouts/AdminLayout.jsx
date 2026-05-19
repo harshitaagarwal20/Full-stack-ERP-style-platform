@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { getNavItemsByRole } from "../../config/navigation";
 import { useAuth } from "../../context/AuthContext";
+import api from "../../api/axiosClient";
 import ErpNavbar from "../erp/ErpNavbar";
 import ErpSidebar from "../erp/ErpSidebar";
+import ErpBottomNav from "../erp/ErpBottomNav";
 import { CartIcon, CheckIcon, ClipboardIcon, FactoryIcon, HomeIcon, InboxIcon, TruckIcon, UsersIcon } from "../erp/ErpIcons";
 
 const iconMap = {
@@ -24,6 +26,11 @@ function AdminLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const [installPromptEvent, setInstallPromptEvent] = useState(null);
   const [isStandalone, setIsStandalone] = useState(false);
+  const [changePwOpen, setChangePwOpen] = useState(false);
+  const [changePwForm, setChangePwForm] = useState({ current_password: "", new_password: "", confirm_password: "" });
+  const [changePwError, setChangePwError] = useState("");
+  const [changePwSuccess, setChangePwSuccess] = useState("");
+  const [changePwSubmitting, setChangePwSubmitting] = useState(false);
 
   const items = useMemo(
     () => getNavItemsByRole(user?.role).map((item) => ({ ...item, icon: iconMap[item.icon] })),
@@ -74,6 +81,40 @@ function AdminLayout() {
     };
   }, []);
 
+  const openChangePassword = () => {
+    setChangePwForm({ current_password: "", new_password: "", confirm_password: "" });
+    setChangePwError("");
+    setChangePwSuccess("");
+    setChangePwOpen(true);
+  };
+
+  const submitChangePassword = async (e) => {
+    e.preventDefault();
+    if (changePwForm.new_password.length < 6) {
+      setChangePwError("New password must be at least 6 characters.");
+      return;
+    }
+    if (changePwForm.new_password !== changePwForm.confirm_password) {
+      setChangePwError("Passwords do not match.");
+      return;
+    }
+    setChangePwSubmitting(true);
+    setChangePwError("");
+    try {
+      await api.patch("/users/me/password", {
+        current_password: changePwForm.current_password,
+        new_password: changePwForm.new_password
+      });
+      setChangePwSuccess("Password updated successfully.");
+      setChangePwForm({ current_password: "", new_password: "", confirm_password: "" });
+    } catch (err) {
+      const msg = err?.response?.data?.message || err?.response?.data?.error || "Failed to update password.";
+      setChangePwError(msg);
+    } finally {
+      setChangePwSubmitting(false);
+    }
+  };
+
   const handleInstall = async () => {
     if (!installPromptEvent) return;
 
@@ -100,6 +141,7 @@ function AdminLayout() {
           userName={user?.name || "Admin User"}
           onToggleSidebar={() => setOpen((prev) => !prev)}
           onLogout={logout}
+          onChangePassword={openChangePassword}
           canInstall={!isStandalone && Boolean(installPromptEvent)}
           onInstall={handleInstall}
         />
@@ -107,6 +149,79 @@ function AdminLayout() {
           <Outlet />
         </main>
       </div>
+      <ErpBottomNav items={items} onOpenMore={() => setOpen(true)} />
+
+      {changePwOpen && (
+        <div className="users-modal-overlay">
+          <div className="users-modal-card">
+            <div className="users-modal-head">
+              <div>
+                <h3>Change Password</h3>
+                <p>Update your account password.</p>
+              </div>
+              <button
+                className="users-modal-close-btn"
+                onClick={() => setChangePwOpen(false)}
+                disabled={changePwSubmitting}
+              >
+                Close
+              </button>
+            </div>
+
+            {changePwError && <p className="users-form-error">{changePwError}</p>}
+            {changePwSuccess && <p style={{ color: "#16a34a", fontSize: 14, margin: "0 0 12px" }}>{changePwSuccess}</p>}
+
+            <form className="users-form-grid" onSubmit={submitChangePassword} noValidate>
+              <div>
+                <label className="users-field-label">Current Password</label>
+                <input
+                  className="users-input"
+                  type="password"
+                  value={changePwForm.current_password}
+                  onChange={(e) => setChangePwForm((prev) => ({ ...prev, current_password: e.target.value }))}
+                  autoComplete="current-password"
+                  required
+                />
+              </div>
+              <div>
+                <label className="users-field-label">New Password</label>
+                <input
+                  className="users-input"
+                  type="password"
+                  value={changePwForm.new_password}
+                  onChange={(e) => setChangePwForm((prev) => ({ ...prev, new_password: e.target.value }))}
+                  autoComplete="new-password"
+                  required
+                />
+              </div>
+              <div>
+                <label className="users-field-label">Confirm New Password</label>
+                <input
+                  className="users-input"
+                  type="password"
+                  value={changePwForm.confirm_password}
+                  onChange={(e) => setChangePwForm((prev) => ({ ...prev, confirm_password: e.target.value }))}
+                  autoComplete="new-password"
+                  required
+                />
+              </div>
+              <div className="users-form-actions">
+                <button
+                  type="button"
+                  className="users-btn users-btn-secondary"
+                  onClick={() => setChangePwOpen(false)}
+                  disabled={changePwSubmitting}
+                >
+                  Cancel
+                </button>
+                <button className="users-btn users-btn-primary min-width" disabled={changePwSubmitting}>
+                  {changePwSubmitting ? "Saving..." : "Update Password"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

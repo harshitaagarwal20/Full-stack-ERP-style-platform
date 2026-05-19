@@ -58,6 +58,22 @@ export function formatManualOrderRequestNumber(sequence) {
   return `MOR_${padId(sequence, 4)}`;
 }
 
+export function extractSupplierCodeSequence(value) {
+  const normalized = String(value || "").trim();
+  const match = normalized.match(/^SO[-_](\d+)$/i);
+  if (!match) return 0;
+  const numeric = Number(match[1]);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+export function formatSupplierCode(sequence) {
+  const numeric = Number(sequence);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return "";
+  }
+  return `SO-${padId(numeric, 3)}`;
+}
+
 export function generateSalesGroupNumber(enquiryNumber) {
   const normalized = String(enquiryNumber || "").trim();
   if (!normalized) {
@@ -93,4 +109,13 @@ export function getDisplayEnquiryNumber(enquiry) {
 export function getDisplaySalesNumber(order) {
   if (!order) return "";
   return normalizeSalesGroupNumber(order.salesGroupNumber || order.salesOrderNumber || formatSalesOrderNumber(order.id));
+}
+
+export function formatPONumber(id) {
+  return `PO-${padId(id, 3)}`;
+}
+
+export function formatGRNNumber(id) {
+  const year = new Date().getFullYear();
+  return `GRN-${year}-${padId(id, 4)}`;
 }

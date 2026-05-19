@@ -15,6 +15,9 @@ import masterDataRoutes from "./routes/masterDataRoutes.js";
 import diagnosticsRoutes from "./routes/diagnosticsRoutes.js";
 import manualOrderRequestRoutes from "./routes/manualOrderRequestRoutes.js";
 import orderRoutes from "./routes/orderRoutes.js";
+import grnRoutes from "./routes/grnRoutes.js";
+import inventoryRoutes from "./routes/inventoryRoutes.js";
+import poRoutes from "./routes/poRoutes.js";
 import productionRoutes from "./routes/productionRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 
@@ -98,6 +101,9 @@ app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/enquiries", enquiryRoutes);
 app.use("/api/manual-orders", manualOrderRequestRoutes);
 app.use("/api/orders", orderRoutes);
+app.use("/api/purchase-orders", poRoutes);
+app.use("/api/grns", grnRoutes);
+app.use("/api/inventory", inventoryRoutes);
 app.use("/api/production", productionRoutes);
 app.use("/api/dispatch", dispatchRoutes);
 

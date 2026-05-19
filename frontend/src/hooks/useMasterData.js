@@ -56,6 +56,7 @@ const DEFAULT_MASTER_DATA = {
   companyNames: [],
   enquiryMaster: [],
   customerMaster: [],
+  supplierMaster: [],
   countryCodes: [{ value: "IN", label: "IN" }],
   products: []
 };
@@ -139,6 +140,7 @@ function buildMasterDataFromResponse(previousData, responseData) {
     companyNames: normalizeOptions(data.companyNames, prev.companyNames),
     enquiryMaster: sortByNewestFirst(Array.isArray(data.enquiryMaster) ? data.enquiryMaster : prev.enquiryMaster),
     customerMaster: sortByNewestFirst(Array.isArray(data.customerMaster) ? data.customerMaster : prev.customerMaster),
+    supplierMaster: Array.isArray(data.supplierMaster) ? data.supplierMaster : prev.supplierMaster,
     countryCodes: normalizeOptions(data.countryCodes, prev.countryCodes),
     products: normalizeOptions(data.products, prev.products)
   };

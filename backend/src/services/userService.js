@@ -92,6 +92,25 @@ export async function updateUser(userId, payload) {
   }
 }
 
+export async function changePassword(userId, currentPassword, newPassword) {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, password: true } });
+  if (!user) {
+    const error = new Error("User not found.");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const valid = await bcrypt.compare(currentPassword, user.password);
+  if (!valid) {
+    const error = new Error("Current password is incorrect.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const hashed = await bcrypt.hash(newPassword, 10);
+  return prisma.user.update({ where: { id: userId }, data: { password: hashed }, select: { id: true } });
+}
+
 export async function deleteUser(userId) {
   try {
     return await prisma.user.delete({

@@ -139,7 +139,7 @@ async function createOrderFromManualRequest(request, actorUser) {
       where: { id: order.id },
       data: {
         salesOrderNumber: formatSalesOrderNumber(order.id),
-        orderNo: `ORD-${String(order.id).padStart(6, "0")}`
+        orderNo: `ORD-${String(order.id).padStart(4, "0")}`
       },
       select: ORDER_LIST_SELECT
     });

@@ -56,6 +56,21 @@ enum ShipmentStatus {
   DELIVERED
 }
 
+enum PurchaseOrderStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  SENT_TO_SUPPLIER
+  PARTIALLY_RECEIVED
+  FULLY_RECEIVED
+  CLOSED
+}
+
+enum GrnStatus {
+  DRAFT
+  CONFIRMED
+}
+
 model User {
   id                 Int       @id @default(autoincrement())
   name               String
@@ -69,6 +84,7 @@ model User {
   manualOrderRequestsCreated ManualOrderRequest[] @relation("ManualOrderRequestCreator")
   manualOrderRequestsApproved ManualOrderRequest[] @relation("ManualOrderRequestApprover")
   auditLogs          AuditLog[]
+  purchaseOrders     PurchaseOrder[] @relation("POCreator")
 
   @@index([createdAt, id])
   @@index([role, createdAt])
@@ -196,11 +212,12 @@ model Production {
   deliveryDate             DateTime
   productSpecs             String
   capacity                 Int
+  batchNo                  String?
   particleSize             String
   acmRpm                   Int
   classifierRpm            Int
   blowerRpm                Int
-  rawMaterials             String
+  rawMaterials             String?          @db.LongText
   remarks                  String?          @db.LongText
   productionCompletionDate DateTime?
   createdAt                DateTime         @default(now())
@@ -218,4 +235,141 @@ model Dispatch {
   remarks        String?
   createdAt      DateTime       @default(now())
   order          Order          @relation(fields: [orderId], references: [id], onDelete: Restrict)
+}
+
+model Supplier {
+  id            Int      @id @default(autoincrement())
+  name          String   @unique
+  supplierCode  String?
+  contactPerson String?
+  phone         String?
+  email         String?
+  address       String?
+  pincode       String?
+  gstNo         String?
+  panNo         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  purchaseOrders PurchaseOrder[]
+
+  @@index([name])
+}
+
+model PurchaseOrder {
+  id                   Int                 @id @default(autoincrement())
+  poNumber             String              @unique
+  poNumberWithCategory String?
+  category             String?
+  billTo               String?
+  supplierId           Int
+  orderDate            DateTime            @default(now())
+  expectedDeliveryDate DateTime?
+  totalDiscount        Float               @default(0)
+  freight              String?
+  status               PurchaseOrderStatus @default(DRAFT)
+  totalAmount          Float               @default(0)
+  notes                String?             @db.Text
+  department           String?
+  createdById          Int
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  supplier  Supplier            @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  createdBy User                @relation("POCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  items     PurchaseOrderItem[]
+  grns      GoodsReceiptNote[]
+
+  @@index([status, createdAt])
+  @@index([supplierId])
+}
+
+model PurchaseOrderItem {
+  id          Int      @id @default(autoincrement())
+  uniqueKey   String   @unique
+  poId        Int
+  poNumber    String
+  supplier    String
+  itemId      String
+  category    String?
+  uom         String?
+  grade       String?
+  currency    String   @default("INR")
+  unitPrice   Float    @default(0)
+  taxPercent  Float    @default(0)
+  expDaysDelivery String?
+  qty         Int
+  receivedQty Int      @default(0)
+  outwardKey  String?
+  batchNo     String?
+  createdAt   DateTime @default(now())
+  receivedAt  DateTime?
+
+  purchaseOrder PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+  grnItems      GrnItem[]
+
+  @@index([poId])
+}
+
+model GoodsReceiptNote {
+  id                Int       @id @default(autoincrement())
+  grnNumber         String    @unique
+  poId              Int
+  receivedDate      DateTime  @default(now())
+  receivedBy        String?
+  vehicleRef        String?
+  warehouseLocation String?
+  status            GrnStatus @default(DRAFT)
+  remarks           String?   @db.Text
+  notes             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  purchaseOrder          PurchaseOrder          @relation(fields: [poId], references: [id], onDelete: Restrict)
+  items                  GrnItem[]
+  inventoryTransactions  InventoryTransaction[]
+
+  @@index([poId])
+  @@index([status])
+}
+
+model GrnItem {
+  id               Int              @id @default(autoincrement())
+  grnId            Int
+  poItemId         Int
+  itemId           String
+  category         String?
+  grade            String?
+  uom              String?
+  currency         String?
+  unitPrice        Float?
+  taxPercent       Float?
+  batchNo          String?
+  quantityOrdered  Int
+  quantityReceived Int              @default(0)
+  remarks          String?
+
+  grn    GoodsReceiptNote  @relation(fields: [grnId], references: [id], onDelete: Cascade)
+  poItem PurchaseOrderItem @relation(fields: [poItemId], references: [id], onDelete: Restrict)
+
+  @@index([grnId])
+  @@index([poItemId])
+}
+
+model InventoryTransaction {
+  id                Int               @id @default(autoincrement())
+  type              String
+  itemId            String
+  quantity          Int
+  warehouseLocation String?
+  reference         String?
+  grnId             Int?
+  grnItemId         Int?
+  remarks           String?
+  createdAt         DateTime          @default(now())
+
+  grn GoodsReceiptNote? @relation(fields: [grnId], references: [id], onDelete: SetNull)
+
+  @@index([itemId])
+  @@index([grnId])
 }

@@ -159,14 +159,20 @@ export function buildProductionUpdateData(payload = {}, production = {}) {
     updateData.acmRpm = acmRpm;
   }
 
-  const classifierRpm = normalizePositiveIntegerInput(payload.classifier_rpm, "Classifier RPM");
-  if (classifierRpm !== undefined) {
-    updateData.classifierRpm = classifierRpm;
+  const classifierRpmRaw = payload.classifier_rpm;
+  if (classifierRpmRaw !== undefined && classifierRpmRaw !== null && classifierRpmRaw !== "") {
+    const numeric = Number(classifierRpmRaw);
+    updateData.classifierRpm = Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
   }
 
   const blowerRpm = normalizePositiveIntegerInput(payload.blower_rpm, "Blower RPM");
   if (blowerRpm !== undefined) {
     updateData.blowerRpm = blowerRpm;
+  }
+
+  const batchNo = normalizeTrimmedInput(payload.batch_no);
+  if (batchNo !== undefined) {
+    updateData.batchNo = batchNo;
   }
 
   const rawMaterials = normalizeTrimmedInput(payload.raw_materials);
@@ -488,6 +494,35 @@ export async function updateProduction(productionId, payload, actorUser) {
       }
     }
 
+    // Deduct raw material inventory when production starts
+    if (updateData.status === "IN_PROGRESS" && production.status === "PENDING") {
+      const rawMaterialsStr = updateData.rawMaterials ?? production.rawMaterials;
+      if (rawMaterialsStr) {
+        try {
+          const parsed = JSON.parse(rawMaterialsStr);
+          const allItems = [
+            ...(Array.isArray(parsed.rm)        ? parsed.rm        : []),
+            ...(Array.isArray(parsed.additives) ? parsed.additives : []),
+            ...(Array.isArray(parsed.catalysts) ? parsed.catalysts : [])
+          ];
+          const txnData = allItems
+            .filter((item) => item.name && item.qty && Number(item.qty) > 0)
+            .map((item) => ({
+              type:      "OUT",
+              itemId:    String(item.name).trim(),
+              quantity:  Math.round(Number(item.qty)),
+              reference: `Production #${productionId}`,
+              remarks:   "Production consumption"
+            }));
+          if (txnData.length > 0) {
+            await tx.inventoryTransaction.createMany({ data: txnData });
+          }
+        } catch {
+          // Don't block production start on JSON parse errors
+        }
+      }
+    }
+
     await recordAuditEvent({
       tx,
       action: "UPDATE_PRODUCTION",
@@ -504,6 +539,19 @@ export async function updateProduction(productionId, payload, actorUser) {
 
   invalidateProductionReadCaches();
   return updatedProduction;
+}
+
+export async function getProductionById(productionId) {
+  const production = await prisma.production.findUnique({
+    where: { id: productionId },
+    select: PRODUCTION_LIST_SELECT
+  });
+  if (!production) {
+    const error = new Error("Production record not found.");
+    error.statusCode = 404;
+    throw error;
+  }
+  return production;
 }
 
 export async function deleteProduction(productionId, actorUser) {

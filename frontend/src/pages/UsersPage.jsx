@@ -27,6 +27,9 @@ function UsersPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingUserId, setEditingUserId] = useState(null);
   const [activeMenuUserId, setActiveMenuUserId] = useState(null);
+  const [resetPasswordUserId, setResetPasswordUserId] = useState(null);
+  const [resetPasswordForm, setResetPasswordForm] = useState({ new_password: "", confirm_password: "" });
+  const [resetPasswordError, setResetPasswordError] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [users, setUsers] = useState([]);
   const [form, setForm] = useState({ name: "", email: "", password: "", role: "sales" });
@@ -179,6 +182,35 @@ function UsersPage() {
     setActiveMenuUserId(null);
   };
 
+  const onResetPassword = (userId) => {
+    setResetPasswordUserId(userId);
+    setResetPasswordForm({ new_password: "", confirm_password: "" });
+    setResetPasswordError("");
+    setActiveMenuUserId(null);
+  };
+
+  const submitResetPassword = async (e) => {
+    e.preventDefault();
+    if (resetPasswordForm.new_password.length < 6) {
+      setResetPasswordError("Password must be at least 6 characters.");
+      return;
+    }
+    if (resetPasswordForm.new_password !== resetPasswordForm.confirm_password) {
+      setResetPasswordError("Passwords do not match.");
+      return;
+    }
+    setSubmitting(true);
+    setResetPasswordError("");
+    try {
+      await api.put(`/users/${resetPasswordUserId}`, { password: resetPasswordForm.new_password });
+      setResetPasswordUserId(null);
+    } catch (error) {
+      setResetPasswordError(getUserFacingErrorMessage(error, "Failed to reset password."));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const onDeleteUser = async (userId) => {
     if (!window.confirm("Delete this user?")) return;
     try {
@@ -257,6 +289,7 @@ function UsersPage() {
                         {activeMenuUserId === user.id && (
                           <div className="user-menu-panel">
                             <button type="button" onClick={() => onEditUser(user)}>Edit</button>
+                            <button type="button" onClick={() => onResetPassword(user.id)}>Reset Password</button>
                             <button type="button" className="danger" onClick={() => onDeleteUser(user.id)}>Delete</button>
                           </div>
                         )}
@@ -275,6 +308,66 @@ function UsersPage() {
           </div>
         )}
       </section>
+
+      {resetPasswordUserId && canManageUsers && (
+        <div className="users-modal-overlay">
+          <div className="users-modal-card">
+            <div className="users-modal-head">
+              <div>
+                <h3>Reset Password</h3>
+                <p>Set a new password for this user.</p>
+              </div>
+              <button
+                className="users-modal-close-btn"
+                onClick={() => setResetPasswordUserId(null)}
+                disabled={submitting}
+              >
+                Close
+              </button>
+            </div>
+
+            {resetPasswordError && <p className="users-form-error">{resetPasswordError}</p>}
+
+            <form className="users-form-grid" onSubmit={submitResetPassword} noValidate>
+              <div>
+                <label className="users-field-label">New Password</label>
+                <input
+                  className="users-input"
+                  type="password"
+                  value={resetPasswordForm.new_password}
+                  onChange={(e) => setResetPasswordForm((prev) => ({ ...prev, new_password: e.target.value }))}
+                  autoComplete="new-password"
+                  required
+                />
+              </div>
+              <div>
+                <label className="users-field-label">Confirm Password</label>
+                <input
+                  className="users-input"
+                  type="password"
+                  value={resetPasswordForm.confirm_password}
+                  onChange={(e) => setResetPasswordForm((prev) => ({ ...prev, confirm_password: e.target.value }))}
+                  autoComplete="new-password"
+                  required
+                />
+              </div>
+              <div className="users-form-actions">
+                <button
+                  type="button"
+                  className="users-btn users-btn-secondary"
+                  onClick={() => setResetPasswordUserId(null)}
+                  disabled={submitting}
+                >
+                  Cancel
+                </button>
+                <button className="users-btn users-btn-primary min-width" disabled={submitting}>
+                  {submitting ? "Saving..." : "Reset Password"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {isCreateModalOpen && canManageUsers && (
         <div className="users-modal-overlay">

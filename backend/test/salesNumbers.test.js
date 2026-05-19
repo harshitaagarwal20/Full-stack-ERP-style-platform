@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import {
   formatEnquiryNumber,
+  formatPONumber,
   formatManualOrderRequestNumber,
+  formatSupplierCode,
   formatSalesOrderNumber,
   formatSalesGroupNumber,
   extractSalesGroupSequence,
@@ -24,7 +26,9 @@ assert.equal(formatSalesGroupNumber(1), "SO_001");
 assert.equal(formatSalesGroupNumber(2), "SO_002");
 assert.equal(extractSalesGroupSequence("SO_002"), 2);
 assert.equal(formatEnquiryNumber(1), "ENQ_0001");
+assert.equal(formatPONumber(1), "PO-001");
 assert.equal(formatManualOrderRequestNumber(1), "MOR_0001");
+assert.equal(formatSupplierCode(1), "SO-001");
 assert.equal(formatSalesOrderNumber(1), "SO_0001");
 assert.equal(getDisplayManualOrderRequestNumber({ id: 1 }), "MOR_0001");
 

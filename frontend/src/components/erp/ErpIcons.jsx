@@ -1,8 +1,17 @@
 import React from "react";
 
-function IconBase({ children }) {
+function IconBase({ children, ...props }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
       {children}
     </svg>
   );
@@ -86,4 +95,8 @@ export function BoxesIcon() {
 
 export function CircleCheckIcon() {
   return <IconBase><circle cx="12" cy="12" r="9" /><path d="m8.5 12 2.4 2.4L15.8 9.5" /></IconBase>;
+}
+
+export function PrinterIcon() {
+  return <IconBase><rect x="6" y="2" width="12" height="7" rx="1" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" rx="1" /><path d="M6 9h12" /></IconBase>;
 }

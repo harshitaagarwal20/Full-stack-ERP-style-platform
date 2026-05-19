@@ -5,6 +5,7 @@ import { buildCacheKey, getOrLoadCached, invalidateCacheByPrefix } from "../util
 import { DISPATCH_LIST_SELECT, MANUAL_ORDER_REQUEST_SELECT } from "../utils/selects.js";
 import { formatEnquiryProducts, getPrimaryEnquiryProduct } from "../utils/enquiryProducts.js";
 import { normalizeOrderUnit } from "../utils/orderUnits.js";
+import { getCustomerMasterProfileByName } from "../utils/customerCatalog.js";
 import {
   extractSalesGroupSequence,
   formatSalesGroupNumber,
@@ -32,7 +33,7 @@ function parseDateInput(value) {
 }
 
 function generateOrderNo(id) {
-  return `ORD-${String(id).padStart(6, "0")}`;
+  return `ORD-${String(id).padStart(4, "0")}`;
 }
 
 function invalidateDispatchReadCaches() {

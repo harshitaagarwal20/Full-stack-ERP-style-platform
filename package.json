@@ -2,7 +2,7 @@
   "name": "nimbasia-frontend-app",
   "private": true,
   "scripts": {
-    "build": "npm --prefix frontend install && npm --prefix frontend run build",
-    "start": "npm --prefix frontend run preview -- --port 4173 --host"
+    "build": "npm --prefix frontend-hostinger install && npm --prefix frontend-hostinger run build",
+    "start": "npm --prefix frontend-hostinger run preview -- --port 4173 --host"
   }
 }

@@ -4,7 +4,6 @@ import api from "../api/axiosClient";
 import VirtualizedTableBody from "../components/common/VirtualizedTableBody";
 import { BoxesIcon, SearchIcon } from "../components/erp/ErpIcons";
 import { logApiError } from "../utils/apiError";
-import GrnFormPage from "./GrnFormPage";
 
 const PAGE_SIZE = 10;
 
@@ -47,7 +46,6 @@ function GrnListPage() {
   const navigate = useNavigate();
   const tableWrapRef = useRef(null);
 
-  const [showNewModal, setShowNewModal]  = useState(false);
   const [loading, setLoading]           = useState(true);
   const [grns, setGrns]                 = useState([]);
   const [searchText, setSearchText]     = useState("");
@@ -131,7 +129,7 @@ function GrnListPage() {
               onKeyDown={(e) => { if (e.key === "Enter") onSearchSubmit(); }}
             />
           </div>
-          <button className="order-btn-primary" onClick={() => setShowNewModal(true)}>
+          <button className="order-btn-primary" onClick={() => navigate("/grns/new")}>
             + New GRN
           </button>
         </div>
@@ -228,20 +226,13 @@ function GrnListPage() {
           <div className="order-empty-state">
             <div className="order-empty-icon"><BoxesIcon /></div>
             <p>No goods receipt notes found</p>
-            <button className="order-btn-primary" onClick={() => setShowNewModal(true)}>
+            <button className="order-btn-primary" onClick={() => navigate("/grns/new")}>
               Create GRN
             </button>
           </div>
         )}
       </section>
 
-      {showNewModal && (
-        <GrnFormPage
-          isModal
-          onClose={() => setShowNewModal(false)}
-          onSuccess={(id) => { setShowNewModal(false); navigate(`/grns/${id}`); }}
-        />
-      )}
     </div>
   );
 }

@@ -3,7 +3,6 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "../api/axiosClient";
 import { logApiError } from "../utils/apiError";
 import { dispatchUserMessage } from "../utils/errorMessages";
-import SearchableSelect from "../components/common/SearchableSelect";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -14,11 +13,13 @@ function GrnFormPage({ isModal = false, onClose, onSuccess }) {
   const [searchParams] = useSearchParams();
   const poIdParam = searchParams.get("po_id");
 
-  const [loadingPO, setLoadingPO]   = useState(Boolean(poIdParam));
-  const [saving, setSaving]         = useState(false);
-  const [po, setPo]                 = useState(null);
-  const [poIdInput, setPoIdInput]   = useState(poIdParam || "");
-  const [poOptions, setPoOptions]   = useState([]);
+  const [loadingPO, setLoadingPO]       = useState(Boolean(poIdParam));
+  const [saving, setSaving]             = useState(false);
+  const [po, setPo]                     = useState(null);
+  const [poIdInput, setPoIdInput]       = useState(poIdParam || "");
+  const [poOptions, setPoOptions]       = useState([]);
+  const [loadingOptions, setLoadingOptions] = useState(false);
+  const [optionsError, setOptionsError] = useState(false);
 
   const [form, setForm] = useState({
     received_date:      today(),
@@ -31,11 +32,17 @@ function GrnFormPage({ isModal = false, onClose, onSuccess }) {
 
   useEffect(() => {
     if (!poIdParam) {
+      setLoadingOptions(true);
+      setOptionsError(false);
       api.get("/purchase-orders", { params: { status: "all", limit: 500 } })
         .then((res) => {
           setPoOptions(Array.isArray(res.data?.items) ? res.data.items : []);
         })
-        .catch(() => {});
+        .catch((err) => {
+          logApiError(err, "Failed to load purchase orders for GRN");
+          setOptionsError(true);
+        })
+        .finally(() => setLoadingOptions(false));
     }
   }, [poIdParam]);
 
@@ -143,19 +150,25 @@ function GrnFormPage({ isModal = false, onClose, onSuccess }) {
           <h3 style={{ margin: "0 0 14px", fontSize: 15, color: "#334155" }}>Select Purchase Order</h3>
           <div style={{ maxWidth: 480 }}>
             <label className="label">Purchase Order</label>
-            <SearchableSelect
-              options={poOptions.map((p) => ({
-                value: p.id,
-                label: `${p.poNumber} — ${p.supplier?.name} (${p.status})`,
-                searchText: [p.poNumber, p.supplier?.name, p.status].filter(Boolean).join(" ")
-              }))}
+            <select
+              className="input"
               value={poIdInput}
-              onChange={(val) => {
-                setPoIdInput(String(val));
+              disabled={loadingOptions}
+              onChange={(e) => {
+                const val = e.target.value;
+                setPoIdInput(val);
                 if (val) loadPO(Number(val));
               }}
-              placeholder="— Select a PO to load —"
-            />
+            >
+              <option value="">
+                {loadingOptions ? "Loading purchase orders..." : optionsError ? "Failed to load — refresh to retry" : poOptions.length === 0 ? "No purchase orders found" : "— Select a PO —"}
+              </option>
+              {poOptions.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.poNumber} — {p.supplier?.name} ({p.status})
+                </option>
+              ))}
+            </select>
           </div>
         </section>
       )}

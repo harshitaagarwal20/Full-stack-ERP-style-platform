@@ -144,7 +144,7 @@ export async function createPurchaseOrder(payload, user) {
 }
 
 export async function listPurchaseOrders(query = {}) {
-  const { page, limit, skip, take } = buildPagination(query, { defaultLimit: 10, maxLimit: 100 });
+  const { page, limit, skip, take } = buildPagination(query, { defaultLimit: 10, maxLimit: 500 });
 
   const where = {};
 

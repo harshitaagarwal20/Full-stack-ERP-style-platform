@@ -1,0 +1,8 @@
+{
+  "name": "nimbasia-frontend-app",
+  "private": true,
+  "scripts": {
+    "build": "cd frontend && npm install && npm run build",
+    "start": "cd frontend && npm run preview -- --port ${PORT:-4173} --host"
+  }
+}

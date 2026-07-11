@@ -55,7 +55,9 @@ const enquiryBaseSchema = z.object({
   unit_of_measurement: z.string().optional().nullable(),
   expected_timeline: z.string().min(2),
   assigned_person: z.string().min(1).optional(),
-  notes_for_production: z.string().optional().nullable()
+  notes_for_production: z.string().optional().nullable(),
+  stage: z.enum(["GENERAL", "SAMPLED", "QUOTED"]).optional(),
+  is_urgent: z.boolean().optional()
 });
 
 export const createEnquirySchema = enquiryBaseSchema.superRefine((data, ctx) => {
@@ -82,9 +84,21 @@ export const updateEnquirySchema = enquiryBaseSchema.partial().superRefine((data
   }
 });
 
-export const updateEnquiryStatusSchema = z.object({
-  status: z.enum(["ACCEPTED", "HOLD", "REJECTED"])
-});
+export const updateEnquiryStatusSchema = z
+  .object({
+    status: z.enum(["ACCEPTED", "REJECTED"]),
+    rejection_reason: z.string().trim().min(1).max(190).optional().nullable()
+  })
+  .superRefine((data, ctx) => {
+    // A rejection has to say why — it's the only record of the decision.
+    if (data.status === "REJECTED" && !String(data.rejection_reason || "").trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["rejection_reason"],
+        message: "Please give a reason for rejecting this enquiry."
+      });
+    }
+  });
 
 export const createOrderSchema = z.object({
   enquiry_id: z.number().int().positive().optional().nullable(),

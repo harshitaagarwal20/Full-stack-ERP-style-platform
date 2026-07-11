@@ -56,8 +56,11 @@ function isOriginAllowed(requestOrigin) {
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (isOriginAllowed(origin)) return callback(null, true);
-      return callback(new Error("CORS blocked for this origin."));
+      // Deny by returning `false` (not by throwing): the cors middleware then
+      // simply omits the CORS headers and the browser blocks the response.
+      // Throwing here surfaces as an unhandled 500 in errorMiddleware, which
+      // masks a config problem as a server error and breaks even preflight.
+      return callback(null, isOriginAllowed(origin));
     },
     credentials: true
   })

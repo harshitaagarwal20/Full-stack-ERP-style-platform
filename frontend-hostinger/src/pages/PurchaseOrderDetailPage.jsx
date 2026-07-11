@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../api/axiosClient";
 import { PrinterIcon } from "../components/erp/ErpIcons";
+import { useAuth } from "../context/AuthContext";
 import { logApiError } from "../utils/apiError";
 import { dispatchUserMessage } from "../utils/errorMessages";
 import { getShipToLocation } from "../config/shipToLocations";
@@ -13,13 +14,29 @@ function formatDate(val) {
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
-function calcAmountAfterTax(item) {
-  const total = calcRowTotal(item);
-  return total * (1 + (item.taxPercent || 0) / 100);
+// A PO line carries two different money figures, and conflating them is what
+// made a freshly-raised PO look like it was worth zero:
+//
+//   ordered value  = qty ordered   × price/UOM  → what we committed to buy
+//   received value = qty received  × price/UOM  → what we actually owe
+//
+// Tax is charged on what was actually received, so the payable is derived from
+// the received value.
+function calcOrderedTotal(item) {
+  return Number(item.qty || 0) * Number(item.unitPrice || 0);
 }
 
-function calcRowTotal(item) {
+function calcReceivedTotal(item) {
   return Number(item.receivedQty || 0) * Number(item.unitPrice || 0);
+}
+
+function calcOrderedAfterTax(item) {
+  return calcOrderedTotal(item) * (1 + (item.taxPercent || 0) / 100);
+}
+
+// What accounts actually pays for this line.
+function calcPayableAfterTax(item) {
+  return calcReceivedTotal(item) * (1 + (item.taxPercent || 0) / 100);
 }
 
 function formatDateTime(val) {
@@ -33,6 +50,8 @@ function formatAmount(val) {
 
 function getPOStatusClass(status) {
   if (status === "DRAFT") return "created";
+  if (status === "SUBMITTED") return "partial";
+  if (status === "APPROVED") return "ready";
   if (status === "SENT_TO_SUPPLIER") return "in-production";
   if (status === "PARTIALLY_RECEIVED") return "partial";
   if (status === "FULLY_RECEIVED") return "ready";
@@ -42,6 +61,8 @@ function getPOStatusClass(status) {
 
 function getPOStatusLabel(status) {
   if (status === "DRAFT") return "Draft";
+  if (status === "SUBMITTED") return "Submitted";
+  if (status === "APPROVED") return "Approved";
   if (status === "SENT_TO_SUPPLIER") return "Sent to Supplier";
   if (status === "PARTIALLY_RECEIVED") return "Partially Received";
   if (status === "FULLY_RECEIVED") return "Fully Received";
@@ -49,7 +70,7 @@ function getPOStatusLabel(status) {
   return status;
 }
 
-function StatusActions({ po, onStatusChange, onDelete, navigateToEdit, navigateToGRN }) {
+function StatusActions({ po, onStatusChange, onDelete, navigateToEdit, navigateToGRN, isAdmin }) {
   const [updating, setUpdating] = useState(false);
 
   const doStatus = async (newStatus) => {
@@ -70,16 +91,20 @@ function StatusActions({ po, onStatusChange, onDelete, navigateToEdit, navigateT
         <button className="order-btn-secondary" onClick={navigateToEdit}>
           Edit PO
         </button>
-        <button className="order-btn-primary" disabled={updating} onClick={() => doStatus("SENT_TO_SUPPLIER")}>
-          Send to Supplier
-        </button>
-        <button
-          className="order-btn-secondary po-btn-danger"
-          disabled={updating}
-          onClick={onDelete}
-        >
-          Delete
-        </button>
+        {isAdmin && (
+          <button className="order-btn-primary" disabled={updating} onClick={() => doStatus("SENT_TO_SUPPLIER")}>
+            Generate PO — Send to Supplier
+          </button>
+        )}
+        {isAdmin && (
+          <button
+            className="order-btn-secondary po-btn-danger"
+            disabled={updating}
+            onClick={onDelete}
+          >
+            Delete
+          </button>
+        )}
       </>
     );
   }
@@ -106,6 +131,8 @@ function StatusActions({ po, onStatusChange, onDelete, navigateToEdit, navigateT
 function PurchaseOrderDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
 
   const [po, setPo] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -199,6 +226,7 @@ function PurchaseOrderDetailPage() {
           </a>
           <StatusActions
             po={po}
+            isAdmin={isAdmin}
             onStatusChange={handleStatusChange}
             onDelete={handleDelete}
             navigateToEdit={() => navigate(`/purchase-orders/${id}/edit`)}
@@ -219,7 +247,7 @@ function PurchaseOrderDetailPage() {
             {po.department && <p><span>Department</span> {po.department}</p>}
             <p><span>Total Amount</span> <strong>{formatAmount(po.totalAmount)}</strong></p>
             <p><span>Created By</span> {po.createdBy?.name || "-"}</p>
-            {po.notes && <p style={{ gridColumn: "1 / -1" }}><span>Notes</span> {po.notes}</p>}
+            {po.notes && <p style={{ gridColumn: "1 / -1" }}><span>Remarks</span> {po.notes}</p>}
           </div>
         </section>
 
@@ -250,44 +278,75 @@ function PurchaseOrderDetailPage() {
               <tr>
                 <th>#</th>
                 <th>Item ID</th>
-                <th>QTY</th>
+                <th>Qty Ordered</th>
                 <th>UoM</th>
                 <th>Grade</th>
                 <th>Currency</th>
-                <th>Price/Unit</th>
-                <th>Total Amount</th>
+                <th>Price / UoM</th>
+                <th>Ordered Value</th>
                 <th>Tax %</th>
-                <th>Amt After Tax</th>
                 <th>Qty Received</th>
+                <th>Received Value</th>
+                <th>Payable (incl. tax)</th>
               </tr>
             </thead>
             <tbody>
-              {(po.items || []).map((item, index) => (
-                <tr key={item.id}>
-                  <td data-label="">{index + 1}</td>
-                  <td data-label="Item ID">{item.itemId || "-"}</td>
-                  <td data-label="QTY">{item.qty}</td>
-                  <td data-label="UoM">{item.uom || "-"}</td>
-                  <td data-label="Grade">{item.grade || "-"}</td>
-                  <td data-label="Currency">{item.currency || "INR"}</td>
-                  <td data-label="Price/Unit">{formatAmount(item.unitPrice)}</td>
-                  <td data-label="Total Amount">{formatAmount(calcRowTotal(item))}</td>
-                  <td data-label="Tax %">{item.taxPercent != null ? `${item.taxPercent}%` : "-"}</td>
-                  <td data-label="Amt After Tax" style={{ fontWeight: 600 }}>{formatAmount(calcAmountAfterTax(item))}</td>
-                  <td data-label="Qty Received">{item.receivedQty}</td>
-                </tr>
-              ))}
+              {(po.items || []).map((item, index) => {
+                const fullyReceived = Number(item.receivedQty || 0) >= Number(item.qty || 0);
+                return (
+                  <tr key={item.id}>
+                    <td data-label="">{index + 1}</td>
+                    <td data-label="Item ID">{item.itemId || "-"}</td>
+                    <td data-label="Qty Ordered">{item.qty}</td>
+                    <td data-label="UoM">{item.uom || "-"}</td>
+                    <td data-label="Grade">{item.grade || "-"}</td>
+                    <td data-label="Currency">{item.currency || "INR"}</td>
+                    <td data-label="Price / UoM">{formatAmount(item.unitPrice)}</td>
+                    <td data-label="Ordered Value">{formatAmount(calcOrderedTotal(item))}</td>
+                    <td data-label="Tax %">{item.taxPercent != null ? `${item.taxPercent}%` : "-"}</td>
+                    <td
+                      data-label="Qty Received"
+                      style={{ color: fullyReceived ? "#047857" : "#b45309", fontWeight: 600 }}
+                    >
+                      {item.receivedQty}
+                    </td>
+                    <td data-label="Received Value">{formatAmount(calcReceivedTotal(item))}</td>
+                    <td data-label="Payable (incl. tax)" style={{ fontWeight: 600 }}>
+                      {formatAmount(calcPayableAfterTax(item))}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
             <tfoot>
               <tr>
-                <td colSpan={9} style={{ textAlign: "right", fontWeight: 700, paddingRight: 12 }}>Gross Amount</td>
-                <td data-label="Gross Amount" style={{ fontWeight: 700 }}>
-                  {formatAmount((po.items || []).reduce((s, i) => s + calcAmountAfterTax(i), 0))}
+                <td colSpan={7} style={{ textAlign: "right", fontWeight: 700, paddingRight: 12 }}>
+                  PO Value (ordered, incl. tax)
+                </td>
+                <td data-label="PO Value (ordered, incl. tax)" colSpan={5} style={{ fontWeight: 700 }}>
+                  {formatAmount((po.items || []).reduce((sum, item) => sum + calcOrderedAfterTax(item), 0))}
+                </td>
+              </tr>
+              <tr>
+                <td colSpan={7} style={{ textAlign: "right", fontWeight: 700, paddingRight: 12 }}>
+                  Payable so far (received, incl. tax)
+                </td>
+                <td
+                  data-label="Payable so far (received, incl. tax)"
+                  colSpan={5}
+                  style={{ fontWeight: 800, color: "#047857" }}
+                >
+                  {formatAmount((po.items || []).reduce((sum, item) => sum + calcPayableAfterTax(item), 0))}
                 </td>
               </tr>
             </tfoot>
           </table>
         </div>
+        <p style={{ margin: "10px 2px 0", fontSize: 12.5, color: "#64748b" }}>
+          Prices are per UoM. <strong>Payable</strong> is calculated from the quantity actually
+          received (received qty × price/UoM, plus tax), so it rises as goods arrive against
+          this PO — it only equals the full PO value once everything is received.
+        </p>
       </section>
 
       {/* Linked GRNs */}

@@ -117,9 +117,9 @@ Frontend runs on `http://localhost:5173`.
 
 ## Deployment Notes
 
-- Set the backend `CLIENT_ORIGIN` env var to the exact deployed frontend origin, such as `https://nimbasia.vercel.app`.
-- For Vercel preview deployments, `https://*.vercel.app` is supported by the backend CORS matcher.
+- Set the backend `CLIENT_ORIGIN` env var to the exact deployed frontend origin, such as `https://app.nimbasia.com`. Multiple origins can be comma-separated, and `*` wildcards are supported by the backend CORS matcher.
 - Set the frontend `VITE_API_URL` to your backend base URL in production, for example `https://manage.nimbasia.com/api`.
+- Set a strong `JWT_SECRET` (32+ chars) and a `CRON_SECRET`; the backend refuses to start in production without a strong `JWT_SECRET`.
 
 ## Bootstrap Login
 

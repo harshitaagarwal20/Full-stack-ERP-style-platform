@@ -72,6 +72,141 @@ body {
   font-weight: 500;
 }
 
+/* Shared UI primitives (Card, Toolbar, Badge, Alert) — reused across list/detail pages */
+
+.ui-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  padding: 14px 20px;
+}
+
+.ui-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ui-toolbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ui-toolbar-row h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+  letter-spacing: 0.01em;
+}
+
+.ui-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ui-toolbar-search {
+  position: relative;
+  width: min(100%, 320px);
+}
+
+.ui-toolbar-search svg {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  color: #64748b;
+}
+
+.ui-toolbar-search input {
+  width: 100%;
+  height: 40px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+  padding: 0 12px 0 36px;
+}
+
+.ui-toolbar-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 12px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.ui-toolbar-filters > * {
+  flex: 1 1 160px;
+  min-width: 140px;
+}
+
+.ui-toolbar-filters select,
+.ui-toolbar-filters input {
+  height: 40px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  padding: 0 12px;
+  width: 100%;
+}
+
+.ui-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.ui-alert {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 12px 16px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ui-alert-error {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.ui-alert-success {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #065f46;
+}
+
+.ui-alert-warning {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #92400e;
+}
+
+.ui-alert-info {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
 :root {
   --erp-bg: #f8fafc;
   --erp-surface: #ffffff;
@@ -983,6 +1118,46 @@ body {
   white-space: nowrap;
 }
 
+.erp-nav-group-toggle {
+  width: 100%;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.erp-nav-chevron {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  transition: transform 0.15s ease;
+}
+
+.erp-nav-chevron svg {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+.erp-nav-group.is-expanded .erp-nav-chevron {
+  transform: rotate(180deg);
+}
+
+.erp-nav-subgroup {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 2px 0 4px;
+}
+
+.erp-nav-subitem {
+  padding-left: 34px;
+  min-height: 30px;
+  font-size: 12.5px;
+  font-weight: 400;
+  opacity: 0.92;
+}
+
 .erp-main-panel {
   margin-left: var(--erp-sidebar-width);
   min-height: 100vh;
@@ -1229,6 +1404,11 @@ body {
 
 .erp-sidebar.is-collapsed .erp-collapse-btn {
   margin-left: 0;
+}
+
+.erp-sidebar.is-collapsed .erp-nav-subgroup,
+.erp-sidebar.is-collapsed .erp-nav-chevron {
+  display: none;
 }
 
 .erp-sidebar.is-collapsed .erp-nav-item {
@@ -3507,17 +3687,13 @@ body {
 }
 
 .enquiry-company-select-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  right: 0;
   max-height: 220px;
   overflow-y: auto;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
   background: #ffffff;
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.14);
-  z-index: 50;
+  z-index: 1100;
 }
 
 .enquiry-company-select-item {
@@ -7009,15 +7185,15 @@ th.rm-th-right { text-align: right; }
 .prod-mcard-actions button:active { transform: scale(0.97); }
 .prod-mcard-actions .pa-primary {
   border-color: #2563eb;
-  background: linear-gradient(135deg, #2563eb, #1e40af);
+  background: #2563eb;
   color: #ffffff;
-  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.28);
+  box-shadow: none;
 }
 .prod-mcard-actions .pa-complete {
   border-color: #059669;
-  background: linear-gradient(135deg, #059669, #047857);
+  background: #059669;
   color: #ffffff;
-  box-shadow: 0 8px 18px rgba(5, 150, 105, 0.26);
+  box-shadow: none;
 }
 .prod-mcard-actions .pa-ghost {
   flex: 0 0 auto;
@@ -7046,8 +7222,9 @@ th.rm-th-right { text-align: right; }
 .today-hi { margin: 3px 0 0; font-size: 22px; font-weight: 800; letter-spacing: -0.02em; color: #0f172a; }
 .today-avatar {
   width: 44px; height: 44px; border-radius: 50%; flex: none;
-  background: linear-gradient(135deg, #2563eb, #1e40af);
-  color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 15px;
+  background: #eaf1fe;
+  border: 1px solid #d8e5fb;
+  color: #2563eb; display: grid; place-items: center; font-weight: 700; font-size: 15px;
 }
 
 .today-sec {
@@ -7057,22 +7234,43 @@ th.rm-th-right { text-align: right; }
 }
 
 .today-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
+
+/* Quiet, elegant cards: white surface, hairline border, colour used only
+   as a soft tint on the icon chip — never as a full-bleed gradient. */
 .today-tile {
   display: flex; flex-direction: column; justify-content: space-between;
-  min-height: 104px; border-radius: 18px; padding: 15px; color: #fff;
-  text-decoration: none; box-shadow: 0 10px 22px rgba(37, 99, 235, 0.24);
+  min-height: 104px; border-radius: 16px; padding: 15px;
+  background: #ffffff;
+  border: 1px solid #e8eaf1;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  color: #0f172a;
+  text-decoration: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
 }
-.today-tile.v1 { background: linear-gradient(150deg, #2563eb, #1e40af); }
-.today-tile.v2 { background: linear-gradient(150deg, #0e7490, #155e75); box-shadow: 0 10px 22px rgba(14,116,144,0.24); }
-.today-tile.v3 { background: linear-gradient(150deg, #b45309, #92400e); box-shadow: 0 10px 22px rgba(180,83,9,0.22); }
-.today-tile.v4 { background: linear-gradient(150deg, #047857, #065f46); box-shadow: 0 10px 22px rgba(4,120,87,0.22); }
+.today-tile:active {
+  transform: scale(0.985);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
 .today-tile-ic {
-  width: 34px; height: 34px; border-radius: 11px; background: rgba(255,255,255,0.22);
+  width: 36px; height: 36px; border-radius: 11px;
   display: grid; place-items: center;
 }
 .today-tile-ic svg { width: 18px; height: 18px; }
-.today-tile-t { font-size: 15px; font-weight: 800; letter-spacing: -0.01em; }
-.today-tile-s { font-size: 11.5px; opacity: 0.88; font-weight: 600; margin-top: 1px; }
+
+/* Per-action accent — tinted chip only. */
+.today-tile.v1 .today-tile-ic { background: #eaf1fe; color: #2563eb; }
+.today-tile.v2 .today-tile-ic { background: #e7f2f4; color: #0e7490; }
+.today-tile.v3 .today-tile-ic { background: #fbf1e3; color: #b45309; }
+.today-tile.v4 .today-tile-ic { background: #e8f3ee; color: #047857; }
+
+.today-tile.v1:active { border-color: #c7dafc; }
+.today-tile.v2:active { border-color: #bfdde2; }
+.today-tile.v3:active { border-color: #ecd9bd; }
+.today-tile.v4:active { border-color: #c4e2d5; }
+
+.today-tile-t { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; color: #0f172a; }
+.today-tile-s { font-size: 11.5px; font-weight: 500; color: #94a3b8; margin-top: 2px; }
 
 .today-needs {
   background: #ffffff; border: 1px solid #e7e8f2; border-radius: 18px;
@@ -7083,21 +7281,133 @@ th.rm-th-right { text-align: right; }
   border-bottom: 1px solid #f1f5f9; text-decoration: none;
 }
 .today-need:last-child { border-bottom: 0; }
-.today-need-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
-.today-need.warn .today-need-dot { background: #d97706; }
-.today-need.info .today-need-dot { background: #2563eb; }
-.today-need.ok .today-need-dot { background: #059669; }
-.today-need-label { flex: 1; font-size: 14px; font-weight: 700; color: #0f172a; }
+/* Muted status dot carries the only colour; the count stays neutral. */
+.today-need-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.today-need.warn .today-need-dot { background: #c98a3d; }
+.today-need.info .today-need-dot { background: #6189d4; }
+.today-need.ok .today-need-dot { background: #4f9c7d; }
+
+.today-need-label { flex: 1; font-size: 14px; font-weight: 600; color: #1e2537; }
+
 .today-need-count {
-  font-size: 13px; font-weight: 800; min-width: 26px; text-align: center;
-  padding: 3px 9px; border-radius: 999px; color: #475569; background: #eef1f6;
+  font-size: 12.5px; font-weight: 700; min-width: 24px; text-align: center;
+  padding: 3px 8px; border-radius: 999px;
+  color: #6b7280; background: #f2f4f8;
+  font-variant-numeric: tabular-nums;
 }
-.today-need.warn .today-need-count { color: #b45309; background: #fdf2dc; }
-.today-need.info .today-need-count { color: #1d4ed8; background: #e8f1ff; }
-.today-need.ok .today-need-count { color: #047857; background: #e7f8f1; }
-.today-need-chev { color: #cbd5e1; font-size: 18px; }
+.today-need-chev { color: #d5d9e2; font-size: 17px; }
 
 .today-empty {
   padding: 26px 16px; text-align: center; color: #64748b; font-size: 14px;
   background: #ffffff; border: 1px solid #e7e8f2; border-radius: 18px;
 }
+
+/* ============================================================
+   URGENT marker — used on production/order rows and cards.
+   Restrained: colour signals priority without shouting.
+   ============================================================ */
+.urgent-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #b42318;
+  background: #fdecea;
+  border: 1px solid #f7cfca;
+  vertical-align: middle;
+}
+
+/* Urgent rows get a quiet left stripe rather than a loud fill. */
+tr.row-urgent td:first-child {
+  box-shadow: inset 3px 0 0 #d92d20;
+}
+
+/* Urgent mobile card: red accent stripe overrides the status colour, because
+   priority matters more at a glance than lifecycle stage. */
+.prod-mcard.is-urgent {
+  border-left-color: #d92d20;
+}
+
+/* Sampled follow-up reminder banner. */
+.followup-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  border-radius: 12px;
+  background: #fef8ec;
+  border: 1px solid #f3ddb0;
+  color: #7a4b09;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.followup-banner strong { font-weight: 700; }
+.followup-banner-icon { flex: none; font-size: 15px; line-height: 1.4; }
+
+/* Why an enquiry was rejected — shown back to the sales team. */
+.approval-reject-reason {
+  margin-top: 10px;
+  padding: 9px 11px;
+  border-radius: 9px;
+  background: #fdecea;
+  border: 1px solid #f7cfca;
+  color: #b42318;
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+/* Urgent tick on the enquiry form. */
+.enquiry-urgent-check {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  cursor: pointer;
+  font-size: 14px;
+  color: #334155;
+}
+.enquiry-urgent-check input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  accent-color: #d92d20;
+  cursor: pointer;
+}
+.enquiry-urgent-check:has(input:checked) {
+  border-color: #f7cfca;
+  background: #fdecea;
+  color: #b42318;
+}
+
+/* Mobile: form action buttons stack full-width (from frontend). */
+@media screen and (max-width: 768px) {
+  .masterdata-form-actions,
+  .dispatch-form-actions,
+  .production-form-actions,
+  .enquiry-form-actions,
+  .order-form-actions,
+  .mapp-form-actions {
+    flex-direction: column-reverse;
+  }
+
+  .masterdata-form-actions button,
+  .dispatch-form-actions button,
+  .production-form-actions button,
+  .enquiry-form-actions button,
+  .order-form-actions button,
+  .mapp-form-actions button {
+    width: 100%;
+    text-align: center;
+  }
+}
+

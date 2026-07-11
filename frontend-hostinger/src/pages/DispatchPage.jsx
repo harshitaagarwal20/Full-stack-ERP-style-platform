@@ -9,6 +9,8 @@ import { logApiError } from "../utils/apiError";
 import { exportRowsToExcel } from "../utils/exportExcel";
 import { getDisplaySalesNumber } from "../utils/businessNumbers";
 import { getDispatchSortPriority } from "../utils/dispatchOrdering";
+import SearchableSelect from "../components/common/SearchableSelect";
+import { findCustomerProfile } from "../utils/customerLookup";
 
 function formatDate(dateValue) {
   if (!dateValue) return "-";
@@ -20,8 +22,21 @@ function formatDate(dateValue) {
   return `${day}/${month}/${year}`;
 }
 
+// An order can have multiple production batches; use the latest completion
+// date among batches that have actually finished rather than just the
+// single most-recently-created batch (which may still be in progress).
+function getLatestProductionCompletionDate(order) {
+  const dates = (order.productions || [])
+    .map((p) => p.productionCompletionDate)
+    .filter(Boolean)
+    .map((d) => new Date(d))
+    .filter((d) => !Number.isNaN(d.getTime()));
+  if (!dates.length) return null;
+  return new Date(Math.max(...dates.map((d) => d.getTime())));
+}
+
 function mapShipmentStatus(status) {
-  if (status === "PACKED") return { label: "Pending", className: "pending" };
+  if (status === "PACKING") return { label: "Pending", className: "pending" };
   if (status === "SHIPPED") return { label: "Dispatched", className: "in-transit" };
   if (status === "DELIVERED") return { label: "Delivered", className: "delivered" };
   return { label: status || "Pending", className: "pending" };
@@ -90,11 +105,25 @@ function getClientCode(clientName, orderId) {
   return `${prefix}${suffix}`;
 }
 
-function toExportRow(row) {
+// Falls back to Customer Master when the order's own location fields are
+// blank (e.g. orders created before an enquiry carried the customer's
+// address over automatically) so the client never has to be typed twice.
+function getDispatchOrderLocation(order, customerMasterRows) {
+  const profile = findCustomerProfile(customerMasterRows, order?.clientName);
+  return {
+    city: order?.city || profile?.city || "",
+    pincode: order?.pincode || profile?.pincode || "",
+    state: order?.state || profile?.state || "",
+    countryCode: order?.countryCode || profile?.countryCode || ""
+  };
+}
+
+function toExportRow(row, customerMasterRows) {
   const order = row.order || {};
   const dispatch = row.dispatch;
   const dispatchQuantity = dispatch?.dispatchedQuantity || 0;
   const remainingQuantity = getOrderRemainingQuantity(order, dispatch);
+  const location = getDispatchOrderLocation(order, customerMasterRows);
 
   return {
     clientCode: getClientCode(order.clientName, order.id),
@@ -106,13 +135,13 @@ function toExportRow(row) {
     remainingQuantity,
     unit: order.unit || "-",
     expectedDeliveryDate: formatDate(order.deliveryDate),
-    city: order.city || "-",
-    pincode: order.pincode || "-",
-    state: order.state || "-",
-    countryCode: order.countryCode || "-",
+    city: location.city || "-",
+    pincode: location.pincode || "-",
+    state: location.state || "-",
+    countryCode: location.countryCode || "-",
     dispatchDate: dispatch ? formatDate(dispatch.dispatchDate) : "-",
     status: getDispatchRowStatus(row).label,
-    prodCompDate: formatDate(order.production?.productionCompletionDate)
+    prodCompDate: formatDate(getLatestProductionCompletionDate(order))
   };
 }
 
@@ -401,7 +430,7 @@ function DispatchPage() {
         { key: "status", header: "Status" },
         { key: "prodCompDate", header: "Prod Comp Date" }
       ],
-      rowsToExport.map(toExportRow)
+      rowsToExport.map((row) => toExportRow(row, masterData.customerMaster))
     );
   };
 
@@ -431,17 +460,15 @@ function DispatchPage() {
       <section className="dispatch-card">
         <div className="dispatch-toolbar">
           <div className="dispatch-filter-grid">
-            <select
+            <SearchableSelect
+              options={statusFilterOptions}
               value={statusFilter}
-              onChange={(event) => {
-                setStatusFilter(event.target.value);
+              onChange={(value) => {
+                setStatusFilter(value);
                 setCurrentPage(1);
               }}
-            >
-              {statusFilterOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
+              placeholder="All Status"
+            />
             <input
               type="text"
               value={clientFilter}
@@ -513,6 +540,7 @@ function DispatchPage() {
                   const order = row.order || {};
                   const shipment = getDispatchRowStatus(row);
                   const remainingQty = getOrderRemainingQuantity(order, row.dispatch);
+                  const location = getDispatchOrderLocation(order, masterData.customerMaster);
 
                   return (
                     <tr key={row.key}>
@@ -527,15 +555,15 @@ function DispatchPage() {
                       <td>{remainingQty}</td>
                       <td>{order.unit || "-"}</td>
                       <td>{formatDate(order.deliveryDate)}</td>
-                      <td>{order.city || "-"}</td>
-                      <td>{order.pincode || "-"}</td>
-                      <td>{order.state || "-"}</td>
-                      <td>{order.countryCode || "-"}</td>
+                      <td>{location.city || "-"}</td>
+                      <td>{location.pincode || "-"}</td>
+                      <td>{location.state || "-"}</td>
+                      <td>{location.countryCode || "-"}</td>
                       <td>{row.dispatch ? formatDate(row.dispatch.dispatchDate) : "-"}</td>
                       <td>
                         <span className={`dispatch-status ${shipment.className}`}>{shipment.label}</span>
                       </td>
-                      <td>{formatDate(order.production?.productionCompletionDate)}</td>
+                      <td>{formatDate(getLatestProductionCompletionDate(order))}</td>
                       <td>
                         <div className="dispatch-actions">
                           {canManageDispatch && (row.dispatch ? (
@@ -679,16 +707,12 @@ function DispatchPage() {
               </div>
               <div>
                 <label>Shipment Status</label>
-                <select
+                <SearchableSelect
+                  options={shipmentStatusOptions}
                   value={dispatchForm.shipment_status}
-                  onChange={(event) => setDispatchForm((prev) => ({ ...prev, shipment_status: event.target.value }))}
-                  required
-                >
-                  <option value="" disabled>Select status</option>
-                  {shipmentStatusOptions.map((item) => (
-                    <option key={item.value} value={item.value}>{item.label}</option>
-                  ))}
-                </select>
+                  onChange={(value) => setDispatchForm((prev) => ({ ...prev, shipment_status: value }))}
+                  placeholder="Select status"
+                />
               </div>
               <div className="full-row">
                 

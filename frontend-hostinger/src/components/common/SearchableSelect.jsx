@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 function normalizeText(value) {
   return String(value ?? "").toLowerCase().trim();
 }
 
-export default function SearchableSelect({ options = [], value, onChange, placeholder = "Select..." }) {
+export default function SearchableSelect({ options = [], value, onChange, placeholder = "Select...", allowCustom = false }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -12,6 +13,8 @@ export default function SearchableSelect({ options = [], value, onChange, placeh
   const inputRef = useRef(null);
   const optionRefs = useRef([]);
   const listboxIdRef = useRef(`searchable-select-${Math.random().toString(36).slice(2)}`);
+  const menuRef = useRef(null);
+  const [menuRect, setMenuRect] = useState(null);
 
   const selected = useMemo(
     () => options.find((option) => String(option.value) === String(value)) || null,
@@ -36,7 +39,9 @@ export default function SearchableSelect({ options = [], value, onChange, placeh
     if (!open) return;
 
     function closeDropdown(event) {
-      if (containerRef.current && !containerRef.current.contains(event.target)) {
+      const insideContainer = containerRef.current && containerRef.current.contains(event.target);
+      const insideMenu = menuRef.current && menuRef.current.contains(event.target);
+      if (!insideContainer && !insideMenu) {
         setOpen(false);
         setSearch("");
         setActiveIndex(-1);
@@ -63,6 +68,28 @@ export default function SearchableSelect({ options = [], value, onChange, placeh
     if (!open || activeIndex < 0) return;
     optionRefs.current[activeIndex]?.scrollIntoView({ block: "nearest" });
   }, [open, activeIndex]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+
+    function updateRect() {
+      const rect = inputRef.current?.getBoundingClientRect();
+      if (rect) setMenuRect(rect);
+    }
+
+    updateRect();
+    window.addEventListener("scroll", updateRect, true);
+    window.addEventListener("resize", updateRect);
+    return () => {
+      window.removeEventListener("scroll", updateRect, true);
+      window.removeEventListener("resize", updateRect);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (open) return;
+    setSearch(selected?.label ?? (allowCustom ? String(value ?? "") : ""));
+  }, [open, selected, allowCustom, value]);
 
   function openDropdown() {
     setOpen(true);
@@ -113,7 +140,12 @@ export default function SearchableSelect({ options = [], value, onChange, placeh
         openDropdown();
         return;
       }
-      selectOption(filtered[activeIndex] || filtered[0]);
+      const match = filtered[activeIndex] || filtered[0];
+      if (match) {
+        selectOption(match);
+      } else if (allowCustom) {
+        setOpen(false);
+      }
       return;
     }
 
@@ -128,7 +160,7 @@ export default function SearchableSelect({ options = [], value, onChange, placeh
       <input
         ref={inputRef}
         type="text"
-        value={open ? search : (search || selected?.label || "")}
+        value={search}
         placeholder={placeholder}
         autoComplete="off"
         role="combobox"
@@ -143,15 +175,23 @@ export default function SearchableSelect({ options = [], value, onChange, placeh
         onChange={(event) => {
           setSearch(event.target.value);
           setOpen(true);
+          if (allowCustom) onChange(event.target.value);
         }}
         onKeyDown={handleKeyDown}
       />
 
-      {open && (
+      {open && menuRect && createPortal(
         <div
+          ref={menuRef}
           id={listboxIdRef.current}
           className="enquiry-company-select-menu"
           role="listbox"
+          style={{
+            position: "fixed",
+            top: menuRect.bottom + 6,
+            left: menuRect.left,
+            width: menuRect.width
+          }}
         >
           {filtered.length ? (
             filtered.map((option, index) => {
@@ -181,7 +221,8 @@ export default function SearchableSelect({ options = [], value, onChange, placeh
           ) : (
             <div className="enquiry-company-select-empty">No matching records found</div>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

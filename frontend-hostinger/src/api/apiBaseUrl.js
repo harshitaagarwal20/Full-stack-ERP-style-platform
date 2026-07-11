@@ -19,10 +19,6 @@ export function resolveApiBaseUrl({
 } = {}) {
   const value = String(configuredUrl || "").trim();
 
-  if (String(hostname || "").endsWith("vercel.app")) {
-    return PRODUCTION_API_URL;
-  }
-
   if (value) {
     if (LEGACY_API_URLS.has(value)) {
       return PRODUCTION_API_URL;

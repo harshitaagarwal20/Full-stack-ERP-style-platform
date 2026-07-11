@@ -6,6 +6,7 @@ import ErpCard from "../components/erp/ErpCard";
 import { BoxesIcon, CheckIcon, ClipboardIcon, FactoryIcon, HomeIcon, HourglassIcon, InboxIcon, TruckIcon } from "../components/erp/ErpIcons";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { logApiError } from "../utils/apiError";
+import { getFollowUpEnquiries } from "../utils/followUps";
 
 const MOBILE_TILES = [
   { title: "New Enquiry", sub: "Log a lead", to: "/enquiries?new=1", icon: <InboxIcon />, v: "v1", roles: ["admin", "sales"] },
@@ -127,6 +128,17 @@ function DashboardPage() {
   const [summary, setSummary] = useState(() => normalizeDashboardSummary());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [followUps, setFollowUps] = useState([]);
+
+  // Sampled enquiries that have gone quiet for 12+ days. Sales/admin only —
+  // production and dispatch users have no use for this.
+  useEffect(() => {
+    if (user?.role !== "admin" && user?.role !== "sales") return;
+    api
+      .get("/enquiries")
+      .then(({ data }) => setFollowUps(getFollowUpEnquiries(normalizeListResponse(data))))
+      .catch(() => setFollowUps([]));
+  }, [user?.role]);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -180,6 +192,7 @@ function DashboardPage() {
     const today = new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "short" });
     const tiles = MOBILE_TILES.filter((tile) => tile.roles.includes(user?.role));
     const needs = [
+      { label: "Sampled — follow up", value: followUps.length, to: "/enquiries", tone: "warn", roles: ["admin", "sales"] },
       { label: "Pending approvals", value: counts.pendingApprovals, to: "/approval", tone: "warn", roles: ["admin", "sales"] },
       { label: "In production", value: counts.inProductionOrders, to: "/production", tone: "info", roles: ["admin"] },
       { label: "Ready for dispatch", value: counts.readyForDispatchOrders, to: "/dispatch", tone: "ok", roles: ["admin"] }

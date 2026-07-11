@@ -11,6 +11,7 @@ import { findCustomerProfile } from "../utils/customerLookup";
 import { formatPriceValue } from "../utils/commerce";
 import { getDisplaySalesNumber } from "../utils/businessNumbers";
 import { sortByNewestFirst } from "../utils/recordOrdering";
+import { exportRowsToExcel } from "../utils/exportExcel";
 
 function formatDate(dateValue) {
   if (!dateValue) return "-";
@@ -123,11 +124,40 @@ function PendingExportDatePage() {
     })()
   } : null;
 
+  const exportToExcel = () => {
+    const columns = [
+      { key: "salesId",      header: "Sales ID" },
+      { key: "client",       header: "Client" },
+      { key: "source",       header: "Source" },
+      { key: "product",      header: "Product" },
+      { key: "quantity",     header: "Quantity" },
+      { key: "price",        header: "Price" },
+      { key: "currency",     header: "Currency" },
+      { key: "unit",         header: "Unit" },
+      { key: "deliveryDate", header: "Expected Delivery Date" }
+    ];
+    const rows = dispatchDateOrders.map((order) => ({
+      salesId:      getDisplaySalesNumber(order) || "-",
+      client:       order.clientName || "-",
+      source:       order.source === "MANUAL_REQUEST" ? "Manual Request" : "Enquiry",
+      product:      order.product || "-",
+      quantity:     order.quantity || 0,
+      price:        formatPriceValue(order.price),
+      currency:     order.currency || "-",
+      unit:         order.unit || "-",
+      deliveryDate: formatDate(order.deliveryDate)
+    }));
+    exportRowsToExcel("pending-dispatch-date", columns, rows);
+  };
+
   return (
     <div className="dispatch-page">
       <section className="dispatch-card">
         <div className="dispatch-section-head">
           <h2>Approved Requests Pending Dispatch Date</h2>
+          <button className="order-btn-secondary" onClick={exportToExcel}>
+            Export to Excel
+          </button>
         </div>
 
         {loading ? (

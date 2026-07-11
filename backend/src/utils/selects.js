@@ -57,6 +57,10 @@ export const ENQUIRY_LIST_SELECT = {
   notesForProduction: true,
   remarks: true,
   status: true,
+  stage: true,
+  sampledAt: true,
+  isUrgent: true,
+  rejectionReason: true,
   createdAt: true,
   updatedAt: true,
   createdById: true,
@@ -112,6 +116,7 @@ export const ORDER_LIST_SELECT = {
   state: true,
   countryCode: true,
   status: true,
+  isUrgent: true,
   orderDate: true,
   createdAt: true,
   updatedAt: true,
@@ -120,7 +125,8 @@ export const ORDER_LIST_SELECT = {
   enquiry: {
     select: {
       id: true,
-      enquiryNumber: true
+      enquiryNumber: true,
+      isUrgent: true
     }
   },
   productions: {
@@ -227,6 +233,7 @@ export const PRODUCTION_LIST_SELECT = {
       state: true,
       countryCode: true,
       status: true,
+      isUrgent: true,
       createdAt: true,
       updatedAt: true,
       enquiry: {
@@ -236,6 +243,7 @@ export const PRODUCTION_LIST_SELECT = {
           companyName: true,
           product: true,
           assignedPerson: true,
+          isUrgent: true,
           createdAt: true
         }
       },

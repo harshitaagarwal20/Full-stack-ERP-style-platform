@@ -21,6 +21,14 @@ enum EnquiryStatus {
   REJECTED
 }
 
+// Sales progress of an enquiry. Independent of EnquiryStatus, which drives
+// the approval workflow.
+enum EnquiryStage {
+  GENERAL
+  SAMPLED
+  QUOTED
+}
+
 enum OrderStatus {
   CREATED
   IN_PRODUCTION
@@ -149,6 +157,15 @@ model Enquiry {
   notesForProduction String?
   remarks          String?
   status           EnquiryStatus @default(PENDING)
+  stage            EnquiryStage  @default(GENERAL)
+  // Set the first time the enquiry enters SAMPLED; drives the 12-day
+  // follow-up reminder.
+  sampledAt        DateTime?
+  // Urgent enquiries jump the production queue and can auto-create the
+  // downstream order + production job.
+  isUrgent         Boolean       @default(false)
+  // Captured when an enquiry is rejected at approval.
+  rejectionReason  String?
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
   createdById      Int
@@ -209,6 +226,9 @@ model Order {
   countryCode      String?
   dispatchDate     DateTime?
   status           OrderStatus @default(CREATED)
+  // Propagated from the source enquiry. Urgent orders are pulled to the front
+  // of the production queue; everything else is FIFO by creation date.
+  isUrgent         Boolean     @default(false)
   orderDate        DateTime    @default(now())
   remarks          String?
   createdAt        DateTime    @default(now())

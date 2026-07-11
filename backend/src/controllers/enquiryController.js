@@ -45,7 +45,12 @@ export async function removeEnquiry(req, res, next) {
 
 export async function approveOrRejectEnquiry(req, res, next) {
   try {
-    const enquiry = await updateEnquiryStatus(toPositiveIntOrThrow(req.params.id, "id"), req.validatedBody.status, req.user);
+    const enquiry = await updateEnquiryStatus(
+      toPositiveIntOrThrow(req.params.id, "id"),
+      req.validatedBody.status,
+      req.user,
+      req.validatedBody.rejection_reason
+    );
     return res.json(enquiry);
   } catch (error) {
     return next(error);

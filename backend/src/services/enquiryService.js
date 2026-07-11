@@ -8,6 +8,22 @@ import { ensureProductsExist } from "../utils/productCatalog.js";
 import { formatEnquiryNumber } from "../utils/businessNumbers.js";
 import { normalizeCurrencyInput, normalizePriceInput } from "../utils/commerce.js";
 import { createOrderFromEnquiry } from "./dispatchService.js";
+import { buildProductionCreateData } from "./productionService.js";
+
+const ENQUIRY_STAGES = ["GENERAL", "SAMPLED", "QUOTED"];
+
+// Number of days an enquiry may sit in SAMPLED before we nudge the owner to
+// follow up with the client.
+export const SAMPLED_FOLLOW_UP_DAYS = 12;
+
+function normalizeStageInput(value, fallback = "GENERAL") {
+  const stage = String(value || "").trim().toUpperCase();
+  return ENQUIRY_STAGES.includes(stage) ? stage : fallback;
+}
+
+function normalizeUrgentInput(value) {
+  return value === true || value === "true" || value === 1 || value === "1";
+}
 
 const ENQUIRY_CACHE_PREFIX = "enquiries:list";
 const ENQUIRY_CACHE_TTL_MS = 12 * 1000;
@@ -87,6 +103,51 @@ export function buildEnquiryRowData({
   };
 }
 
+// Urgent enquiries bypass approval and land directly in production. We create
+// the production row here rather than going through startProductionFromOrder()
+// because that path requires a full delivery address, which an enquiry-derived
+// order does not have yet — the address is filled in before dispatch instead.
+async function createUrgentDownstreamRecords(enquiry, actorUser, tx) {
+  const dispatchDate = enquiry.expectedTimeline || new Date();
+  const order = await createOrderFromEnquiry(enquiry, dispatchDate, actorUser, tx);
+
+  const orderForProduction = await tx.order.findUnique({
+    where: { id: order.id }
+  });
+
+  const production = await tx.production.create({
+    data: {
+      orderId: orderForProduction.id,
+      ...buildProductionCreateData(orderForProduction, {
+        remarks: `Auto-created from URGENT enquiry ${enquiry.enquiryNumber || `#${enquiry.id}`}`
+      }),
+      status: "PENDING"
+    },
+    select: { id: true }
+  });
+
+  await tx.order.update({
+    where: { id: orderForProduction.id },
+    data: { status: "IN_PRODUCTION" }
+  });
+
+  await recordAuditEvent({
+    tx,
+    action: "START_PRODUCTION",
+    entityType: "Production",
+    entityId: production.id,
+    user: actorUser,
+    newValue: {
+      enquiryId: enquiry.id,
+      orderId: orderForProduction.id,
+      isUrgent: true
+    },
+    note: `Urgent enquiry #${enquiry.id} auto-created order #${orderForProduction.id} and production #${production.id}`
+  });
+
+  return { order: orderForProduction, production };
+}
+
 export async function createEnquiry(payload, user) {
   const userId = user.id;
   const assignedPerson = user.name || payload.assigned_person;
@@ -94,6 +155,11 @@ export async function createEnquiry(payload, user) {
   const products = await ensureProductsExist(productRows);
   const price = normalizePriceInput(payload.price);
   const currency = normalizeCurrencyInput(payload.currency);
+  const stage = normalizeStageInput(payload.stage);
+  const isUrgent = normalizeUrgentInput(payload.is_urgent);
+  // Only stamp sampledAt when the enquiry actually starts life as SAMPLED —
+  // the 12-day follow-up clock runs from here.
+  const sampledAt = stage === "SAMPLED" ? new Date() : null;
   const normalizedProducts = products.map((product, index) => ({
     product,
     grade: productRows[index]?.grade || "",
@@ -122,6 +188,9 @@ export async function createEnquiry(payload, user) {
           assignedPerson: assignedPerson,
           notesForProduction: payload.notes_for_production || null,
           remarks: null,
+          stage,
+          sampledAt,
+          isUrgent,
           createdById: userId
         },
         select: ENQUIRY_LIST_SELECT
@@ -149,6 +218,15 @@ export async function createEnquiry(payload, user) {
       }
 
       createdRows.push(createdRow);
+    }
+
+    // An urgent enquiry skips the approval queue: it is pushed straight into
+    // an order and a production job so the floor can start on it immediately.
+    // Approval status stays PENDING so the sales record is still auditable.
+    if (isUrgent) {
+      for (const enquiryRow of createdRows) {
+        await createUrgentDownstreamRecords(enquiryRow, user, tx);
+      }
     }
 
     return createdRows.length === 1 ? createdRows[0] : createdRows;
@@ -223,7 +301,7 @@ export async function listEnquiries(filters = {}) {
   });
 }
 
-export async function updateEnquiryStatus(enquiryId, status, approvedByUser) {
+export async function updateEnquiryStatus(enquiryId, status, approvedByUser, rejectionReason = null) {
   const enquiry = await prisma.enquiry.findUnique({
     where: { id: enquiryId },
     select: {
@@ -238,6 +316,7 @@ export async function updateEnquiryStatus(enquiryId, status, approvedByUser) {
       unitOfMeasurement: true,
       price: true,
       currency: true,
+      isUrgent: true,
       approvedById: true,
       order: {
         select: {
@@ -259,12 +338,25 @@ export async function updateEnquiryStatus(enquiryId, status, approvedByUser) {
     throw error;
   }
 
+  const reason = status === "REJECTED"
+    ? String(rejectionReason || "").trim()
+    : null;
+
+  if (status === "REJECTED" && !reason) {
+    const error = new Error("A reason is required when rejecting an enquiry.");
+    error.statusCode = 400;
+    throw error;
+  }
+
   const updatedEnquiry = await prisma.$transaction(async (tx) => {
     await tx.enquiry.update({
       where: { id: enquiryId },
       data: {
         status,
-        approvedById: approvedByUser.id
+        approvedById: approvedByUser.id,
+        // Clear any prior reason when accepting, so a re-approved enquiry
+        // doesn't keep showing a stale rejection note.
+        rejectionReason: reason
       }
     });
 
@@ -288,9 +380,10 @@ export async function updateEnquiryStatus(enquiryId, status, approvedByUser) {
         status,
         approvedById: approvedByUser.id,
         orderCreated: Boolean(createdOrder),
-        orderId: createdOrder?.id ?? null
+        orderId: createdOrder?.id ?? null,
+        rejectionReason: reason
       },
-      note: `${status === "ACCEPTED" ? "Approved" : "Rejected"} enquiry #${enquiryId}${createdOrder ? ` and created order #${createdOrder.id}` : ""}`
+      note: `${status === "ACCEPTED" ? "Approved" : "Rejected"} enquiry #${enquiryId}${createdOrder ? ` and created order #${createdOrder.id}` : ""}${reason ? ` — reason: ${reason}` : ""}`
     });
 
     return tx.enquiry.findUnique({

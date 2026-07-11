@@ -12,7 +12,6 @@ const DEFAULT_MASTER_DATA = {
   enquiryStatuses: [
     { value: "PENDING", label: "Pending" },
     { value: "ACCEPTED", label: "Accepted" },
-    { value: "HOLD", label: "Hold" },
     { value: "REJECTED", label: "Rejected" }
   ],
   orderStatuses: [
@@ -20,11 +19,13 @@ const DEFAULT_MASTER_DATA = {
     { value: "IN_PRODUCTION", label: "In Production" },
     { value: "READY_FOR_DISPATCH", label: "Ready for Dispatch" },
     { value: "PARTIALLY_DISPATCHED", label: "Partially Dispatched" },
-    { value: "COMPLETED", label: "Completed" }
+    { value: "COMPLETED", label: "Completed" },
+    { value: "DISPATCHED", label: "Completed" }
   ],
   productionStatuses: [
     { value: "PENDING", label: "Not Started" },
-    { value: "IN_PROGRESS", label: "Started" },
+    { value: "IN_PROGRESS", label: "In Progress" },
+    { value: "PARTIALLY_PRODUCED", label: "Partially Produced" },
     { value: "HOLD", label: "Hold" },
     { value: "COMPLETED", label: "Completed" }
   ],
@@ -53,12 +54,24 @@ const DEFAULT_MASTER_DATA = {
     { value: "Ankesh Jain", label: "Ankesh Jain" },
     { value: "Shrinivas Potukuchi", label: "Shrinivas Potukuchi" }
   ],
+  supervisors: [
+    { value: "Vaibhav Mishra", label: "Vaibhav Mishra" },
+    { value: "Amarjeet", label: "Amarjeet" },
+    { value: "Ankit", label: "Ankit" },
+    { value: "Sonu Mahur", label: "Sonu Mahur" },
+    { value: "Omprakash", label: "Omprakash" },
+    { value: "Satish Singh", label: "Satish Singh" },
+    { value: "Mandeep Singh", label: "Mandeep Singh" }
+  ],
   companyNames: [],
   enquiryMaster: [],
   customerMaster: [],
   supplierMaster: [],
   countryCodes: [{ value: "IN", label: "IN" }],
-  products: []
+  products: [],
+  finishedGoodsCatalog: [],
+  rawMaterialsCatalog: [],
+  packingMaterialsCatalog: []
 };
 const MASTER_DATA_CACHE_KEY = "fms_master_data_v3";
 const MASTER_DATA_TTL_MS = 5 * 60 * 1000;
@@ -106,7 +119,8 @@ function buildMasterDataFromResponse(previousData, responseData) {
   const data = responseData && typeof responseData === "object" ? responseData : {};
   const productionStatuses = normalizeOptions(data.productionStatuses, prev.productionStatuses).map((item) => {
     if (item.value === "PENDING") return { ...item, label: "Not Started" };
-    if (item.value === "IN_PROGRESS") return { ...item, label: "Started" };
+    if (item.value === "IN_PROGRESS") return { ...item, label: "In Progress" };
+    if (item.value === "PARTIALLY_PRODUCED") return { ...item, label: "Partially Produced" };
     if (item.value === "HOLD") return { ...item, label: "Hold" };
     if (item.value === "COMPLETED") return { ...item, label: "Completed" };
     return item;
@@ -137,12 +151,16 @@ function buildMasterDataFromResponse(previousData, responseData) {
     units: normalizeOptions(data.units, prev.units),
     modeOfEnquiry: normalizeOptions(data.modeOfEnquiry, prev.modeOfEnquiry),
     assignedPersons: normalizeOptions(data.assignedPersons, prev.assignedPersons),
+    supervisors: normalizeOptions(data.supervisors, prev.supervisors),
     companyNames: normalizeOptions(data.companyNames, prev.companyNames),
     enquiryMaster: sortByNewestFirst(Array.isArray(data.enquiryMaster) ? data.enquiryMaster : prev.enquiryMaster),
     customerMaster: sortByNewestFirst(Array.isArray(data.customerMaster) ? data.customerMaster : prev.customerMaster),
     supplierMaster: Array.isArray(data.supplierMaster) ? data.supplierMaster : prev.supplierMaster,
     countryCodes: normalizeOptions(data.countryCodes, prev.countryCodes),
-    products: normalizeOptions(data.products, prev.products)
+    products: normalizeOptions(data.products, prev.products),
+    finishedGoodsCatalog: normalizeOptions(data.finishedGoodsCatalog, prev.finishedGoodsCatalog),
+    rawMaterialsCatalog: normalizeOptions(data.rawMaterialsCatalog, prev.rawMaterialsCatalog),
+    packingMaterialsCatalog: normalizeOptions(data.packingMaterialsCatalog, prev.packingMaterialsCatalog)
   };
 }
 

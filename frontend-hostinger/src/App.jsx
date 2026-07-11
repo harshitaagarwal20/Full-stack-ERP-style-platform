@@ -8,6 +8,7 @@ import { useAuth } from "./context/AuthContext";
 const ApprovalPage = lazy(() => import("./pages/ApprovalPage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const DispatchPage = lazy(() => import("./pages/DispatchPage"));
+const PackingPage = lazy(() => import("./pages/PackingPage"));
 const EnquiryPage = lazy(() => import("./pages/EnquiryPage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const MasterDataPage = lazy(() => import("./pages/MasterDataPage"));
@@ -27,7 +28,17 @@ const GrnDetailPage = lazy(() => import("./pages/GrnDetailPage"));
 const PurchaseOrderPrintPage = lazy(() => import("./pages/PurchaseOrderPrintPage"));
 const SupplierMasterPage = lazy(() => import("./pages/SupplierMasterPage"));
 const RawMaterialPage = lazy(() => import("./pages/RawMaterialPage"));
-const ProductionDetailPage = lazy(() => import("./pages/ProductionDetailPage"));
+const ProductionOverviewPage = lazy(() => import("./pages/ProductionOverviewPage"));
+const ProductionBatchSetupPage = lazy(() => import("./pages/ProductionBatchSetupPage"));
+const ProductionMaterialStepPage = lazy(() => import("./pages/ProductionMaterialStepPage"));
+const ProductionEquipmentPage = lazy(() => import("./pages/ProductionEquipmentPage"));
+const ProductionProcessParamsPage = lazy(() => import("./pages/ProductionProcessParamsPage"));
+const ProductionOperationLogPage = lazy(() => import("./pages/ProductionOperationLogPage"));
+const ProductionInProcessTestPage = lazy(() => import("./pages/ProductionInProcessTestPage"));
+const ProductionQcTestSheetPage = lazy(() => import("./pages/ProductionQcTestSheetPage"));
+const QualityCheckPage = lazy(() => import("./pages/QualityCheckPage"));
+const InProcessTestingListPage = lazy(() => import("./pages/InProcessTestingListPage"));
+const OperationLogListPage = lazy(() => import("./pages/OperationLogListPage"));
 
 const ROLES = {
   ADMIN: "admin",
@@ -38,9 +49,11 @@ const ROLES = {
 
 const ENQUIRY_ROLES = [ROLES.ADMIN, ROLES.SALES];
 const ORDER_ROLES = [ROLES.ADMIN, ROLES.SALES];
-const PO_ROLES = [ROLES.ADMIN];
+const PO_ROLES = [ROLES.ADMIN, ROLES.PRODUCTION];
+const GRN_ROLES = [ROLES.ADMIN];
 const PRODUCTION_ROLES = [ROLES.ADMIN, ROLES.PRODUCTION];
 const DISPATCH_ROLES = [ROLES.ADMIN, ROLES.DISPATCH];
+const PACKING_ROLES = [ROLES.ADMIN, ROLES.PRODUCTION, ROLES.DISPATCH];
 
 function RouteFallback() {
   return (
@@ -110,6 +123,9 @@ function App() {
               <Route path="/purchase-orders/new" element={withSuspense(<PurchaseOrderFormPage />)} />
               <Route path="/purchase-orders/:id" element={withSuspense(<PurchaseOrderDetailPage />)} />
               <Route path="/purchase-orders/:id/edit" element={withSuspense(<PurchaseOrderFormPage />)} />
+            </Route>
+
+            <Route element={<ProtectedRoute roles={GRN_ROLES} />}>
               <Route path="/grns" element={withSuspense(<GrnListPage />)} />
               <Route path="/grns/new" element={withSuspense(<GrnFormPage />)} />
               <Route path="/grns/:id" element={withSuspense(<GrnDetailPage />)} />
@@ -117,12 +133,28 @@ function App() {
             </Route>
 
             <Route element={<ProtectedRoute roles={PRODUCTION_ROLES} />}>
+              <Route path="/quality-check" element={withSuspense(<QualityCheckPage />)} />
+              <Route path="/in-process-testing" element={withSuspense(<InProcessTestingListPage />)} />
+              <Route path="/operation-log" element={withSuspense(<OperationLogListPage />)} />
               <Route path="/production" element={withSuspense(<ProductionPage />)} />
-              <Route path="/production/:id" element={withSuspense(<ProductionDetailPage />)} />
+              <Route path="/production/:id" element={withSuspense(<ProductionOverviewPage />)} />
+              <Route path="/production/:id/batch-setup" element={withSuspense(<ProductionBatchSetupPage />)} />
+              <Route path="/production/:id/raw-materials" element={withSuspense(<ProductionMaterialStepPage section="rm" stepKey="raw-materials" label="Raw Materials" colLabel="RM Name" />)} />
+              <Route path="/production/:id/additives" element={withSuspense(<ProductionMaterialStepPage section="additives" stepKey="additives" label="Additives" colLabel="Additive" />)} />
+              <Route path="/production/:id/catalyst" element={withSuspense(<ProductionMaterialStepPage section="catalysts" stepKey="catalyst" label="Catalyst" colLabel="Catalyst" />)} />
+              <Route path="/production/:id/equipment" element={withSuspense(<ProductionEquipmentPage />)} />
+              <Route path="/production/:id/process-params" element={withSuspense(<ProductionProcessParamsPage />)} />
+              <Route path="/production/:id/operation-log" element={withSuspense(<ProductionOperationLogPage />)} />
+              <Route path="/production/:id/in-process-testing" element={withSuspense(<ProductionInProcessTestPage />)} />
+              <Route path="/production/:id/qc-test-sheet" element={withSuspense(<ProductionQcTestSheetPage />)} />
             </Route>
 
             <Route element={<ProtectedRoute roles={PRODUCTION_ROLES} />}>
               <Route path="/production/complete/:id" element={withSuspense(<ProductionCompletePage />)} />
+            </Route>
+
+            <Route element={<ProtectedRoute roles={PACKING_ROLES} />}>
+              <Route path="/packing" element={withSuspense(<PackingPage />)} />
             </Route>
 
             <Route element={<ProtectedRoute roles={DISPATCH_ROLES} />}>

@@ -6,6 +6,11 @@ import MobileListCard from "../components/common/MobileListCard";
 import { BoxesIcon, SearchIcon } from "../components/erp/ErpIcons";
 import { logApiError } from "../utils/apiError";
 import { useIsMobile } from "../hooks/useIsMobile";
+import SearchableSelect from "../components/common/SearchableSelect";
+import Toolbar from "../components/common/Toolbar";
+import { exportRowsToExcel } from "../utils/exportExcel";
+import StatusBadge from "../components/common/StatusBadge";
+import { GRN_STATUS_CONFIG } from "../config/statusConfig";
 
 const PAGE_SIZE = 10;
 
@@ -15,33 +20,11 @@ const GRN_STATUS_OPTIONS = [
   { value: "CONFIRMED", label: "Confirmed"  }
 ];
 
-const STATUS_STYLE = {
-  DRAFT:     { background: "#fefce8", color: "#854d0e", border: "1px solid #fde68a" },
-  CONFIRMED: { background: "#f0fdf4", color: "#15803d", border: "1px solid #bbf7d0" }
-};
-
 function formatDate(val) {
   if (!val) return "-";
   const d = new Date(val);
   if (Number.isNaN(d.getTime())) return "-";
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
-}
-
-function StatusBadge({ status }) {
-  const s = STATUS_STYLE[status] || STATUS_STYLE.DRAFT;
-  return (
-    <span style={{
-      ...s,
-      padding: "3px 10px",
-      borderRadius: 20,
-      fontSize: 12,
-      fontWeight: 600,
-      whiteSpace: "nowrap",
-      display: "inline-block"
-    }}>
-      {status === "CONFIRMED" ? "Confirmed" : "Draft"}
-    </span>
-  );
 }
 
 function GrnListPage() {
@@ -108,6 +91,30 @@ function GrnListPage() {
 
   const onSearchSubmit = () => { setQuery(searchText.trim()); setCurrentPage(1); };
 
+  const exportToExcel = () => {
+    const columns = [
+      { key: "grnNumber",     header: "GRN Number" },
+      { key: "poNumber",      header: "PO Number" },
+      { key: "supplier",      header: "Supplier" },
+      { key: "receivedDate",  header: "Received Date" },
+      { key: "receivedBy",    header: "Received By" },
+      { key: "warehouse",     header: "Warehouse" },
+      { key: "items",         header: "Items" },
+      { key: "status",        header: "Status" }
+    ];
+    const rows = sortedGrns.map((grn) => ({
+      grnNumber:    grn.grnNumber || "-",
+      poNumber:     grn.purchaseOrder?.poNumber || "-",
+      supplier:     grn.purchaseOrder?.supplier?.name || "-",
+      receivedDate: formatDate(grn.receivedDate),
+      receivedBy:   grn.receivedBy || "-",
+      warehouse:    grn.warehouseLocation || "-",
+      items:        grn._count?.items ?? "-",
+      status:       grn.status || "-"
+    }));
+    exportRowsToExcel("goods-receipt-notes", columns, rows);
+  };
+
   const SortBtn = ({ colKey, label }) => (
     <button className="order-sort-btn" onClick={() => onSort(colKey)}>
       {label}
@@ -119,11 +126,10 @@ function GrnListPage() {
 
   return (
     <div className="order-page">
-      {/* Header */}
-      <section className="order-card order-header-card">
-        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#0f172a" }}>Goods Receipt Notes</h2>
-        <div className="order-header-right">
-          <div className="order-header-search">
+      <Toolbar
+        title="Goods Receipt Notes"
+        search={
+          <div className="ui-toolbar-search">
             <SearchIcon />
             <input
               placeholder="Search GRN or PO number..."
@@ -132,38 +138,39 @@ function GrnListPage() {
               onKeyDown={(e) => { if (e.key === "Enter") onSearchSubmit(); }}
             />
           </div>
-          <button className="order-btn-primary" onClick={() => navigate("/grns/new")}>
-            + New GRN
-          </button>
-        </div>
-      </section>
-
-      {/* Filters */}
-      <section className="order-card" style={{ padding: "12px 20px" }}>
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
-          <select
-            className="input"
-            style={{ minWidth: 150, maxWidth: 200 }}
-            value={statusFilter}
-            onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-          >
-            {GRN_STATUS_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-          {(query || statusFilter !== "all") && (
-            <button
-              className="order-btn-secondary"
-              onClick={() => { setQuery(""); setSearchText(""); setStatusFilter("all"); setCurrentPage(1); }}
-            >
-              Clear
+        }
+        actions={
+          <>
+            <button className="order-btn-secondary" onClick={exportToExcel}>
+              Export to Excel
             </button>
-          )}
-          <span style={{ marginLeft: "auto", fontSize: 13, color: "#64748b" }}>
-            {totalRecords} record{totalRecords !== 1 ? "s" : ""}
-          </span>
-        </div>
-      </section>
+            <button className="order-btn-primary" onClick={() => navigate("/grns/new")}>
+              + New GRN
+            </button>
+          </>
+        }
+        filters={
+          <>
+            <SearchableSelect
+              options={GRN_STATUS_OPTIONS}
+              value={statusFilter}
+              onChange={(value) => { setStatusFilter(value); setCurrentPage(1); }}
+              placeholder="All Status"
+            />
+            {(query || statusFilter !== "all") && (
+              <button
+                className="order-btn-secondary"
+                onClick={() => { setQuery(""); setSearchText(""); setStatusFilter("all"); setCurrentPage(1); }}
+              >
+                Clear
+              </button>
+            )}
+            <span style={{ marginLeft: "auto", fontSize: 13, color: "#64748b", flex: "0 0 auto" }}>
+              {totalRecords} record{totalRecords !== 1 ? "s" : ""}
+            </span>
+          </>
+        }
+      />
 
       {/* Table */}
       <section className="order-card" style={{ padding: 0, overflow: "hidden" }}>
@@ -211,7 +218,7 @@ function GrnListPage() {
                       <td>{grn.receivedBy || "-"}</td>
                       <td>{grn.warehouseLocation || "-"}</td>
                       <td style={{ textAlign: "center" }}>{grn._count?.items ?? "-"}</td>
-                      <td><StatusBadge status={grn.status} /></td>
+                      <td><StatusBadge status={grn.status} config={GRN_STATUS_CONFIG} /></td>
                     </tr>
                   )}
                 />
@@ -263,6 +270,7 @@ function GrnListPage() {
           </div>
         )}
       </section>
+
     </div>
   );
 }

@@ -457,7 +457,13 @@ export async function listProductionOrders(filters = {}) {
   const query = {
     where,
     select: PRODUCTION_LIST_SELECT,
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }]
+    // Production queue priority: urgent jobs are pulled to the front, and
+    // everything else runs FIFO (oldest order first) so nothing starves.
+    orderBy: [
+      { order: { isUrgent: "desc" } },
+      { createdAt: "asc" },
+      { id: "asc" }
+    ]
   };
 
   const cacheKey = buildCacheKey(PRODUCTION_CACHE_PREFIX, {

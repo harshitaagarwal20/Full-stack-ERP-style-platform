@@ -21,23 +21,6 @@ test("rewrites legacy render api urls to the current backend", () => {
   );
 });
 
-test("defaults vercel deployments to the production backend", () => {
-  assert.equal(
-    resolveApiBaseUrl({ configuredUrl: "", hostname: "nimbasia.vercel.app" }),
-    "https://manage.nimbasia.com/api"
-  );
-});
-
-test("vercel deployments ignore stale configured urls", () => {
-  assert.equal(
-    resolveApiBaseUrl({
-      configuredUrl: "https://nimbasia.onrender.com/api",
-      hostname: "nimbasia.vercel.app"
-    }),
-    "https://manage.nimbasia.com/api"
-  );
-});
-
 test("falls back to same-origin api for local development", () => {
   assert.equal(resolveApiBaseUrl({ configuredUrl: "", hostname: "localhost" }), "/api");
 });

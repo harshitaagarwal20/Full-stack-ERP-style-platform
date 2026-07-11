@@ -2,14 +2,27 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/axiosClient";
 import VirtualizedTableBody from "../components/common/VirtualizedTableBody";
-import { EditIcon, EyeIcon, FactoryIcon, SearchIcon, TrashIcon } from "../components/erp/ErpIcons";
+import { BoxesIcon, ClipboardIcon, EditIcon, EyeIcon, FactoryIcon, SearchIcon, TrashIcon } from "../components/erp/ErpIcons";
 import { useAuth } from "../context/AuthContext";
 import useMasterData from "../hooks/useMasterData";
+import useKnownItemIds from "../hooks/useKnownItemIds";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { logApiError } from "../utils/apiError";
 import { exportRowsToExcel } from "../utils/exportExcel";
 import { getDisplaySalesNumber } from "../utils/businessNumbers";
 import SearchableSelect from "../components/common/SearchableSelect";
+import { formatDuration } from "../utils/productionMfg";
+import Toolbar from "../components/common/Toolbar";
+import Alert from "../components/common/Alert";
+import StatusBadge from "../components/common/StatusBadge";
+
+const PRODUCTION_STATUS_CONFIG = {
+  PENDING: { label: "Not Started", background: "#e2e8f0", color: "#475569" },
+  IN_PROGRESS: { label: "In Progress", background: "#ffedd5", color: "#c2410c" },
+  PARTIALLY_PRODUCED: { label: "Partially Produced", background: "#dbeafe", color: "#1d4ed8" },
+  HOLD: { label: "Hold", background: "#dbeafe", color: "#1d4ed8" },
+  COMPLETED: { label: "Completed", background: "#dbeafe", color: "#1d4ed8" }
+};
 
 function formatDate(value) {
   if (!value) return "-";
@@ -19,6 +32,18 @@ function formatDate(value) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const year = date.getFullYear();
   return `${day}/${month}/${year}`;
+}
+
+function formatDateTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${day}/${month}/${year} ${hours}:${minutes}`;
 }
 
 function getClientCode(clientName, orderId) {
@@ -31,20 +56,16 @@ function getClientCode(clientName, orderId) {
   return `${prefix}${suffix}`;
 }
 
-function getStatusBadgeClass(status) {
-  if (status === "PENDING") return "created";
-  if (status === "COMPLETED") return "approved";
-  if (status === "IN_PROGRESS") return "in-production";
-  if (status === "HOLD") return "partial";
-  return "created";
+// Matches StatusBadge's own fallback exactly (raw status string, not a
+// hardcoded guess) so the exported file can never show a different status
+// than what's rendered on screen for the same record.
+// Urgency is stamped on the order (and mirrored from its source enquiry).
+export function isUrgentRecord(record) {
+  return Boolean(record?.order?.isUrgent || record?.order?.enquiry?.isUrgent);
 }
 
 function getStatusLabel(status) {
-  if (status === "PENDING") return "Not Started";
-  if (status === "IN_PROGRESS") return "Started";
-  if (status === "HOLD") return "Hold";
-  if (status === "COMPLETED") return "Completed";
-  return "Created";
+  return PRODUCTION_STATUS_CONFIG[status]?.label || status || "-";
 }
 
 function getLatestDispatchDate(order) {
@@ -108,9 +129,16 @@ function ProductionPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const masterData = useMasterData();
-  const rawMaterialOptions = useMemo(() => (
-    Array.isArray(masterData.rawMaterialsCatalog) ? masterData.rawMaterialsCatalog : []
-  ), [masterData.rawMaterialsCatalog]);
+  const knownItemIds = useKnownItemIds();
+  const knownItemIdOptions = useMemo(
+    () => knownItemIds.map((id) => ({ value: id, label: id })),
+    [knownItemIds]
+  );
+  const rawMaterialOptions = useMemo(() => {
+    const catalog = Array.isArray(masterData.rawMaterialsCatalog) ? masterData.rawMaterialsCatalog : [];
+    if (catalog.length > 0) return catalog;
+    return knownItemIdOptions;
+  }, [knownItemIdOptions, masterData.rawMaterialsCatalog]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -131,7 +159,9 @@ function ProductionPage() {
   const [dateFilter, setDateFilter] = useState("");
   const isMobile = useIsMobile();
   useEffect(() => { if (isMobile) { setDateFilter(""); } }, [isMobile]);
-  const [sortConfig, setSortConfig] = useState({ key: "createdAt", direction: "desc" });
+  // FIFO by default — oldest job first. Urgent jobs are floated above this
+  // regardless (see sortedRecords).
+  const [sortConfig, setSortConfig] = useState({ key: "createdAt", direction: "asc" });
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalRecords, setTotalRecords] = useState(0);
@@ -152,12 +182,16 @@ function ProductionPage() {
   );
   const supplierOptions = useMemo(() => {
     const supplierMaster = Array.isArray(masterData.supplierMaster) ? masterData.supplierMaster : [];
-    return supplierMaster.map((supplier) => ({
-      value: supplier.supplierName,
-      label: supplier.supplierName,
-      searchText: [supplier.supplierName, supplier.supplierCode].filter(Boolean).join(" ")
+    return supplierMaster.map((s) => ({
+      value: s.supplierName,
+      label: s.supplierName,
+      searchText: [s.supplierName, s.supplierCode].filter(Boolean).join(" ")
     }));
   }, [masterData.supplierMaster]);
+  const supervisorOptions = useMemo(
+    () => (Array.isArray(masterData.supervisors) ? masterData.supervisors : []),
+    [masterData.supervisors]
+  );
   const customerMasterMap = useMemo(() => {
     const map = new Map();
     customerMasterRows.forEach((row) => {
@@ -284,6 +318,12 @@ function ProductionPage() {
     };
 
     sorted.sort((a, b) => {
+      // Urgent jobs always head the production queue, whatever column the user
+      // has sorted by — an urgent job must never be buried below a normal one.
+      const ua = isUrgentRecord(a) ? 1 : 0;
+      const ub = isUrgentRecord(b) ? 1 : 0;
+      if (ua !== ub) return ub - ua;
+
       const va = getValue(a);
       const vb = getValue(b);
       if (va < vb) return -1 * sign;
@@ -387,7 +427,9 @@ function ProductionPage() {
         { key: "state", header: "State" },
         { key: "countryCode", header: "Country Code" },
         { key: "status", header: "Status" },
+        { key: "productionStartedDate", header: "Production Started Date" },
         { key: "productionCompDate", header: "Production Completion Date" },
+        { key: "duration", header: "Duration" },
         { key: "dispatchDate", header: "Dispatch Date" },
         { key: "productionState", header: "Production State" }
       ],
@@ -409,7 +451,9 @@ function ProductionPage() {
         unit: record.order?.unit || "-",
         expectedDeliveryDate: formatDate(record.deliveryDate || record.order?.deliveryDate),
         status: getStatusLabel(record.status),
-        productionCompDate: formatDate(record.productionCompletionDate),
+        productionStartedDate: formatDateTime(record.productionStartedDate),
+        productionCompDate: formatDateTime(record.productionCompletionDate),
+        duration: formatDuration(record.productionStartedDate, record.productionCompletionDate),
         dispatchDate: formatDate(getOrderDispatchDate(record.order)),
         productionState: record.state || "-"
       }))
@@ -450,7 +494,7 @@ function ProductionPage() {
     }
   };
 
-  const emptyMaterialRow = () => ({ name: "", vendor: "", grade: "", batch_no: "", qty: "", remark: "" });
+  const emptyMaterialRow = () => ({ name: "", vendor: "", grade: "", batch_no: "", qty: "", remark: "", shift: "" });
   const emptyEquipRow    = () => ({ name: "", equipId: "", capacity: "" });
   const emptyParamRow    = () => ({ parameter: "", range: "", doneBy: "", reviewedBy: "", remark: "" });
 
@@ -479,13 +523,12 @@ function ProductionPage() {
         catalysts:     Array.isArray(parsed.catalysts)     ? parsed.catalysts     : [emptyMaterialRow()],
         pulveriserRpm: parsed.pulveriserRpm || "",
         equipment:     Array.isArray(parsed.equipment)     ? parsed.equipment     : defaultEquipment(),
-        processParams: Array.isArray(parsed.processParams) ? parsed.processParams : defaultProcessParams(),
-        batchLogs:     Array.isArray(parsed.batchLogs)     ? parsed.batchLogs     : []
+        processParams: Array.isArray(parsed.processParams) ? parsed.processParams : defaultProcessParams()
       };
     } catch {
       return {
         rm: [emptyMaterialRow()], additives: [emptyMaterialRow()], catalysts: [emptyMaterialRow()],
-        pulveriserRpm: "", equipment: defaultEquipment(), processParams: defaultProcessParams(), batchLogs: []
+        pulveriserRpm: "", equipment: defaultEquipment(), processParams: defaultProcessParams()
       };
     }
   };
@@ -520,9 +563,15 @@ function ProductionPage() {
     };
     const draft = loadMfgDraft(record.id);
     setMfgOrderRecord(record);
-    setMfgForm(draft?.mfg || serverMfg);
     setPfrForm(draft?.pfr || serverPfr);
     setMfgStep("mfg");
+
+    if (draft?.mfg) {
+      setMfgForm(draft.mfg);
+      return;
+    }
+
+    setMfgForm(serverMfg);
   };
 
   const closeAll = () => {
@@ -530,6 +579,37 @@ function ProductionPage() {
     setMfgForm(null);
     setPfrForm(null);
     setMfgStep(null);
+  };
+
+  // Full raw materials blob as-is (unlike parseMfgRawMaterials, this keeps
+  // every key — including batchLogs — so saves from this wizard never wipe
+  // out sections filled in elsewhere, like the Operation Log).
+  const getExistingMfgBlob = (rawMaterials) => {
+    try {
+      return JSON.parse(rawMaterials || "{}");
+    } catch {
+      return {};
+    }
+  };
+
+  // Opens Process Feeding Record on its own, independent of the batch-setup
+  // step — since these are filled in at different times on the floor.
+  const openPfr = (record) => {
+    const mats = parseMfgRawMaterials(record.rawMaterials);
+    setMfgOrderRecord(record);
+    setMfgForm({
+      batch_no:       record.batchNo      || "",
+      particle_size:  record.particleSize || "Fine",
+      acm_rpm:        record.acmRpm       ? String(record.acmRpm)    : "",
+      classifier_rpm: mats.pulveriserRpm  || (record.classifierRpm ? String(record.classifierRpm) : ""),
+      blower_rpm:     record.blowerRpm    ? String(record.blowerRpm) : "",
+      rm:             mats.rm,
+      additives:      mats.additives,
+      catalysts:      mats.catalysts,
+      remarks:        record.remarks || ""
+    });
+    setPfrForm({ equipment: mats.equipment, processParams: mats.processParams });
+    setMfgStep("pfr");
   };
 
   const setMfgField = (key, value) => setMfgForm((prev) => ({ ...prev, [key]: value }));
@@ -605,6 +685,8 @@ function ProductionPage() {
     doneBy: ""
   });
 
+  // Older saved logs stored quantities under the hardcoded "stearicAcid"/"caOH2"
+  // keys; migrate them to the generic material1Qty/material2Qty keys on load.
   const migrateOpsRow = (row) => ({
     ...row,
     material1Qty: row.material1Qty ?? row.stearicAcid ?? "",
@@ -613,7 +695,7 @@ function ProductionPage() {
 
   const openOps = (record) => {
     const mats = parseMfgRawMaterials(record.rawMaterials);
-    const rmNames = mats.rm.map((row) => row.name).filter(Boolean);
+    const rmNames = mats.rm.map((r) => r.name).filter(Boolean);
     setOpsMaterialNames([rmNames[0] || "Material 1", rmNames[1] || "Material 2"]);
 
     try {
@@ -664,19 +746,57 @@ function ProductionPage() {
     }
   }, [mfgForm, pfrForm, mfgOrderRecord]);
 
-  // Step 1: Mfg form → advance to PFR
-  const handleMfgNext = (e) => {
+  // Step 1: Mfg form (batch setup + materials) — saves on its own, since
+  // Process Feeding Record is typically filled in later, not in one sitting.
+  const submitMfg = async (e, advanceToPfr) => {
     e.preventDefault();
-    setMfgStep("pfr");
+    if (!mfgOrderRecord || saving) return;
+    setSaving(true);
+    try {
+      const rawMaterialsJson = JSON.stringify({
+        ...getExistingMfgBlob(mfgOrderRecord.rawMaterials),
+        rm:            mfgForm.rm,
+        additives:     mfgForm.additives,
+        catalysts:     mfgForm.catalysts,
+        pulveriserRpm: mfgForm.classifier_rpm
+      });
+      const newStatus = mfgOrderRecord.status === "PENDING" ? "IN_PROGRESS" : mfgOrderRecord.status;
+      await api.put(`/production/${mfgOrderRecord.id}/edit`, {
+        status:        newStatus,
+        batch_no:      mfgForm.batch_no      || undefined,
+        particle_size: mfgForm.particle_size || undefined,
+        acm_rpm:       mfgForm.acm_rpm       ? Number(mfgForm.acm_rpm)    : undefined,
+        blower_rpm:    mfgForm.blower_rpm     ? Number(mfgForm.blower_rpm) : undefined,
+        raw_materials: rawMaterialsJson,
+        remarks:       mfgForm.remarks       || undefined
+      });
+      clearMfgDraft(mfgOrderRecord.id);
+
+      if (advanceToPfr) {
+        const { data } = await api.get(`/production/${mfgOrderRecord.id}`);
+        const mats = parseMfgRawMaterials(data.rawMaterials);
+        setMfgOrderRecord(data);
+        setPfrForm({ equipment: mats.equipment, processParams: mats.processParams });
+        setMfgStep("pfr");
+      } else {
+        closeAll();
+      }
+      await fetchData();
+    } catch (error) {
+      logApiError(error, "Failed to save batch setup");
+    } finally {
+      setSaving(false);
+    }
   };
 
-  // Step 2: PFR form → save everything to API
+  // Step 2 (or standalone, via openPfr): Process Feeding Record → equipment + process params.
   const submitPfr = async (e) => {
     e.preventDefault();
     if (!mfgOrderRecord || saving) return;
     setSaving(true);
     try {
       const rawMaterialsJson = JSON.stringify({
+        ...getExistingMfgBlob(mfgOrderRecord.rawMaterials),
         rm:            mfgForm.rm,
         additives:     mfgForm.additives,
         catalysts:     mfgForm.catalysts,
@@ -698,7 +818,7 @@ function ProductionPage() {
       closeAll();
       await fetchData();
     } catch (error) {
-      logApiError(error, "Failed to save production");
+      logApiError(error, "Failed to save process feeding record");
     } finally {
       setSaving(false);
     }
@@ -706,10 +826,10 @@ function ProductionPage() {
 
   return (
     <div className="order-page production-page">
-      <section className="order-card order-header-card">
-        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#0f172a" }}>Production</h2>
-        <div className="order-header-right">
-          <div className="order-header-search">
+      <Toolbar
+        title="Production"
+        search={
+          <div className="ui-toolbar-search">
             <SearchIcon />
             <input
               placeholder="Search order, product, company, or assigned team"
@@ -720,18 +840,16 @@ function ProductionPage() {
               }}
             />
           </div>
-          <button className="order-btn-secondary" onClick={exportProduction}>Export to Excel</button>
-        </div>
-      </section>
-
-      <section className="order-card" style={{ padding: "12px 20px" }}>
-        <div className="order-toolbar">
-          <div className="order-filter-grid">
-            <select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setCurrentPage(1); }}>
-              {statusFilterOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label ?? option.value}</option>
-              ))}
-            </select>
+        }
+        actions={<button className="order-btn-secondary" onClick={exportProduction}>Export to Excel</button>}
+        filters={
+          <>
+            <SearchableSelect
+              options={statusFilterOptions.map((option) => ({ value: option.value, label: option.label ?? option.value }))}
+              value={statusFilter}
+              onChange={(value) => { setStatusFilter(value); setCurrentPage(1); }}
+              placeholder="All Status"
+            />
             <input
               className="production-filter-company"
               type="text"
@@ -747,17 +865,19 @@ function ProductionPage() {
                 onChange={(event) => { setDateFilter(event.target.value); setCurrentPage(1); }}
               />
             )}
-          </div>
-          <div className="order-toolbar-actions">
             <button className="order-btn-primary ghost" onClick={onSearchSubmit}>Search</button>
-          </div>
-        </div>
+          </>
+        }
+      />
 
+      <section className="order-card" style={{ padding: "12px 20px" }}>
         {fetchError && (
-          <div style={{ padding: "12px 20px", background: "#fef2f2", color: "#b91c1c", borderRadius: 6, margin: "8px 0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <span>Failed to load production records. Please refresh.</span>
-            <button className="order-btn-secondary" onClick={() => fetchDataRef.current()}>Retry</button>
-          </div>
+          <Alert variant="error">
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <span>Failed to load production records. Please refresh.</span>
+              <button className="order-btn-secondary" onClick={() => fetchDataRef.current()}>Retry</button>
+            </div>
+          </Alert>
         )}
 
         {loading ? (
@@ -788,14 +908,16 @@ function ProductionPage() {
                     <th>State</th>
                     <th>Country Code</th>
                     <th><button className="order-sort-btn" onClick={() => onSort("status")}>Status</button></th>
+                    <th>Production Started Date</th>
                     <th>Production Completion Date</th>
+                    <th>Duration</th>
                     <th>Dispatch Date</th>
                     <th>Action</th>
                   </tr>
                 </thead>
                 <VirtualizedTableBody
                   rows={sortedRecords}
-                  colSpan={17}
+                  colSpan={19}
                   rowHeight={52}
                   overscan={8}
                   scrollContainerRef={tableWrapRef}
@@ -803,10 +925,13 @@ function ProductionPage() {
                   renderRow={(record, index) => {
                     const location = getOrderLocation(record.order);
                     return (
-                      <tr key={record.id}>
+                      <tr key={record.id} className={isUrgentRecord(record) ? "row-urgent" : undefined}>
                         <td>{(currentPage - 1) * PAGE_SIZE + index + 1}</td>
                         <td>{getClientCode(record.order?.clientName, record.order?.id)}</td>
-                        <td>{record.order?.orderNo || "-"}</td>
+                        <td>
+                          {record.order?.orderNo || "-"}
+                          {isUrgentRecord(record) && <span className="urgent-tag">Urgent</span>}
+                        </td>
                         <td>{getDisplaySalesNumber(record.order) || "-"}</td>
                         <td>{record.order?.product || record.order?.enquiry?.product || "-"}</td>
                         <td>{record.order?.grade || "-"} / {record.order?.quantity || "-"}</td>
@@ -818,11 +943,11 @@ function ProductionPage() {
                         <td>{location.state || "-"}</td>
                         <td>{location.countryCode || "-"}</td>
                         <td>
-                          <span className={`order-status ${getStatusBadgeClass(record.status)}`}>
-                            {getStatusLabel(record.status)}
-                          </span>
+                          <StatusBadge status={record.status} config={PRODUCTION_STATUS_CONFIG} />
                         </td>
-                        <td>{formatDate(record.productionCompletionDate)}</td>
+                        <td>{formatDateTime(record.productionStartedDate)}</td>
+                        <td>{formatDateTime(record.productionCompletionDate)}</td>
+                        <td>{formatDuration(record.productionStartedDate, record.productionCompletionDate)}</td>
                         <td>{formatDate(getOrderDispatchDate(record.order))}</td>
                         <td>
                           <div className="order-row-actions">
@@ -840,8 +965,13 @@ function ProductionPage() {
                               </button>
                             )}
                             {canManageProduction && record.status === "IN_PROGRESS" && (
-                              <button className="order-btn-secondary" onClick={() => openOps(record)}>
-                                Operations
+                              <button className="icon-btn" onClick={() => openPfr(record)} aria-label="Process Feeding Record" title="Process Feeding Record">
+                                <BoxesIcon />
+                              </button>
+                            )}
+                            {canManageProduction && record.status === "IN_PROGRESS" && (
+                              <button className="icon-btn" onClick={() => openOps(record)} aria-label="Operations" title="Operations">
+                                <ClipboardIcon />
                               </button>
                             )}
                             {canManageProduction && record.status === "IN_PROGRESS" && (
@@ -868,8 +998,9 @@ function ProductionPage() {
             </div>}
 
             {isMobile && <div className="order-mobile-list">
-              <div style={{ marginBottom: 12, fontSize: 12, color: '#64748b', paddingLeft: 4 }}>
-                Showing {Math.min((currentPage - 1) * PAGE_SIZE + 1, totalRecords)}-{Math.min(currentPage * PAGE_SIZE, totalRecords)} of {totalRecords} records
+              <div style={{ marginBottom: 12, fontSize: 12, color: "#64748b", paddingLeft: 4 }}>
+                Showing {Math.min((currentPage - 1) * PAGE_SIZE + 1, totalRecords)}-
+                {Math.min(currentPage * PAGE_SIZE, totalRecords)} of {totalRecords} records
               </div>
               {sortedRecords.map((record) => {
                 const location = getOrderLocation(record.order);
@@ -888,7 +1019,10 @@ function ProductionPage() {
                   >
                     <div className="prod-mcard-top">
                       <div className="prod-mcard-idwrap">
-                        <span className="prod-mcard-code">{record.order?.orderNo || "-"}</span>
+                        <span className="prod-mcard-code">
+                          {record.order?.orderNo || "-"}
+                          {isUrgentRecord(record) && <span className="urgent-tag">Urgent</span>}
+                        </span>
                         <span className="prod-mcard-name">{productName}</span>
                       </div>
                       <span className={`prod-mcard-pill ${stateClass}`}>{getStatusLabel(status)}</span>
@@ -980,11 +1114,12 @@ function ProductionPage() {
             <form className="production-form-grid" onSubmit={submitProduction}>
               <div>
                 <label>Status</label>
-                <select value={form.status} onChange={(e) => setForm((p) => ({ ...p, status: e.target.value }))}>
-                  {productionEditStatusOptions.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label ?? option.value}</option>
-                  ))}
-                </select>
+                <SearchableSelect
+                  options={productionEditStatusOptions.map((option) => ({ value: option.value, label: option.label ?? option.value }))}
+                  value={form.status}
+                  onChange={(value) => setForm((p) => ({ ...p, status: value }))}
+                  placeholder="Select status"
+                />
               </div>
               <div>
                 <label>Expected Delivery Date</label>
@@ -1048,7 +1183,7 @@ function ProductionPage() {
               ))}
             </div>
 
-            <form onSubmit={handleMfgNext} className="mfg-form">
+            <form onSubmit={(e) => submitMfg(e, false)} className="mfg-form">
               {/* Section 1 – Batch & Machine Settings */}
               <div className="mfg-section">
                 <div className="mfg-section-header">
@@ -1095,7 +1230,7 @@ function ProductionPage() {
                     <table className="mfg-table">
                       <thead>
                         <tr>
-                          <th>{colLabel}</th><th>Supplier Name</th><th>Grade</th><th>Batch No.</th><th>Qty (kg)</th><th>Remark</th>
+                          <th>{colLabel}</th><th>Supplier Name</th><th>Grade</th><th>Batch No.</th><th>Qty (kg)</th><th>Shift</th><th>Remark</th>
                           <th className="mfg-th-del" />
                         </tr>
                       </thead>
@@ -1104,7 +1239,7 @@ function ProductionPage() {
                           <tr key={i}>
                             <td>
                               <SearchableSelect
-                                options={key === "rm" ? rawMaterialOptions : []}
+                                options={key === "rm" ? rawMaterialOptions : knownItemIdOptions}
                                 value={row.name}
                                 onChange={(value) => { handleMaterialItemChange(key, i, value); }}
                                 placeholder={colLabel}
@@ -1135,6 +1270,14 @@ function ProductionPage() {
                               />
                             </td>
                             <td><input className="mfg-cell-input mfg-cell-qty" type="number" min="0" step="0.1" value={row.qty} placeholder="0" onChange={(e) => setMaterialRow(key, i, "qty", e.target.value)} /></td>
+                            <td>
+                              <SearchableSelect
+                                options={[{ value: "A", label: "A-Shift" }, { value: "B", label: "B-Shift" }, { value: "C", label: "C-Shift" }]}
+                                value={row.shift}
+                                onChange={(value) => setMaterialRow(key, i, "shift", value)}
+                                placeholder="Shift"
+                              />
+                            </td>
                             <td><input className="mfg-cell-input" value={row.remark}   placeholder="Remark"   onChange={(e) => setMaterialRow(key, i, "remark",   e.target.value)} /></td>
                             <td className="mfg-td-del">
                               {mfgForm[key].length > 1 && (
@@ -1159,9 +1302,12 @@ function ProductionPage() {
               </div>
 
               <div className="mfg-footer">
-                <button type="button" className="mfg-btn-cancel" onClick={closeAll}>Cancel</button>
-                <button type="submit" className="mfg-btn-submit">
-                  Next: Process Feeding Record &rarr;
+                <button type="button" className="mfg-btn-cancel" onClick={closeAll} disabled={saving}>Cancel</button>
+                <button type="button" className="mfg-btn-cancel" onClick={(e) => submitMfg(e, true)} disabled={saving}>
+                  Save &amp; Continue to Process Feeding &rarr;
+                </button>
+                <button type="submit" className="mfg-btn-submit" disabled={saving}>
+                  {saving ? "Saving…" : "Save & Close"}
                 </button>
               </div>
             </form>
@@ -1175,7 +1321,7 @@ function ProductionPage() {
           <div className="mfg-modal">
             <div className="mfg-header pfr-header">
               <div className="mfg-header-left">
-                <span className="mfg-badge">Step 2 of 2 &nbsp;·&nbsp; Process Feeding Record</span>
+                <span className="mfg-badge">Process Feeding Record</span>
                 <h3 className="mfg-title">{mfgOrderRecord.order?.product || "Product"}</h3>
                 <p className="mfg-subtitle">{mfgOrderRecord.order?.clientName} &mdash; Batch: {mfgForm.batch_no || "—"}</p>
               </div>
@@ -1258,8 +1404,24 @@ function ProductionPage() {
                         <tr key={i}>
                           <td><input className="mfg-cell-input" value={row.parameter}  placeholder="Parameter"      onChange={(e) => setParamRow(i, "parameter",  e.target.value)} /></td>
                           <td><input className="mfg-cell-input" value={row.range}      placeholder="e.g. 70-120°C" onChange={(e) => setParamRow(i, "range",      e.target.value)} /></td>
-                          <td><input className="mfg-cell-input" value={row.doneBy}     placeholder="Name"           onChange={(e) => setParamRow(i, "doneBy",     e.target.value)} /></td>
-                          <td><input className="mfg-cell-input" value={row.reviewedBy} placeholder="Name"           onChange={(e) => setParamRow(i, "reviewedBy", e.target.value)} /></td>
+                          <td>
+                            <SearchableSelect
+                              options={supervisorOptions}
+                              value={row.doneBy}
+                              onChange={(value) => setParamRow(i, "doneBy", value)}
+                              placeholder="Name"
+                              allowCustom
+                            />
+                          </td>
+                          <td>
+                            <SearchableSelect
+                              options={supervisorOptions}
+                              value={row.reviewedBy}
+                              onChange={(value) => setParamRow(i, "reviewedBy", value)}
+                              placeholder="Name"
+                              allowCustom
+                            />
+                          </td>
                           <td><input className="mfg-cell-input" value={row.remark}     placeholder="Remark"         onChange={(e) => setParamRow(i, "remark",     e.target.value)} /></td>
                           <td className="mfg-td-del">
                             {pfrForm.processParams.length > 1 && (
@@ -1275,10 +1437,10 @@ function ProductionPage() {
 
               <div className="mfg-footer">
                 <button type="button" className="mfg-btn-cancel" onClick={() => setMfgStep("mfg")} disabled={saving}>
-                  &larr; Back
+                  &larr; Edit Batch Setup
                 </button>
                 <button type="submit" className="mfg-btn-submit" disabled={saving}>
-                  {saving ? "Saving…" : mfgOrderRecord.status === "PENDING" ? "Start Production" : "Save Changes"}
+                  {saving ? "Saving…" : "Save Process Feeding Record"}
                 </button>
               </div>
             </form>
@@ -1340,7 +1502,15 @@ function ProductionPage() {
                           <td><input className="mfg-cell-input" value={row.reactionTemp}   placeholder="93°C / 13:30"    onChange={(e) => setOpsRow(i, "reactionTemp",   e.target.value)} /></td>
                           <td><input className="mfg-cell-input" value={row.chopperTemp}    placeholder="91°C"            onChange={(e) => setOpsRow(i, "chopperTemp",    e.target.value)} /></td>
                           <td><input className="mfg-cell-input" value={row.completionTemp} placeholder="99°C"            onChange={(e) => setOpsRow(i, "completionTemp", e.target.value)} /></td>
-                          <td><input className="mfg-cell-input" value={row.doneBy}         placeholder="Name"            onChange={(e) => setOpsRow(i, "doneBy",         e.target.value)} /></td>
+                          <td>
+                            <SearchableSelect
+                              options={supervisorOptions}
+                              value={row.doneBy}
+                              onChange={(value) => setOpsRow(i, "doneBy", value)}
+                              placeholder="Name"
+                              allowCustom
+                            />
+                          </td>
                           <td className="mfg-td-del">
                             {opsLogs.length > 1 && (
                               <button type="button" className="mfg-del-btn" onClick={() => removeOpsRow(i)} aria-label="Remove">&#10005;</button>

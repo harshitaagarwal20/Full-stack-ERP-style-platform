@@ -88,7 +88,7 @@ function LoginPage() {
             </p>
           )}
 
-          <button className="btn-primary w-full" disabled={loading}>
+          <button type="submit" className="btn-primary w-full" disabled={loading}>
             {loading ? <LoadingSpinner label="Signing in..." /> : "Login"}
           </button>
         </form>

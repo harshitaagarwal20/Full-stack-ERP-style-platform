@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import api from "../api/axiosClient";
 import VirtualizedTableBody from "../components/common/VirtualizedTableBody";
-import MobileListCard from "../components/common/MobileListCard";
 import { EditIcon, EyeIcon, InboxIcon, SearchIcon, TrashIcon } from "../components/erp/ErpIcons";
 import { useAuth } from "../context/AuthContext";
 import useMasterData from "../hooks/useMasterData";
@@ -12,6 +11,8 @@ import { exportRowsToExcel } from "../utils/exportExcel";
 import { CURRENCY_OPTIONS, formatPriceValue } from "../utils/commerce";
 import { getDisplayEnquiryNumber } from "../utils/businessNumbers";
 import { formatEnquiryProducts, normalizeEnquiryProductRows } from "../utils/enquiryProducts";
+import { SAMPLED_FOLLOW_UP_DAYS, buildFollowUpMessage, getFollowUpEnquiries } from "../utils/followUps";
+import SearchableSelect from "../components/common/SearchableSelect";
 
 function prettyLabel(value) {
   return String(value || "")
@@ -40,7 +41,6 @@ function toDateInput(dateValue) {
 function getStatusClass(status) {
   if (status === "ACCEPTED") return "approved";
   if (status === "REJECTED") return "rejected";
-  if (status === "HOLD") return "pending";
   if (status === "PENDING") return "pending";
   return "new";
 }
@@ -62,9 +62,17 @@ function createEmptyForm() {
     country: "",
     port: "",
     last_transaction: "",
-    notes_for_production: ""
+    notes_for_production: "",
+    stage: "GENERAL",
+    is_urgent: false
   };
 }
+
+const STAGE_OPTIONS = [
+  { value: "GENERAL", label: "General" },
+  { value: "SAMPLED", label: "Sampled" },
+  { value: "QUOTED", label: "Quoted" }
+];
 
 function createEmptyProductRow() {
   return { product: "", grade: "", quantity: "", unit_of_measurement: "", price_per_uom: "" };
@@ -140,8 +148,6 @@ function EnquiryPage() {
   const [totalRecords, setTotalRecords] = useState(0);
   const [enquiries, setEnquiries] = useState([]);
   const [form, setForm] = useState(createEmptyForm());
-  const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
-  const companyDropdownRef = useRef(null);
   const canManageEnquiries = user?.role === "admin" || user?.role === "sales";
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -156,6 +162,10 @@ function EnquiryPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, canManageEnquiries]);
+
+  // Sampled enquiries that have gone quiet for 12+ days.
+  const followUps = useMemo(() => getFollowUpEnquiries(enquiries), [enquiries]);
+
   const tableWrapRef = useRef(null);
   const statusOptions = useMemo(
     () => [
@@ -171,13 +181,6 @@ function EnquiryPage() {
     () => (Array.isArray(masterData.companyNames) ? masterData.companyNames : []),
     [masterData.companyNames]
   );
-  const filteredCompanyOptions = useMemo(() => {
-    const inputValue = String(form.company_name || "").trim().toLowerCase();
-    if (!inputValue) return companyOptions;
-    return companyOptions.filter((option) =>
-      String(option.label || option.value || "").toLowerCase().includes(inputValue)
-    );
-  }, [companyOptions, form.company_name]);
   const fetchEnquiries = async () => {
     setLoading(true);
     try {
@@ -206,16 +209,6 @@ function EnquiryPage() {
   useEffect(() => {
     fetchEnquiries();
   }, [query, statusFilter, assignedFilter, dateFilter, currentPage]);
-
-  useEffect(() => {
-    const onOutsideClick = (event) => {
-      if (!companyDropdownRef.current?.contains(event.target)) {
-        setIsCompanyDropdownOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onOutsideClick);
-    return () => document.removeEventListener("mousedown", onOutsideClick);
-  }, []);
 
   const pendingCount = useMemo(
     () => enquiries.filter((item) => item.status === "PENDING").length,
@@ -292,10 +285,22 @@ function EnquiryPage() {
       return;
     }
 
-    const invalidRow = productRows.find((row) => !row.quantity || !row.unit_of_measurement);
+    const invalidRow = productRows.find((row) => !row.grade || !row.quantity || !row.unit_of_measurement);
     if (invalidRow) {
       window.alert("Fill product, grade, quantity, and unit of measurement for each row.");
       return;
+    }
+
+    // An urgent enquiry skips approval and immediately creates a sales order
+    // and a production job, so make the user acknowledge that before saving.
+    if (form.is_urgent && !editingEnquiryId) {
+      const proceed = window.confirm(
+        "Marked URGENT.\n\n"
+        + "Saving this will immediately create a sales order and a production job, "
+        + "skipping the approval queue. It will also jump to the front of the production line.\n\n"
+        + "Create it now?"
+      );
+      if (!proceed) return;
     }
 
     const totalQuantity = productRows.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
@@ -327,7 +332,9 @@ function EnquiryPage() {
         port: form.port || null,
         last_transaction: form.last_transaction || null,
         unit_of_measurement: unitOfMeasurement,
-        notes_for_production: form.notes_for_production || null
+        notes_for_production: form.notes_for_production || null,
+        stage: form.stage || "GENERAL",
+        is_urgent: Boolean(form.is_urgent)
       };
 
       if (editingEnquiryId) {
@@ -420,7 +427,9 @@ function EnquiryPage() {
       country: enquiry.country || "",
       port: enquiry.port || "",
       last_transaction: enquiry.lastTransaction || "",
-      notes_for_production: enquiry.notesForProduction || ""
+      notes_for_production: enquiry.notesForProduction || "",
+      stage: enquiry.stage || "GENERAL",
+      is_urgent: Boolean(enquiry.isUrgent)
     });
     setIsCreateModalOpen(true);
   };
@@ -437,6 +446,25 @@ function EnquiryPage() {
 
   return (
     <div className="enquiry-page">
+      {followUps.length > 0 && (
+        <div className="followup-banner" role="status">
+          <span className="followup-banner-icon" aria-hidden="true">⏰</span>
+          <div>
+            <strong>Follow-up needed.</strong>{" "}
+            {followUps.length === 1
+              ? buildFollowUpMessage(followUps[0])
+              : `${followUps.length} sampled enquiries have had no quote for over ${SAMPLED_FOLLOW_UP_DAYS} days — follow up with these clients:`}
+            {followUps.length > 1 && (
+              <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+                {followUps.slice(0, 5).map((enquiry) => (
+                  <li key={enquiry.id}>{buildFollowUpMessage(enquiry)}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
+
       <section className="enquiry-card enquiry-header-card">
         <div className="enquiry-header-left">
           <h2>Enquiry </h2>
@@ -474,11 +502,12 @@ function EnquiryPage() {
 
         <div className="enquiry-toolbar">
           <div className="enquiry-filter-grid">
-            <select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setCurrentPage(1); }}>
-              {statusOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              options={statusOptions}
+              value={statusFilter}
+              onChange={(value) => { setStatusFilter(value); setCurrentPage(1); }}
+              placeholder="All Status"
+            />
             {!isMobile && <input type="date" value={dateFilter} onChange={(event) => { setDateFilter(event.target.value); setCurrentPage(1); }} />}
             <input
               type="text"
@@ -499,7 +528,7 @@ function EnquiryPage() {
           </div>
         ) : sortedEnquiries.length ? (
           <>
-            {!isMobile && <div className="enquiry-table-wrap" ref={tableWrapRef}>
+            <div className="enquiry-table-wrap" ref={tableWrapRef}>
               <div className="enquiry-table-meta">
                 Showing {Math.min((currentPage - 1) * PAGE_SIZE + 1, totalRecords)}-
                 {Math.min(currentPage * PAGE_SIZE, totalRecords)} of {totalRecords} records
@@ -560,7 +589,7 @@ function EnquiryPage() {
                   )}
                 />
               </table>
-            </div>}
+            </div>
             <div className="enquiry-pagination">
               <div className="enquiry-pagination-info">Page {currentPage} of {totalPages}</div>
               <div className="enquiry-page-controls">
@@ -568,34 +597,6 @@ function EnquiryPage() {
                 <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Next</button>
               </div>
             </div>
-
-            {isMobile && <div className="order-mobile-list">
-              {sortedEnquiries.map((enquiry) => (
-                <MobileListCard
-                  key={enquiry.id}
-                  title={getDisplayEnquiryNumber(enquiry)}
-                  subtitle={enquiry.companyName || "-"}
-                  badge={enquiry.status}
-                  badgeColor={getStatusClass(enquiry.status) === "approved" ? "green" : getStatusClass(enquiry.status) === "rejected" ? "red" : getStatusClass(enquiry.status) === "pending" ? "orange" : "blue"}
-                  fields={[
-                    { label: "Product", value: formatEnquiryProducts(enquiry) || "-" },
-                    { label: "Quantity", value: enquiry.quantity || "-" },
-                    { label: "Enquiry Date", value: formatDate(enquiry.enquiryDate) },
-                    { label: "Timeline", value: formatDate(enquiry.expectedTimeline) }
-                  ]}
-                  onClick={() => setSelectedEnquiry(enquiry)}
-                  onActionClick={() => setSelectedEnquiry(enquiry)}
-                  actionLabel="View Details"
-                />
-              ))}
-              <div className="enquiry-pagination" style={{ borderTop: "none", paddingTop: 16, marginTop: 0 }}>
-                <div className="enquiry-pagination-info">Page {currentPage} of {totalPages}</div>
-                <div className="enquiry-page-controls">
-                  <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1}>Prev</button>
-                  <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Next</button>
-                </div>
-              </div>
-            </div>}
           </>
         ) : (
           <div className="enquiry-empty-state">
@@ -690,49 +691,22 @@ function EnquiryPage() {
               )}
               <div>
                 <label>Mode of Enquiry</label>
-                <select value={form.mode_of_enquiry} onChange={(e) => setForm((p) => ({ ...p, mode_of_enquiry: e.target.value }))}>
-                  <option value="">Select mode</option>
-                  {masterData.modeOfEnquiry.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
+                <SearchableSelect
+                  options={masterData.modeOfEnquiry}
+                  value={form.mode_of_enquiry}
+                  onChange={(value) => setForm((p) => ({ ...p, mode_of_enquiry: value }))}
+                  placeholder="Select mode"
+                />
               </div>
               <div>
                 <label>Company Name*</label>
-                <div className="enquiry-company-select" ref={companyDropdownRef}>
-                  <input
-                    type="text"
-                    value={form.company_name}
-                    placeholder="Search or select company"
-                    onFocus={() => setIsCompanyDropdownOpen(true)}
-                    onChange={(e) => {
-                      setForm((p) => ({ ...p, company_name: e.target.value }));
-                      setIsCompanyDropdownOpen(true);
-                    }}
-                    required
-                  />
-                  {isCompanyDropdownOpen && (
-                    <div className="enquiry-company-select-menu">
-                      {filteredCompanyOptions.length ? (
-                        filteredCompanyOptions.map((option) => (
-                          <button
-                            type="button"
-                            key={option.value}
-                            className="enquiry-company-select-item"
-                            onClick={() => {
-                              setForm((p) => ({ ...p, company_name: option.value }));
-                              setIsCompanyDropdownOpen(false);
-                            }}
-                          >
-                            {option.label}
-                          </button>
-                        ))
-                      ) : (
-                        <div className="enquiry-company-select-empty">No matching company found</div>
-                      )}
-                    </div>
-                  )}
-                </div>
+                <SearchableSelect
+                  options={companyOptions}
+                  value={form.company_name}
+                  onChange={(value) => setForm((p) => ({ ...p, company_name: value }))}
+                  placeholder="Search or select company"
+                  allowCustom
+                />
               </div>
               {form.enquiry_type === "International" && (
                 <>
@@ -780,14 +754,12 @@ function EnquiryPage() {
               {form.enquiry_type === "International" && (
                 <div>
                   <label>Currency</label>
-                  <select value={form.currency} onChange={(e) => setForm((p) => ({ ...p, currency: e.target.value }))}>
-                    <option value="">Select currency</option>
-                    {CURRENCY_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
+                  <SearchableSelect
+                    options={CURRENCY_OPTIONS}
+                    value={form.currency}
+                    onChange={(value) => setForm((p) => ({ ...p, currency: value }))}
+                    placeholder="Select currency"
+                  />
                 </div>
               )}
               <div className="full-row">
@@ -797,28 +769,22 @@ function EnquiryPage() {
                     <div key={index} className="enquiry-product-row">
                       <div>
                         <label>Product</label>
-                        <select
+                        <SearchableSelect
+                          options={masterData.products}
                           value={row.product}
-                          onChange={(e) =>
+                          onChange={(value) =>
                             setForm((prev) => ({
                               ...prev,
                               products: prev.products.map((item, rowIndex) =>
-                                rowIndex === index ? { ...item, product: e.target.value } : item
+                                rowIndex === index ? { ...item, product: value } : item
                               )
                             }))
                           }
-                          required
-                        >
-                          <option value="">Select product</option>
-                          {masterData.products.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
+                          placeholder="Select product"
+                        />
                       </div>
                       <div>
-                        <label>Grade</label>
+                        <label>Grade *</label>
                         <input
                           type="text"
                           value={row.grade}
@@ -831,6 +797,7 @@ function EnquiryPage() {
                             }))
                           }
                           placeholder="Enter grade"
+                          required
                         />
                       </div>
                       <div>
@@ -852,22 +819,19 @@ function EnquiryPage() {
                       </div>
                       <div>
                         <label>Unit of Measurement</label>
-                        <select
+                        <SearchableSelect
+                          options={UNIT_OPTIONS.map((unit) => ({ value: unit, label: unit }))}
                           value={row.unit_of_measurement}
-                          onChange={(e) =>
+                          onChange={(value) =>
                             setForm((prev) => ({
                               ...prev,
                               products: prev.products.map((item, rowIndex) =>
-                                rowIndex === index ? { ...item, unit_of_measurement: e.target.value } : item
+                                rowIndex === index ? { ...item, unit_of_measurement: value } : item
                               )
                             }))
                           }
-                        >
-                          <option value="">Select unit</option>
-                          {UNIT_OPTIONS.map((unit) => (
-                            <option key={unit} value={unit}>{unit}</option>
-                          ))}
-                        </select>
+                          placeholder="Select unit"
+                        />
                       </div>
                       <div>
                         <label>Price per {row.unit_of_measurement || "UOM"}</label>
@@ -917,12 +881,51 @@ function EnquiryPage() {
                 </button>
               </div>
               <div>
+                <label>Stage*</label>
+                <select
+                  value={form.stage}
+                  onChange={(e) => setForm((p) => ({ ...p, stage: e.target.value }))}
+                >
+                  {STAGE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+                {form.stage === "SAMPLED" && (
+                  <small style={{ color: "#7a4b09" }}>
+                    You'll be reminded to follow up if this stays sampled for 12 days.
+                  </small>
+                )}
+              </div>
+
+              <div>
+                <label>Priority</label>
+                <label className="enquiry-urgent-check">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(form.is_urgent)}
+                    onChange={(e) => setForm((p) => ({ ...p, is_urgent: e.target.checked }))}
+                  />
+                  <span>Mark as <strong>Urgent</strong></span>
+                </label>
+                {form.is_urgent && (
+                  <small style={{ color: "#b42318" }}>
+                    Skips approval — creates the order and production job right away, at the front of the queue.
+                  </small>
+                )}
+              </div>
+
+              <div>
                 <label>Expected Timeline*</label>
                 <input type="date" value={form.expected_timeline} onChange={(e) => setForm((p) => ({ ...p, expected_timeline: e.target.value }))} required />
               </div>
               <div>
-                <label>Assigned To</label>
-                <input value={user?.name || ""} disabled />
+                <label>Assigned To?</label>
+                <SearchableSelect
+                  options={masterData.assignedPersons}
+                  value={form.assigned_person}
+                  onChange={(value) => setForm((p) => ({ ...p, assigned_person: value }))}
+                  placeholder="Select assignee"
+                />
               </div>
               <div>
                 <label>Status</label>

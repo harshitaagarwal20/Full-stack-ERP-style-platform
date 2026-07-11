@@ -8,9 +8,17 @@ import { logApiError } from "../utils/apiError";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { exportRowsToExcel } from "../utils/exportExcel";
 import PurchaseOrderFormPage from "./PurchaseOrderFormPage";
+import SearchableSelect from "../components/common/SearchableSelect";
+import Toolbar from "../components/common/Toolbar";
+import StatusBadge from "../components/common/StatusBadge";
 
 const PAGE_SIZE = 10;
 
+// Only statuses that a purchase order can actually reach are offered as
+// filters. The PO state machine is DRAFT -> SENT_TO_SUPPLIER ->
+// PARTIALLY_RECEIVED / FULLY_RECEIVED -> CLOSED (see VALID_TRANSITIONS in
+// poService). SUBMITTED/APPROVED exist in the Prisma enum but are never set,
+// so filtering by them would always return nothing.
 const PO_STATUS_OPTIONS = [
   { value: "all",                label: "All Status" },
   { value: "DRAFT",              label: "Draft" },
@@ -20,20 +28,14 @@ const PO_STATUS_OPTIONS = [
   { value: "CLOSED",             label: "Closed" }
 ];
 
-const STATUS_STYLE = {
-  DRAFT:              { background: "#f1f5f9", color: "#475569", border: "1px solid #cbd5e1" },
-  SENT_TO_SUPPLIER:   { background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe" },
-  PARTIALLY_RECEIVED: { background: "#fff7ed", color: "#c2410c", border: "1px solid #fed7aa" },
-  FULLY_RECEIVED:     { background: "#f0fdf4", color: "#15803d", border: "1px solid #bbf7d0" },
-  CLOSED:             { background: "#f8fafc", color: "#64748b", border: "1px solid #e2e8f0" }
-};
-
-const STATUS_LABEL = {
-  DRAFT:              "Draft",
-  SENT_TO_SUPPLIER:   "Sent to Supplier",
-  PARTIALLY_RECEIVED: "Partially Received",
-  FULLY_RECEIVED:     "Fully Received",
-  CLOSED:             "Closed"
+const PO_STATUS_CONFIG = {
+  DRAFT:              { label: "Draft",              background: "#f1f5f9", color: "#475569", border: "1px solid #cbd5e1" },
+  SUBMITTED:          { label: "Submitted",          background: "#fefce8", color: "#854d0e", border: "1px solid #fde68a" },
+  APPROVED:           { label: "Approved",           background: "#f0fdf4", color: "#15803d", border: "1px solid #bbf7d0" },
+  SENT_TO_SUPPLIER:   { label: "Sent to Supplier",   background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe" },
+  PARTIALLY_RECEIVED: { label: "Partially Received", background: "#fff7ed", color: "#c2410c", border: "1px solid #fed7aa" },
+  FULLY_RECEIVED:     { label: "Fully Received",     background: "#f0fdf4", color: "#15803d", border: "1px solid #bbf7d0" },
+  CLOSED:             { label: "Closed",             background: "#f8fafc", color: "#64748b", border: "1px solid #e2e8f0" }
 };
 
 function formatDate(val) {
@@ -46,23 +48,6 @@ function formatDate(val) {
 function formatAmount(val) {
   if (val == null || val === "") return "-";
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(val);
-}
-
-function StatusBadge({ status }) {
-  const s = STATUS_STYLE[status] || STATUS_STYLE.DRAFT;
-  return (
-    <span style={{
-      ...s,
-      padding: "3px 10px",
-      borderRadius: 20,
-      fontSize: 12,
-      fontWeight: 600,
-      whiteSpace: "nowrap",
-      display: "inline-block"
-    }}>
-      {STATUS_LABEL[status] || status}
-    </span>
-  );
 }
 
 function PurchaseOrderListPage() {
@@ -122,7 +107,7 @@ function PurchaseOrderListPage() {
           status:    statusFilter === "all" ? undefined : statusFilter,
           supplier:  supplierFilter || undefined,
           date_from: dateFilter || undefined,
-          limit:     1000
+          limit:     0
         }
       });
       rows = Array.isArray(res.data?.items) ? res.data.items : sortedPos;
@@ -150,7 +135,7 @@ function PurchaseOrderListPage() {
         category:             po.category || "-",
         itemCount:            po._count?.items ?? "-",
         totalAmount:          po.totalAmount ?? 0,
-        status:               STATUS_LABEL[po.status] || po.status || "-",
+        status:               PO_STATUS_CONFIG[po.status]?.label || po.status || "-",
         notes:                po.notes || ""
       }))
     );
@@ -194,11 +179,10 @@ function PurchaseOrderListPage() {
 
   return (
     <div className="order-page">
-      {/* Header */}
-      <section className="order-card order-header-card">
-        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#0f172a" }}>Purchase Orders</h2>
-        <div className="order-header-right">
-          <div className="order-header-search">
+      <Toolbar
+        title="Purchase Orders"
+        search={
+          <div className="ui-toolbar-search">
             <SearchIcon />
             <input
               placeholder="Search PO number or supplier..."
@@ -207,58 +191,54 @@ function PurchaseOrderListPage() {
               onKeyDown={(e) => { if (e.key === "Enter") onSearchSubmit(); }}
             />
           </div>
-          <button className="order-btn-secondary" onClick={exportToExcel}>
-            Export to Excel
-          </button>
-          <button className="order-btn-primary" onClick={() => setShowNewModal(true)}>
-            + New PO
-          </button>
-        </div>
-      </section>
-
-      {/* Filters */}
-      <section className="order-card" style={{ padding: "12px 20px" }}>
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
-          <select
-            className="input"
-            style={{ minWidth: 160, maxWidth: 200 }}
-            value={statusFilter}
-            onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(1); }}
-          >
-            {PO_STATUS_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-          <input
-            className="input"
-            style={{ minWidth: 160, maxWidth: 220 }}
-            type="text"
-            placeholder="Filter by supplier"
-            value={supplierFilter}
-            onChange={(e) => { setSupplierFilter(e.target.value); setCurrentPage(1); }}
-          />
-          {!isMobile && (
+        }
+        actions={
+          <>
+            <button className="order-btn-secondary" onClick={exportToExcel}>
+              Export to Excel
+            </button>
+            <button className="order-btn-primary" onClick={() => setShowNewModal(true)}>
+              + New PO
+            </button>
+          </>
+        }
+        filters={
+          <>
+            <SearchableSelect
+              options={PO_STATUS_OPTIONS}
+              value={statusFilter}
+              onChange={(value) => { setStatusFilter(value); setCurrentPage(1); }}
+              placeholder="All Status"
+            />
             <input
               className="input"
-              style={{ minWidth: 140, maxWidth: 180 }}
-              type="date"
-              value={dateFilter}
-              onChange={(e) => { setDateFilter(e.target.value); setCurrentPage(1); }}
+              type="text"
+              placeholder="Filter by supplier"
+              value={supplierFilter}
+              onChange={(e) => { setSupplierFilter(e.target.value); setCurrentPage(1); }}
             />
-          )}
-          {(query || statusFilter !== "all" || supplierFilter || dateFilter) && (
-            <button
-              className="order-btn-secondary"
-              onClick={() => { setQuery(""); setSearchText(""); setStatusFilter("all"); setSupplierFilter(""); setDateFilter(""); setCurrentPage(1); }}
-            >
-              Clear
-            </button>
-          )}
-          <span style={{ marginLeft: "auto", fontSize: 13, color: "#64748b" }}>
-            {totalRecords} record{totalRecords !== 1 ? "s" : ""}
-          </span>
-        </div>
-      </section>
+            {!isMobile && (
+              <input
+                className="input"
+                type="date"
+                value={dateFilter}
+                onChange={(e) => { setDateFilter(e.target.value); setCurrentPage(1); }}
+              />
+            )}
+            {(query || statusFilter !== "all" || supplierFilter || dateFilter) && (
+              <button
+                className="order-btn-secondary"
+                onClick={() => { setQuery(""); setSearchText(""); setStatusFilter("all"); setSupplierFilter(""); setDateFilter(""); setCurrentPage(1); }}
+              >
+                Clear
+              </button>
+            )}
+            <span style={{ marginLeft: "auto", fontSize: 13, color: "#64748b", flex: "0 0 auto" }}>
+              {totalRecords} record{totalRecords !== 1 ? "s" : ""}
+            </span>
+          </>
+        }
+      />
 
       {/* Table */}
       <section className="order-card" style={{ padding: 0, overflow: "hidden" }}>
@@ -304,7 +284,7 @@ function PurchaseOrderListPage() {
                       <td>{formatDate(po.expectedDeliveryDate)}</td>
                       <td style={{ textAlign: "center" }}>{po._count?.items ?? "-"}</td>
                       <td style={{ fontWeight: 600 }}>{formatAmount(po.totalAmount)}</td>
-                      <td><StatusBadge status={po.status} /></td>
+                      <td><StatusBadge status={po.status} config={PO_STATUS_CONFIG} /></td>
                     </tr>
                   )}
                 />
@@ -326,7 +306,7 @@ function PurchaseOrderListPage() {
                   key={po.id}
                   title={po.poNumber}
                   subtitle={po.supplier?.name || "-"}
-                  badge={STATUS_LABEL[po.status] || po.status}
+                  badge={PO_STATUS_CONFIG[po.status]?.label || po.status}
                   badgeColor={po.status === "FULLY_RECEIVED" ? "green" : po.status === "SENT_TO_SUPPLIER" ? "blue" : po.status === "PARTIALLY_RECEIVED" ? "orange" : "default"}
                   fields={[
                     { label: "Order Date", value: formatDate(po.orderDate) },

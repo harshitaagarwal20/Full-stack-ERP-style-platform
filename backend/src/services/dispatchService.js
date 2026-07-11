@@ -645,6 +645,9 @@ export async function createOrderFromEnquiry(enquiry, dispatchDate, actorUser, t
       countryCode: customerProfile?.countryCode || "IN",
       remarks: `Created from approved enquiry #${enquiry.id} via dispatch date`,
       status: "CREATED",
+      // Urgency rides along with the order so production can prioritise it
+      // without having to walk back to the enquiry.
+      isUrgent: Boolean(enquiry.isUrgent),
       ...(hasDispatchDateColumn ? { dispatchDate } : {})
     },
     select: {

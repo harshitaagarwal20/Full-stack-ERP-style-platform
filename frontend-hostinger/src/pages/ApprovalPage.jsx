@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import api from "../api/axiosClient";
 import LoadingSpinner from "../components/LoadingSpinner";
 import { useAuth } from "../context/AuthContext";
 import { logApiError } from "../utils/apiError";
 import { getApprovalListParams, normalizeApprovalStatus } from "../utils/approvalFilters";
+import { exportRowsToExcel } from "../utils/exportExcel";
 import { getDisplayEnquiryNumber, getDisplayManualOrderRequestNumber } from "../utils/businessNumbers";
 import { formatPriceValue } from "../utils/commerce";
 import { formatEnquiryProducts } from "../utils/enquiryProducts";
@@ -41,8 +42,10 @@ function ApprovalPage() {
   const [items, setItems] = useState([]);
   const [statusFilter, setStatusFilter] = useState("PENDING");
   const canApprove = user?.role === "admin" || user?.role === "sales";
+  const fetchSeqRef = useRef(0);
 
   const fetchItems = async ({ silent = false } = {}) => {
+    const requestId = ++fetchSeqRef.current;
     if (!silent) {
       setLoading(true);
     }
@@ -104,12 +107,18 @@ function ApprovalPage() {
         return normalizeApprovalStatus(item.source, item.raw.status) === statusFilter;
       });
 
+      // Ignore this response if a newer request has since been kicked off
+      // (e.g. the user switched tabs while a poll/focus refresh for the
+      // previous tab was still in flight) — otherwise stale data can
+      // silently overwrite what's currently selected.
+      if (requestId !== fetchSeqRef.current) return;
       setItems(filtered);
     } catch (error) {
+      if (requestId !== fetchSeqRef.current) return;
       logApiError(error, "Failed to load approval items");
       setItems([]);
     } finally {
-      if (!silent) {
+      if (!silent && requestId === fetchSeqRef.current) {
         setLoading(false);
       }
     }
@@ -143,6 +152,22 @@ function ApprovalPage() {
   const updateStatus = async (item, nextStatus) => {
     if (!canApprove) return;
 
+    // A rejection has to say why — it's the only record of the decision.
+    let rejectionReason = null;
+    if (nextStatus === "REJECTED") {
+      const entered = window.prompt(
+        `Why is ${item.businessNumber || "this request"} being rejected?\n\n`
+        + "This reason is saved against the record and shown to the sales team."
+      );
+      // Cancel → abort the rejection entirely.
+      if (entered === null) return;
+      rejectionReason = entered.trim();
+      if (!rejectionReason) {
+        window.alert("A reason is required to reject. Nothing was changed.");
+        return;
+      }
+    }
+
     const optimisticStatus = normalizeApprovalStatus(item.source, nextStatus === "ACCEPTED" ? (item.source === "manual" ? "APPROVED" : "ACCEPTED") : "REJECTED");
     const shouldRemoveFromCurrentView = statusFilter === "PENDING";
     const previousItems = items;
@@ -169,9 +194,15 @@ function ApprovalPage() {
     try {
       if (item.source === "manual") {
         const apiStatus = nextStatus === "ACCEPTED" ? "APPROVED" : "REJECTED";
-        await api.put(`/manual-orders/${item.id}/status`, { status: apiStatus });
+        await api.put(`/manual-orders/${item.id}/status`, {
+          status: apiStatus,
+          ...(rejectionReason ? { rejection_reason: rejectionReason } : {})
+        });
       } else {
-        await api.put(`/enquiries/${item.id}`, { status: nextStatus });
+        await api.put(`/enquiries/${item.id}`, {
+          status: nextStatus,
+          ...(rejectionReason ? { rejection_reason: rejectionReason } : {})
+        });
       }
 
       await fetchItems({ silent: true });
@@ -181,13 +212,43 @@ function ApprovalPage() {
     }
   };
 
+  const exportToExcel = () => {
+    const columns = [
+      { key: "businessNumber", header: "Reference No" },
+      { key: "type",           header: "Type" },
+      { key: "clientName",     header: "Client" },
+      { key: "products",       header: "Products" },
+      { key: "quantity",       header: "Quantity" },
+      { key: "price",          header: "Price" },
+      { key: "currency",       header: "Currency" },
+      { key: "expectedDate",   header: "Expected Date" },
+      { key: "status",         header: "Status" },
+      { key: "createdAt",      header: "Created" }
+    ];
+    const rows = items.map((item) => ({
+      businessNumber: item.businessNumber || "-",
+      type:           item.source === "manual" ? "Manual Order Request" : "Enquiry",
+      clientName:     item.clientName || "-",
+      products:       item.products || "-",
+      quantity:       item.quantity ?? "-",
+      price:          item.price ?? "-",
+      currency:       item.currency || "-",
+      expectedDate:   formatDate(item.expectedDate),
+      status:         normalizeApprovalStatus(item.source, item.raw.status),
+      createdAt:      formatDate(item.createdAt)
+    }));
+    exportRowsToExcel("approvals", columns, rows);
+  };
+
   return (
     <div className="space-y-4 sm:space-y-5">
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-1">
             <h2 className="text-2xl font-semibold tracking-tight text-slate-900">Approval</h2>
-            
+            <button className="order-btn-secondary" onClick={exportToExcel}>
+              Export to Excel
+            </button>
           </div>
           <div className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-1 lg:w-auto">
             <div className="grid grid-cols-2 gap-1 sm:grid-cols-4">
@@ -269,6 +330,12 @@ function ApprovalPage() {
                     <strong>{formatDate(item.createdAt)}</strong>
                   </div>
                 </div>
+
+                {item.raw?.rejectionReason && (
+                  <div className="approval-reject-reason">
+                    <strong>Rejected:</strong> {item.raw.rejectionReason}
+                  </div>
+                )}
 
                 {canApprove && normalizeApprovalStatus(item.source, item.raw.status) === "PENDING" && (
                   <div className="approval-request-actions">

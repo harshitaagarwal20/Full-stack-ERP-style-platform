@@ -4,9 +4,11 @@ import VirtualizedTableBody from "../components/common/VirtualizedTableBody";
 import MobileListCard from "../components/common/MobileListCard";
 import { ClipboardIcon, SearchIcon } from "../components/erp/ErpIcons";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { exportRowsToExcel } from "../utils/exportExcel";
 import { sanitizeAuditValue } from "../utils/auditLog";
 import { logApiError } from "../utils/apiError";
 import { sortByNewestFirst } from "../utils/recordOrdering";
+import SearchableSelect from "../components/common/SearchableSelect";
 
 const actionLabels = {
   APPROVE_ENQUIRY: "Approve Enquiry",
@@ -54,13 +56,23 @@ function ActivityLogPage() {
   const [entityFilter, setEntityFilter] = useState("ALL");
   const isMobile = useIsMobile();
   const [selectedLog, setSelectedLog] = useState(null);
+  const [totalLogCount, setTotalLogCount] = useState(0);
   const tableWrapRef = useRef(null);
+
+  // Cap the fetch instead of pulling the entire audit history every load —
+  // this only shows the most recent LOG_FETCH_LIMIT entries, which keeps the
+  // request bounded as the log grows. Search/filter still run client-side
+  // within that window rather than a full server-paginated table, since the
+  // action/entity filter dropdowns are derived from whatever's loaded.
+  const LOG_FETCH_LIMIT = 500;
 
   const fetchLogs = async () => {
     setLoading(true);
     try {
-      const { data } = await api.get("/audit-logs");
-      setLogs(sortByNewestFirst(Array.isArray(data) ? data : []));
+      const { data } = await api.get("/audit-logs", { params: { limit: LOG_FETCH_LIMIT } });
+      const items = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
+      setLogs(sortByNewestFirst(items));
+      setTotalLogCount(Number(data?.pagination?.total ?? items.length));
     } catch (error) {
       logApiError(error, "Failed to load activity log");
     } finally {
@@ -95,6 +107,26 @@ function ActivityLogPage() {
     });
   }, [logs, searchText, actionFilter, entityFilter]);
 
+  const exportToExcel = () => {
+    const columns = [
+      { key: "time",     header: "Time" },
+      { key: "action",   header: "Action" },
+      { key: "module",   header: "Module" },
+      { key: "recordId", header: "Record ID" },
+      { key: "user",     header: "User" },
+      { key: "role",     header: "Role" }
+    ];
+    const rows = filteredLogs.map((log) => ({
+      time:     formatDateTime(log.createdAt),
+      action:   actionLabels[log.action] || log.action || "-",
+      module:   log.entityType || "-",
+      recordId: log.entityId ?? "-",
+      user:     log.actorName || log.actor?.name || "System",
+      role:     log.actorRole || log.actor?.role || "-"
+    }));
+    exportRowsToExcel("activity-log", columns, rows);
+  };
+
   return (
     <div className="activity-page">
       <section className="activity-card activity-header-card">
@@ -106,7 +138,10 @@ function ActivityLogPage() {
             <h2>Activity Log</h2>
             </div>
         </div>
-        <button className="activity-refresh-btn" onClick={fetchLogs}>Refresh</button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button className="order-btn-secondary" onClick={exportToExcel}>Export to Excel</button>
+          <button className="activity-refresh-btn" onClick={fetchLogs}>Refresh</button>
+        </div>
       </section>
 
       <section className="activity-card">
@@ -121,16 +156,18 @@ function ActivityLogPage() {
           </div>
 
           <div className="activity-filter-grid">
-            <select value={actionFilter} onChange={(event) => setActionFilter(event.target.value)}>
-              {actionOptions.map((option) => (
-                <option key={option} value={option}>{option === "ALL" ? "All Actions" : actionLabels[option] || option}</option>
-              ))}
-            </select>
-            <select value={entityFilter} onChange={(event) => setEntityFilter(event.target.value)}>
-              {entityOptions.map((option) => (
-                <option key={option} value={option}>{option === "ALL" ? "All Modules" : option}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              options={actionOptions.map((option) => ({ value: option, label: option === "ALL" ? "All Actions" : actionLabels[option] || option }))}
+              value={actionFilter}
+              onChange={(value) => setActionFilter(value)}
+              placeholder="All Actions"
+            />
+            <SearchableSelect
+              options={entityOptions.map((option) => ({ value: option, label: option === "ALL" ? "All Modules" : option }))}
+              value={entityFilter}
+              onChange={(value) => setEntityFilter(value)}
+              placeholder="All Modules"
+            />
           </div>
         </div>
 
@@ -141,6 +178,7 @@ function ActivityLogPage() {
           {!isMobile && <div className="activity-table-wrap" ref={tableWrapRef}>
             <div className="activity-table-meta">
               Showing {filteredLogs.length} activity record{filteredLogs.length === 1 ? "" : "s"}
+              {totalLogCount > logs.length ? ` (most recent ${logs.length} of ${totalLogCount} total)` : ""}
             </div>
             <table className="activity-table">
               <thead>

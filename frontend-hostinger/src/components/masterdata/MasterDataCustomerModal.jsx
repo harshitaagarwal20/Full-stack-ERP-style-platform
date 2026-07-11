@@ -1,3 +1,5 @@
+import SearchableSelect from "../common/SearchableSelect";
+
 function MasterDataCustomerModal({
   isOpen,
   saving,
@@ -99,21 +101,16 @@ function MasterDataCustomerModal({
             <div className="masterdata-form-grid-two">
               <div>
                 <label className="label">Country</label>
-                <select
-                  className={getInputClassName("country")}
+                <SearchableSelect
+                  options={countryOptions.map((option) => ({ value: option.value, label: option.value }))}
                   value={customerForm.country}
-                  onChange={(e) => {
-                    const selectedCountry = e.target.value;
-                    onFieldChange("country", selectedCountry);
-                    const matching = countryOptions.find((item) => item.value === selectedCountry);
+                  onChange={(value) => {
+                    onFieldChange("country", value);
+                    const matching = countryOptions.find((item) => item.value === value);
                     if (matching) onFieldChange("country_code", matching.code);
                   }}
-                >
-                  <option value="">Select country</option>
-                  {countryOptions.map((option) => (
-                    <option key={option.value} value={option.value}>{option.value}</option>
-                  ))}
-                </select>
+                  placeholder="Select country"
+                />
               </div>
               <div>
                 <label className="label">Country Code</label>
@@ -126,16 +123,12 @@ function MasterDataCustomerModal({
               </div>
               <div>
                 <label className="label">State</label>
-                <select
-                  className={getInputClassName("state")}
+                <SearchableSelect
+                  options={stateOptions.map((state) => ({ value: state, label: state }))}
                   value={customerForm.state}
-                  onChange={(e) => onFieldChange("state", e.target.value)}
-                >
-                  <option value="">Select state</option>
-                  {stateOptions.map((state) => (
-                    <option key={state} value={state}>{state}</option>
-                  ))}
-                </select>
+                  onChange={(value) => onFieldChange("state", value)}
+                  placeholder="Select state"
+                />
               </div>
               <div>
                 <label className="label">City</label>

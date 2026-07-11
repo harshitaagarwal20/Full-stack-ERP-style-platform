@@ -41,6 +41,17 @@ function MasterDataCustomerModal({
             <h4>Basic Information</h4>
             <div className="masterdata-form-grid-two">
               <div>
+                <label className="label">Customer Code</label>
+                <input
+                  className={getInputClassName("customer_code")}
+                  placeholder="Auto-generated"
+                  value={customerForm.customer_code}
+                  disabled
+                  style={{ backgroundColor: "#f3f4f6", color: "#6b7280" }}
+                />
+                {!customerForm.customer_code && !editingCustomerCode && <small style={{ color: "#6b7280" }}>Will be auto-generated</small>}
+              </div>
+              <div>
                 <label className="label">Customer Name <span className="req">*</span></label>
                 <input
                   className={getInputClassName("customer_name")}
@@ -52,24 +63,33 @@ function MasterDataCustomerModal({
                 {formErrors.customer_name ? <small style={{ color: "#dc2626" }}>{formErrors.customer_name}</small> : null}
               </div>
               <div>
-                <label className="label">Customer Code</label>
+                <label className="label">Contact Person</label>
                 <input
-                  className={getInputClassName("customer_code")}
-                  placeholder="Enter customer code"
-                  value={customerForm.customer_code}
-                  onChange={(e) => onFieldChange("customer_code", e.target.value)}
-                  disabled={Boolean(editingCustomerCode)}
+                  className={getInputClassName("contact_person")}
+                  placeholder="Enter contact person"
+                  value={customerForm.contact_person}
+                  onChange={(e) => onFieldChange("contact_person", e.target.value)}
                 />
-                {formErrors.customer_code ? <small style={{ color: "#dc2626" }}>{formErrors.customer_code}</small> : null}
               </div>
               <div>
-                <label className="label">Cust Initials</label>
+                <label className="label">Phone Number</label>
                 <input
-                  className="input"
-                  placeholder="e.g. ABC"
-                  value={customerForm.cust_initials}
-                  onChange={(e) => onFieldChange("cust_initials", e.target.value)}
+                  className={getInputClassName("contact_person_number")}
+                  placeholder="Enter phone number"
+                  value={customerForm.contact_person_number}
+                  onChange={(e) => onFieldChange("contact_person_number", e.target.value)}
                 />
+              </div>
+              <div className="full-row">
+                <label className="label">Company Email</label>
+                <input
+                  className={getInputClassName("company_email")}
+                  type="email"
+                  placeholder="name@company.com"
+                  value={customerForm.company_email}
+                  onChange={(e) => onFieldChange("company_email", e.target.value)}
+                />
+                {formErrors.company_email ? <small style={{ color: "#dc2626" }}>{formErrors.company_email}</small> : null}
               </div>
             </div>
           </section>
@@ -171,40 +191,6 @@ function MasterDataCustomerModal({
             </div>
           </section>
 
-          <section className="masterdata-form-section">
-            <h4>Contact Information</h4>
-            <div className="masterdata-form-grid-two">
-              <div>
-                <label className="label">Contact Person</label>
-                <input
-                  className={getInputClassName("contact_person")}
-                  placeholder="Enter contact person"
-                  value={customerForm.contact_person}
-                  onChange={(e) => onFieldChange("contact_person", e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="label">Phone Number</label>
-                <input
-                  className={getInputClassName("contact_person_number")}
-                  placeholder="Enter phone number"
-                  value={customerForm.contact_person_number}
-                  onChange={(e) => onFieldChange("contact_person_number", e.target.value)}
-                />
-              </div>
-              <div className="full-row">
-                <label className="label">Company Email</label>
-                <input
-                  className={getInputClassName("company_email")}
-                  type="email"
-                  placeholder="name@company.com"
-                  value={customerForm.company_email}
-                  onChange={(e) => onFieldChange("company_email", e.target.value)}
-                />
-                {formErrors.company_email ? <small style={{ color: "#dc2626" }}>{formErrors.company_email}</small> : null}
-              </div>
-            </div>
-          </section>
 
           <div
             className="masterdata-form-actions"

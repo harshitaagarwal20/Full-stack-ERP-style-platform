@@ -6,10 +6,15 @@ const MasterDataSupplierTable = lazy(() => import("../components/masterdata/Mast
 const MasterDataSupplierModal = lazy(() => import("../components/masterdata/MasterDataSupplierModal"));
 
 const SUPPLIER_FORM_INITIAL = {
+  supplier_code: "",
   supplier_name: "",
   gstn: "",
   pan_no: "",
   country: "",
+  country_code: "",
+  contact_person: "",
+  contact_person_number: "",
+  company_email: "",
   address: "",
   pincode: "",
   state: "",
@@ -132,10 +137,15 @@ function scoreSupplierHeaderRow(row = []) {
 
 function mapSupplierRow(row) {
   return {
+    supplier_code: row.supplier_code || "",
     supplier_name: row.supplier_name || "",
     gstn: row.gstn || "",
     pan_no: row.pan_no || "",
     country: row.country || "",
+    country_code: row.country_code || "",
+    contact_person: row.contact_person || "",
+    contact_person_number: row.contact_person_number || "",
+    company_email: row.company_email || "",
     address: row.address || "",
     pincode: row.pincode || "",
     state: row.state || "",
@@ -337,10 +347,15 @@ function SupplierMasterPage() {
 
     setEditingSupplierCode(String(row.supplierCode));
     setSupplierForm({
+      supplier_code: row.supplierCode || "",
       supplier_name: row.supplierName || "",
       gstn: row.gstn || "",
       pan_no: row.panNo || "",
       country: row.country || "",
+      country_code: row.countryCode || "",
+      contact_person: row.contactPerson || "",
+      contact_person_number: row.contactPersonNumber || "",
+      company_email: row.companyEmail || "",
       address: row.address || "",
       pincode: row.pincode || "",
       state: row.state || "",

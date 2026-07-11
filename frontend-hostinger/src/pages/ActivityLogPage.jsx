@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import api from "../api/axiosClient";
 import VirtualizedTableBody from "../components/common/VirtualizedTableBody";
+import MobileListCard from "../components/common/MobileListCard";
 import { ClipboardIcon, SearchIcon } from "../components/erp/ErpIcons";
+import { useIsMobile } from "../hooks/useIsMobile";
 import { sanitizeAuditValue } from "../utils/auditLog";
 import { logApiError } from "../utils/apiError";
 import { sortByNewestFirst } from "../utils/recordOrdering";
@@ -50,6 +52,7 @@ function ActivityLogPage() {
   const [searchText, setSearchText] = useState("");
   const [actionFilter, setActionFilter] = useState("ALL");
   const [entityFilter, setEntityFilter] = useState("ALL");
+  const isMobile = useIsMobile();
   const [selectedLog, setSelectedLog] = useState(null);
   const tableWrapRef = useRef(null);
 
@@ -134,7 +137,8 @@ function ActivityLogPage() {
         {loading ? (
           <div className="activity-empty">Loading activity log...</div>
         ) : filteredLogs.length ? (
-          <div className="activity-table-wrap" ref={tableWrapRef}>
+          <>
+          {!isMobile && <div className="activity-table-wrap" ref={tableWrapRef}>
             <div className="activity-table-meta">
               Showing {filteredLogs.length} activity record{filteredLogs.length === 1 ? "" : "s"}
             </div>
@@ -147,7 +151,7 @@ function ActivityLogPage() {
                   <th>Record ID</th>
                   <th>User</th>
                   <th>Note</th>
-                  
+
                 </tr>
               </thead>
               <VirtualizedTableBody
@@ -182,7 +186,29 @@ function ActivityLogPage() {
                 )}
               />
             </table>
-          </div>
+          </div>}
+
+          {isMobile && <div className="order-mobile-list">
+            {filteredLogs.map((log) => (
+              <MobileListCard
+                key={log.id}
+                title={actionLabels[log.action] || log.action}
+                subtitle={log.entityType}
+                badge={log.entityId ?? "-"}
+                badgeColor={getTone(log.action) === "activity-delete" ? "red" : getTone(log.action) === "activity-success" ? "green" : getTone(log.action) === "activity-complete" ? "blue" : getTone(log.action) === "activity-danger" ? "orange" : "default"}
+                fields={[
+                  { label: "User", value: log.actorName || log.actor?.name || "System" },
+                  { label: "Role", value: log.actorRole || log.actor?.role || "-" },
+                  { label: "Time", value: formatDateTime(log.createdAt) },
+                  { label: "Note", value: log.note || "-" }
+                ]}
+                onClick={() => setSelectedLog(log)}
+                onActionClick={() => setSelectedLog(log)}
+                actionLabel="View Details"
+              />
+            ))}
+          </div>}
+          </>
         ) : (
           <div className="activity-empty">
             No activity records found for the selected filters.

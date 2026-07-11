@@ -22,12 +22,12 @@ const router = Router();
 router.use(authMiddleware);
 
 // /suppliers must come BEFORE /:id to avoid being matched as an id
-router.get("/suppliers", allowRoles("admin"), getSuppliers);
+router.get("/suppliers", allowRoles("admin", "production"), getSuppliers);
 
-router.get("/", allowRoles("admin"), listPOs);
-router.post("/", allowRoles("admin"), validateBody(createPurchaseOrderSchema), createPO);
-router.get("/:id", allowRoles("admin"), getPOById);
-router.put("/:id", allowRoles("admin"), validateBody(updatePurchaseOrderSchema), updatePO);
+router.get("/", allowRoles("admin", "production"), listPOs);
+router.post("/", allowRoles("admin", "production"), validateBody(createPurchaseOrderSchema), createPO);
+router.get("/:id", allowRoles("admin", "production"), getPOById);
+router.put("/:id", allowRoles("admin", "production"), validateBody(updatePurchaseOrderSchema), updatePO);
 router.patch("/:id/status", allowRoles("admin"), validateBody(updatePOStatusSchema), updatePOStatus);
 router.delete("/:id", allowRoles("admin"), deletePO);
 

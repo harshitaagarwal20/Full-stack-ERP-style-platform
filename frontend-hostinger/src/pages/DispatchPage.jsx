@@ -474,7 +474,7 @@ function DispatchPage() {
           </div>
         ) : sortedDispatchRows.length ? (
           <>
-            <div className="dispatch-table-wrap" ref={tableWrapRef}>
+            {!isMobile && <div className="dispatch-table-wrap" ref={tableWrapRef}>
               <div className="dispatch-table-meta">
                 Showing {firstRecord}-{lastRecord} of {totalRecords} records
               </div>
@@ -560,7 +560,73 @@ function DispatchPage() {
                   <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Next</button>
                 </div>
               </div>
-            </div>
+            </div>}
+
+            {isMobile && <div className="order-mobile-list">
+              <div style={{ marginBottom: 12, fontSize: 12, color: '#64748b', paddingLeft: 4 }}>
+                Showing {firstRecord}-{lastRecord} of {totalRecords} records
+              </div>
+              {sortedDispatchRows.map((row) => {
+                const order = row.order || {};
+                const shipment = getDispatchRowStatus(row);
+                const remainingQty = getOrderRemainingQuantity(order, row.dispatch);
+                const cls = shipment.className;
+                const stateClass =
+                  cls === "delivered" ? "is-complete" :
+                  cls === "in-transit" ? "is-progress" :
+                  cls === "partial" ? "is-hold" : "is-pending";
+                const stage = cls === "delivered" ? 2 : (cls === "in-transit" || cls === "partial") ? 1 : 0;
+                return (
+                  <div key={row.key} className={`prod-mcard ${stateClass}`} style={{ cursor: "default" }}>
+                    <div className="prod-mcard-top">
+                      <div className="prod-mcard-idwrap">
+                        <span className="prod-mcard-code">{order.orderNo || "-"}</span>
+                        <span className="prod-mcard-name">{order.product || "-"}</span>
+                      </div>
+                      <span className={`prod-mcard-pill ${stateClass}`}>{shipment.label}</span>
+                    </div>
+
+                    <div className="prod-mcard-meta">
+                      {order.clientName && <span>{order.clientName}</span>}
+                      <span>{row.dispatch ? (row.dispatch.dispatchedQuantity || 0) : 0}/{order.quantity || 0} {order.unit || ""}</span>
+                      {order.city && <span>{order.city}</span>}
+                      <span>{row.dispatch ? formatDate(row.dispatch.dispatchDate) : `Due ${formatDate(order.deliveryDate)}`}</span>
+                    </div>
+
+                    <div className="prod-steps">
+                      {[0, 1, 2].map((i) => (
+                        <span key={i} className={`prod-step ${i <= stage ? `done ${stateClass}` : ""}`} />
+                      ))}
+                    </div>
+                    <div className="prod-steps-labels">
+                      <span>Packed</span><span>Dispatched</span><span>Delivered</span>
+                    </div>
+
+                    {canManageDispatch && (
+                      <div className="prod-mcard-actions">
+                        {row.dispatch ? (
+                          <>
+                            <button className="pa-primary" onClick={() => editDispatch(row.dispatch)}>Update dispatch</button>
+                            <button className="pa-ghost danger" onClick={() => deleteDispatch(row.dispatch.id)} aria-label="Delete dispatch">
+                              <TrashIcon />
+                            </button>
+                          </>
+                        ) : (
+                          <button className="pa-primary" onClick={() => openDispatchModal(order)}>Dispatch now</button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              <div className="dispatch-pagination" style={{ borderTop: "none", paddingTop: 16 }}>
+                <div className="dispatch-pagination-info">Page {currentPage} of {totalPages}</div>
+                <div className="dispatch-page-controls">
+                  <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1}>Prev</button>
+                  <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Next</button>
+                </div>
+              </div>
+            </div>}
           </>
         ) : (
           <div className="dispatch-empty-state compact">

@@ -12,6 +12,34 @@ export const USER_MIN_SELECT = {
   role: true
 };
 
+export const BOM_ITEM_SELECT = {
+  id:         true,
+  category:   true,
+  name:       true,
+  vendor:     true,
+  grade:      true,
+  qtyPerUnit: true,
+  remark:     true
+};
+
+export const BOM_LIST_SELECT = {
+  id:        true,
+  product:   true,
+  grade:     true,
+  createdAt: true,
+  updatedAt: true,
+  _count: { select: { items: true } }
+};
+
+export const BOM_DETAIL_SELECT = {
+  id:        true,
+  product:   true,
+  grade:     true,
+  createdAt: true,
+  updatedAt: true,
+  items: { select: BOM_ITEM_SELECT, orderBy: { id: "asc" } }
+};
+
 export const ENQUIRY_LIST_SELECT = {
   id: true,
   enquiryNumber: true,
@@ -58,6 +86,7 @@ export const ORDER_DISPATCH_SELECT = {
 export const ORDER_PRODUCTION_SELECT = {
   id: true,
   status: true,
+  producedQuantity: true,
   productionCompletionDate: true
 };
 
@@ -94,8 +123,11 @@ export const ORDER_LIST_SELECT = {
       enquiryNumber: true
     }
   },
-  production: {
-    select: ORDER_PRODUCTION_SELECT
+  productions: {
+    select: ORDER_PRODUCTION_SELECT,
+    orderBy: {
+      createdAt: "desc"
+    }
   },
   dispatches: {
     select: ORDER_DISPATCH_SELECT,
@@ -150,7 +182,9 @@ export const PRODUCTION_LIST_SELECT = {
   id: true,
   orderId: true,
   status: true,
+  producedQuantity: true,
   state: true,
+  batchNo: true,
   assignedPersonnel: true,
   deliveryDate: true,
   productSpecs: true,
@@ -161,9 +195,16 @@ export const PRODUCTION_LIST_SELECT = {
   blowerRpm: true,
   rawMaterials: true,
   remarks: true,
+  productionStartedDate: true,
   productionCompletionDate: true,
   createdAt: true,
   updatedAt: true,
+  finishedGoodsTestSheet: {
+    select: { overallResult: true, approvedBy: true, approvedAt: true }
+  },
+  inProcessTestSheet: {
+    select: { updatedAt: true, _count: { select: { items: true } } }
+  },
   order: {
     select: {
       id: true,
@@ -208,9 +249,87 @@ export const PRODUCTION_LIST_SELECT = {
   }
 };
 
+export const FG_TEST_SHEET_ITEM_SELECT = {
+  id:            true,
+  srNo:          true,
+  sampleDate:    true,
+  shift:         true,
+  samplingBy:    true,
+  samplingTime:  true,
+  blackParticle: true,
+  bulkDensity:   true,
+  sieveResidue:  true,
+  analysisBy:    true,
+  remarks:       true
+};
+
+export const FG_TEST_SHEET_SELECT = {
+  id:            true,
+  productName:   true,
+  grade:         true,
+  batchNo:       true,
+  overallResult: true,
+  approvedBy:    true,
+  approvedAt:    true,
+  createdAt:     true,
+  updatedAt:     true,
+  items: { select: FG_TEST_SHEET_ITEM_SELECT, orderBy: { id: "asc" } }
+};
+
+export const IN_PROCESS_TEST_SHEET_ITEM_SELECT = {
+  id:            true,
+  analysisDate:  true,
+  shift:         true,
+  lotNo:         true,
+  reactorNo:     true,
+  samplingBy:    true,
+  samplingTime:  true,
+  freeFattyAcid: true,
+  ash:           true,
+  moisture:      true,
+  appearance:    true,
+  meltingPoint:  true,
+  analysisBy:    true,
+  ffaInformTime: true,
+  remarks:       true
+};
+
+export const IN_PROCESS_TEST_SHEET_SELECT = {
+  id:          true,
+  productName: true,
+  grade:       true,
+  batchNo:     true,
+  createdAt:   true,
+  updatedAt:   true,
+  items: { select: IN_PROCESS_TEST_SHEET_ITEM_SELECT, orderBy: { id: "asc" } }
+};
+
+export const BATCH_SUBSTITUTION_SELECT = {
+  id:                true,
+  productionId:      true,
+  section:           true,
+  originalItemId:    true,
+  originalBatchNo:   true,
+  originalVendor:    true,
+  originalGrade:     true,
+  quantity:          true,
+  substituteItemId:  true,
+  substituteBatchNo: true,
+  substituteVendor:  true,
+  substituteGrade:   true,
+  reason:            true,
+  createdAt:         true,
+  createdBy: {
+    select: { id: true, name: true }
+  }
+};
+
 export const PRODUCTION_DETAIL_SELECT = {
   ...PRODUCTION_LIST_SELECT,
-  batchNo: true
+  batchNo: true,
+  finishedGoodsTestSheet: { select: FG_TEST_SHEET_SELECT },
+  inProcessTestSheet: { select: IN_PROCESS_TEST_SHEET_SELECT },
+  batchSubstitutions: { select: BATCH_SUBSTITUTION_SELECT, orderBy: { createdAt: "desc" } }
 };
 
 export const DISPATCH_ORDER_SELECT = {
@@ -242,8 +361,11 @@ export const DISPATCH_ORDER_SELECT = {
       enquiryNumber: true
     }
   },
-  production: {
-    select: ORDER_PRODUCTION_SELECT
+  productions: {
+    select: ORDER_PRODUCTION_SELECT,
+    orderBy: {
+      createdAt: "desc"
+    }
   },
   dispatches: {
     select: ORDER_DISPATCH_SELECT,
@@ -292,6 +414,7 @@ export const PO_LIST_SELECT = {
   poNumberWithCategory: true,
   category: true,
   billTo: true,
+  shipTo: true,
   orderDate: true,
   expectedDeliveryDate: true,
   totalDiscount: true,
@@ -313,6 +436,7 @@ export const PO_DETAIL_SELECT = {
   poNumberWithCategory: true,
   category: true,
   billTo: true,
+  shipTo: true,
   orderDate: true,
   expectedDeliveryDate: true,
   totalDiscount: true,
@@ -365,6 +489,34 @@ export const GRN_LIST_SELECT = {
   _count: { select: { items: true } }
 };
 
+export const QC_TEST_SHEET_ITEM_SELECT = {
+  id:            true,
+  srNo:          true,
+  samplingDate:  true,
+  productName:   true,
+  batchNo:       true,
+  mfgDate:       true,
+  expiryDate:    true,
+  supplier:      true,
+  sampleQty:     true,
+  testParameter: true,
+  result:        true,
+  analysisBy:    true,
+  analysisDate:  true,
+  remarks:       true
+};
+
+export const QC_TEST_SHEET_SELECT = {
+  id:            true,
+  sheetNumber:   true,
+  overallResult: true,
+  approvedBy:    true,
+  approvedAt:    true,
+  createdAt:     true,
+  updatedAt:     true,
+  items: { select: QC_TEST_SHEET_ITEM_SELECT, orderBy: { id: "asc" } }
+};
+
 export const GRN_DETAIL_SELECT = {
   id:                true,
   grnNumber:         true,
@@ -386,7 +538,8 @@ export const GRN_DETAIL_SELECT = {
       supplier: { select: { id: true, name: true } }
     }
   },
-  items: { select: GRN_ITEM_SELECT, orderBy: { id: "asc" } }
+  items: { select: GRN_ITEM_SELECT, orderBy: { id: "asc" } },
+  qcTestSheet: { select: QC_TEST_SHEET_SELECT }
 };
 
 export const AUDIT_LOG_SELECT = {

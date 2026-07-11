@@ -148,13 +148,13 @@ function EmptyNote({ children }) {
 function MaterialTable({ rows, colLabel }) {
   if (!rows.length) return <EmptyNote>No entries recorded.</EmptyNote>;
   return (
-    <div className="order-table-wrap" style={{ marginTop: 0 }}>
-      <table className="order-table">
+    <div className="responsive-table-wrap" style={{ marginTop: 0 }}>
+      <table className="order-table responsive-table">
         <thead>
           <tr>
             <th>#</th>
             <th>{colLabel}</th>
-            <th>Vendor</th>
+            <th>Supplier</th>
             <th>Grade</th>
             <th>Batch No.</th>
             <th>Qty (kg)</th>
@@ -164,13 +164,13 @@ function MaterialTable({ rows, colLabel }) {
         <tbody>
           {rows.map((row, i) => (
             <tr key={i}>
-              <td>{i + 1}</td>
-              <td>{row.name || "-"}</td>
-              <td>{row.vendor || "-"}</td>
-              <td>{row.grade || "-"}</td>
-              <td>{row.batch_no || "-"}</td>
-              <td>{row.qty || "-"}</td>
-              <td>{row.remark || "-"}</td>
+              <td data-label="">{i + 1}</td>
+              <td data-label={colLabel}>{row.name || "-"}</td>
+              <td data-label="Supplier">{row.vendor || "-"}</td>
+              <td data-label="Grade">{row.grade || "-"}</td>
+              <td data-label="Batch No.">{row.batch_no || "-"}</td>
+              <td data-label="Qty (kg)">{row.qty || "-"}</td>
+              <td data-label="Remark">{row.remark || "-"}</td>
             </tr>
           ))}
         </tbody>
@@ -253,6 +253,10 @@ function ProductionDetailPage() {
   }, [id]);
 
   const mfg = useMemo(() => (record ? parseMfgData(record.rawMaterials) : null), [record]);
+  const operationMaterialNames = useMemo(() => {
+    const rmNames = Array.isArray(mfg?.rm) ? mfg.rm.map((row) => row.name).filter(Boolean) : [];
+    return [rmNames[0] || "Material 1", rmNames[1] || "Material 2"];
+  }, [mfg]);
 
   const openMfgEdit = () => {
     if (!record || !canManageProduction) return;
@@ -500,8 +504,8 @@ function ProductionDetailPage() {
           <div>
             <SectionTitle>Equipment Used in Production Line</SectionTitle>
             {mfg?.equipment.length ? (
-              <div className="order-table-wrap" style={{ marginTop: 0 }}>
-                <table className="order-table">
+              <div className="responsive-table-wrap" style={{ marginTop: 0 }}>
+                <table className="order-table responsive-table">
                   <thead>
                     <tr>
                       <th>#</th>
@@ -513,10 +517,10 @@ function ProductionDetailPage() {
                   <tbody>
                     {mfg.equipment.map((row, i) => (
                       <tr key={i}>
-                        <td>{i + 1}</td>
-                        <td>{row.name || "-"}</td>
-                        <td>{row.equipId || "-"}</td>
-                        <td>{row.capacity || "-"}</td>
+                        <td data-label="">{i + 1}</td>
+                        <td data-label="Equipment Name">{row.name || "-"}</td>
+                        <td data-label="Equipment ID No.">{row.equipId || "-"}</td>
+                        <td data-label="Capacity">{row.capacity || "-"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -531,8 +535,8 @@ function ProductionDetailPage() {
           <div>
             <SectionTitle>Critical Process Parameters</SectionTitle>
             {mfg?.processParams.length ? (
-              <div className="order-table-wrap" style={{ marginTop: 0 }}>
-                <table className="order-table">
+              <div className="responsive-table-wrap" style={{ marginTop: 0 }}>
+                <table className="order-table responsive-table">
                   <thead>
                     <tr>
                       <th>#</th>
@@ -546,12 +550,12 @@ function ProductionDetailPage() {
                   <tbody>
                     {mfg.processParams.map((row, i) => (
                       <tr key={i}>
-                        <td>{i + 1}</td>
-                        <td>{row.parameter || "-"}</td>
-                        <td>{row.range || "-"}</td>
-                        <td>{row.doneBy || "-"}</td>
-                        <td>{row.reviewedBy || "-"}</td>
-                        <td>{row.remark || "-"}</td>
+                        <td data-label="">{i + 1}</td>
+                        <td data-label="Parameter">{row.parameter || "-"}</td>
+                        <td data-label="Range">{row.range || "-"}</td>
+                        <td data-label="Done By">{row.doneBy || "-"}</td>
+                        <td data-label="Reviewed By">{row.reviewedBy || "-"}</td>
+                        <td data-label="Remark">{row.remark || "-"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -566,14 +570,14 @@ function ProductionDetailPage() {
           <div>
             <SectionTitle>Manufacturing Operation Log — Lot-wise Batch Record</SectionTitle>
             {mfg?.batchLogs.length ? (
-              <div className="order-table-wrap" style={{ marginTop: 0 }}>
-                <table className="order-table">
+              <div className="responsive-table-wrap" style={{ marginTop: 0 }}>
+                <table className="order-table responsive-table">
                   <thead>
                     <tr>
                       <th>Lot No.</th>
                       <th>Date</th>
-                      <th>Stearic Acid (kg)</th>
-                      <th>Ca(O)H₂ (kg)</th>
+                      <th>{operationMaterialNames[0]} (kg)</th>
+                      <th>{operationMaterialNames[1]} (kg)</th>
                       <th>Initial Temp</th>
                       <th>Reaction Temp</th>
                       <th>Chopper Temp</th>
@@ -584,15 +588,15 @@ function ProductionDetailPage() {
                   <tbody>
                     {mfg.batchLogs.map((row, i) => (
                       <tr key={i}>
-                        <td>{row.lotNo || i + 1}</td>
-                        <td>{row.date || "-"}</td>
-                        <td>{row.stearicAcid || "-"}</td>
-                        <td>{row.caOH2 || "-"}</td>
-                        <td>{row.initialTemp || "-"}</td>
-                        <td>{row.reactionTemp || "-"}</td>
-                        <td>{row.chopperTemp || "-"}</td>
-                        <td>{row.completionTemp || "-"}</td>
-                        <td>{row.doneBy || "-"}</td>
+                        <td data-label="Lot No.">{row.lotNo || i + 1}</td>
+                        <td data-label="Date">{row.date || "-"}</td>
+                        <td data-label={`${operationMaterialNames[0]} (kg)`}>{(row.material1Qty ?? row.stearicAcid) || "-"}</td>
+                        <td data-label={`${operationMaterialNames[1]} (kg)`}>{(row.material2Qty ?? row.caOH2) || "-"}</td>
+                        <td data-label="Initial Temp">{row.initialTemp || "-"}</td>
+                        <td data-label="Reaction Temp">{row.reactionTemp || "-"}</td>
+                        <td data-label="Chopper Temp">{row.chopperTemp || "-"}</td>
+                        <td data-label="Completion Temp">{row.completionTemp || "-"}</td>
+                        <td data-label="Done By">{row.doneBy || "-"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -683,7 +687,7 @@ function ProductionDetailPage() {
                       <thead>
                         <tr>
                           <th>{colLabel}</th>
-                          <th>Vendor Name</th>
+                          <th>Supplier Name</th>
                           <th>Grade</th>
                           <th>Batch No.</th>
                           <th>Qty (kg)</th>
@@ -695,7 +699,7 @@ function ProductionDetailPage() {
                         {mfgEditForm[key].map((row, index) => (
                           <tr key={`${key}-${index}`}>
                             <td><input className="mfg-cell-input" value={row.name} placeholder={colLabel} onChange={(e) => setMfgEditMaterialRow(key, index, "name", e.target.value)} /></td>
-                            <td><input className="mfg-cell-input" value={row.vendor} placeholder="Vendor" onChange={(e) => setMfgEditMaterialRow(key, index, "vendor", e.target.value)} /></td>
+                            <td><input className="mfg-cell-input" value={row.vendor} placeholder="Supplier" onChange={(e) => setMfgEditMaterialRow(key, index, "vendor", e.target.value)} /></td>
                             <td><input className="mfg-cell-input" value={row.grade} placeholder="Grade" onChange={(e) => setMfgEditMaterialRow(key, index, "grade", e.target.value)} /></td>
                             <td><input className="mfg-cell-input" value={row.batch_no} placeholder="Batch" onChange={(e) => setMfgEditMaterialRow(key, index, "batch_no", e.target.value)} /></td>
                             <td><input className="mfg-cell-input mfg-cell-qty" type="number" min="0" step="0.1" value={row.qty} placeholder="0" onChange={(e) => setMfgEditMaterialRow(key, index, "qty", e.target.value)} /></td>

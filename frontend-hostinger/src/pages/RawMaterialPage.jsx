@@ -159,8 +159,8 @@ function RawMaterialPage() {
             <p style={{ color: "#64748b", marginTop: 6 }}>Confirm a GRN to see raw material stock appear here.</p>
           </div>
         ) : (
-          <div className="order-table-wrap" ref={tableWrapRef}>
-            <table className="order-table">
+          <div className="responsive-table-wrap" ref={tableWrapRef}>
+            <table className="order-table responsive-table">
               <thead>
                 <tr>
                   <th style={{ width: 44 }}>#</th>
@@ -185,17 +185,17 @@ function RawMaterialPage() {
                       background: item.netQty <= 0 ? "#fff1f2" : item.netQty < 100 ? "#fffbeb" : undefined
                     }}
                   >
-                    <td style={{ color: "#94a3b8", fontSize: 12 }}>{idx + 1}</td>
-                    <td style={{ fontWeight: 600, color: "#1d4ed8" }}>{item.itemId}</td>
-                    <td>{item.category || "-"}</td>
-                    <td>{item.grade || "-"}</td>
-                    <td>{item.uom || "-"}</td>
-                    <td style={{ textAlign: "right" }}>{Number(item.totalIn || 0).toLocaleString()}</td>
-                    <td style={{ textAlign: "right" }}>{item.totalOut > 0 ? Number(item.totalOut).toLocaleString() : "-"}</td>
-                    <td style={{ textAlign: "right", fontWeight: 600 }}>{Number(item.netQty || 0).toLocaleString()}</td>
-                    <td><StockBadge netQty={item.netQty || 0} /></td>
-                    <td>{item.warehouseLocation || "-"}</td>
-                    <td>{formatDate(item.lastReceivedAt)}</td>
+                    <td data-label="" style={{ color: "#94a3b8", fontSize: 12 }}>{idx + 1}</td>
+                    <td data-label="Item ID / Name" style={{ fontWeight: 600, color: "#1d4ed8" }}>{item.itemId}</td>
+                    <td data-label="Category">{item.category || "-"}</td>
+                    <td data-label="Grade">{item.grade || "-"}</td>
+                    <td data-label="UOM">{item.uom || "-"}</td>
+                    <td data-label="Received" style={{ textAlign: "right" }}>{Number(item.totalIn || 0).toLocaleString()}</td>
+                    <td data-label="Consumed" style={{ textAlign: "right" }}>{item.totalOut > 0 ? Number(item.totalOut).toLocaleString() : "-"}</td>
+                    <td data-label="Net Stock" style={{ textAlign: "right", fontWeight: 600 }}>{Number(item.netQty || 0).toLocaleString()}</td>
+                    <td data-label="Status"><StockBadge netQty={item.netQty || 0} /></td>
+                    <td data-label="Warehouse">{item.warehouseLocation || "-"}</td>
+                    <td data-label="Last Received">{formatDate(item.lastReceivedAt)}</td>
                   </tr>
                 ))}
               </tbody>

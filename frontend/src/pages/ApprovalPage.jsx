@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import api from "../api/axiosClient";
 import LoadingSpinner from "../components/LoadingSpinner";
 import { useAuth } from "../context/AuthContext";
@@ -12,6 +12,7 @@ import { sortByNewestFirst } from "../utils/recordOrdering";
 const approvalTabs = [
   { label: "All", value: "ALL" },
   { label: "Pending", value: "PENDING" },
+  { label: "Hold", value: "HOLD" },
   { label: "Approved", value: "ACCEPTED" },
   { label: "Rejected", value: "REJECTED" }
 ];
@@ -41,8 +42,10 @@ function ApprovalPage() {
   const [items, setItems] = useState([]);
   const [statusFilter, setStatusFilter] = useState("PENDING");
   const canApprove = user?.role === "admin" || user?.role === "sales";
+  const fetchSeqRef = useRef(0);
 
   const fetchItems = async ({ silent = false } = {}) => {
+    const requestId = ++fetchSeqRef.current;
     if (!silent) {
       setLoading(true);
     }
@@ -104,12 +107,18 @@ function ApprovalPage() {
         return normalizeApprovalStatus(item.source, item.raw.status) === statusFilter;
       });
 
+      // Ignore this response if a newer request has since been kicked off
+      // (e.g. the user switched tabs while a poll/focus refresh for the
+      // previous tab was still in flight) — otherwise stale data can
+      // silently overwrite what's currently selected.
+      if (requestId !== fetchSeqRef.current) return;
       setItems(filtered);
     } catch (error) {
+      if (requestId !== fetchSeqRef.current) return;
       logApiError(error, "Failed to load approval items");
       setItems([]);
     } finally {
-      if (!silent) {
+      if (!silent && requestId === fetchSeqRef.current) {
         setLoading(false);
       }
     }

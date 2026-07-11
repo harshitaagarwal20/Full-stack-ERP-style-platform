@@ -6,6 +6,7 @@ import { logApiError } from "../utils/apiError";
 import { dispatchUserMessage } from "../utils/errorMessages";
 import useMasterData from "../hooks/useMasterData";
 import SearchableSelect from "../components/common/SearchableSelect";
+import { SHIP_TO_OPTIONS } from "../config/shipToLocations";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -32,6 +33,7 @@ function createEmptyForm() {
     supplier_code:            "",
     supplier_address:         "",
     supplier_pincode:         "",
+    ship_to:                  SHIP_TO_OPTIONS[0]?.value || "",
     order_date:               today(),
     expected_delivery_date:   "",
     category:                 "",
@@ -102,6 +104,7 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
           supplier_code:           data.supplier?.supplierCode   || "",
           supplier_address:        data.supplier?.address        || "",
           supplier_pincode:        data.supplier?.pincode        || "",
+          ship_to: data.shipTo || SHIP_TO_OPTIONS[0]?.value || "",
           order_date: data.orderDate ? data.orderDate.slice(0, 10) : today(),
           expected_delivery_date: data.expectedDeliveryDate ? data.expectedDeliveryDate.slice(0, 10) : "",
           category: data.category || data.department || "",
@@ -191,6 +194,7 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
         supplier_code:            form.supplier_code            || null,
         supplier_address:         form.supplier_address         || null,
         supplier_pincode:         form.supplier_pincode         || null,
+        ship_to:                  form.ship_to                  || null,
         order_date: form.order_date || null,
         expected_delivery_date: form.expected_delivery_date || null,
         category: form.category || null,
@@ -258,6 +262,15 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
             </select>
           </div>
           <div>
+            <label className="label">Ship To</label>
+            <SearchableSelect
+              options={SHIP_TO_OPTIONS}
+              value={form.ship_to}
+              onChange={(value) => setField("ship_to", value)}
+              placeholder="Select ship to address"
+            />
+          </div>
+          <div>
             <label className="label">Expected Delivery Date</label>
             <input
               className="input"
@@ -281,15 +294,15 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
       </section>
 
       <section className="order-card">
-        <h3 style={{ margin: "0 0 14px", fontSize: 15, color: "#334155" }}>Vendor Details</h3>
+        <h3 style={{ margin: "0 0 14px", fontSize: 15, color: "#334155" }}>Supplier Details</h3>
         <div className="order-form-grid">
           <div>
-            <label className="label">Vendor Name *</label>
+            <label className="label">Supplier Name *</label>
             <SearchableSelect
               options={supplierOptions}
               value={form.supplier_name}
               onChange={handleSupplierSelect}
-              placeholder="Search and select vendor..."
+              placeholder="Search and select supplier..."
             />
           </div>
           <div>
@@ -330,8 +343,8 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
           </button>
         </div>
 
-        <div className="order-table-wrap">
-          <table className="order-table">
+        <div className="responsive-table-wrap">
+          <table className="order-table responsive-table">
             <thead>
               <tr>
                 <th>#</th>
@@ -350,8 +363,8 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
             <tbody>
               {form.items.map((item, index) => (
                 <tr key={index}>
-                  <td>{index + 1}</td>
-                  <td>
+                  <td data-label="">{index + 1}</td>
+                  <td data-label="Item">
                     <select
                       className="input"
                       style={{ minWidth: 160 }}
@@ -365,7 +378,7 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
                       ))}
                     </select>
                   </td>
-                  <td>
+                  <td data-label="UoM">
                     <input
                       className="input"
                       style={{ minWidth: 70 }}
@@ -374,7 +387,7 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
                       onChange={(e) => setItem(index, "uom", e.target.value)}
                     />
                   </td>
-                  <td>
+                  <td data-label="Grade">
                     <input
                       className="input"
                       style={{ minWidth: 80 }}
@@ -383,7 +396,7 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
                       onChange={(e) => setItem(index, "grade", e.target.value)}
                     />
                   </td>
-                  <td>
+                  <td data-label="Currency">
                     <input
                       className="input"
                       style={{ minWidth: 70 }}
@@ -392,7 +405,7 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
                       onChange={(e) => setItem(index, "currency", e.target.value)}
                     />
                   </td>
-                  <td>
+                  <td data-label="Qty">
                     <input
                       className="input"
                       style={{ minWidth: 80 }}
@@ -404,7 +417,7 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
                       required
                     />
                   </td>
-                  <td>
+                  <td data-label="Price/Unit">
                     <input
                       className="input"
                       style={{ minWidth: 100 }}
@@ -416,10 +429,10 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
                       onChange={(e) => setItem(index, "unit_price", e.target.value)}
                     />
                   </td>
-                  <td style={{ fontWeight: 600, whiteSpace: "nowrap" }}>
+                  <td data-label="Total" style={{ fontWeight: 600, whiteSpace: "nowrap" }}>
                     {calcRowTotal(item) > 0 ? formatCurrency(calcRowTotal(item)) : "-"}
                   </td>
-                  <td>
+                  <td data-label="Tax %">
                     <input
                       className="input"
                       style={{ minWidth: 70 }}
@@ -432,10 +445,10 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
                       onChange={(e) => setItem(index, "tax_percent", e.target.value)}
                     />
                   </td>
-                  <td style={{ fontWeight: 600, whiteSpace: "nowrap" }}>
+                  <td data-label="Amt After Tax" style={{ fontWeight: 600, whiteSpace: "nowrap" }}>
                     {calcRowAmountAfterTax(item) > 0 ? formatCurrency(calcRowAmountAfterTax(item)) : "-"}
                   </td>
-                  <td>
+                  <td data-label="">
                     {form.items.length > 1 && (
                       <button
                         type="button"
@@ -455,8 +468,7 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
                 <td colSpan={9} style={{ textAlign: "right", fontWeight: 700, paddingRight: 12 }}>
                   Gross Amount
                 </td>
-                <td style={{ fontWeight: 700 }}>{grandTotal > 0 ? formatCurrency(grandTotal) : "-"}</td>
-                <td />
+                <td data-label="Gross Amount" style={{ fontWeight: 700 }}>{grandTotal > 0 ? formatCurrency(grandTotal) : "-"}</td>
               </tr>
             </tfoot>
           </table>

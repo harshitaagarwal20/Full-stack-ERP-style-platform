@@ -5,7 +5,7 @@ const manualOrderRequestProductsInputSchema = z.preprocess((value) => {
   return normalizeEnquiryProductRows(value);
 }, z.array(z.object({
   product: z.string().min(1),
-  grade: z.string().optional().default(""),
+  grade: z.string().min(1, "Grade is required"),
   quantity: z.union([z.string(), z.number()]).optional().nullable(),
   unit_of_measurement: z.string().optional().nullable()
 }))).optional();
@@ -38,7 +38,7 @@ const enquiryProductsInputSchema = z.preprocess((value) => {
   return normalizeEnquiryProductRows(value);
 }, z.array(z.object({
   product: z.string().min(1),
-  grade: z.string().optional().default(""),
+  grade: z.string().min(1, "Grade is required"),
   quantity: z.union([z.string(), z.number()]).optional().nullable(),
   unit_of_measurement: z.string().optional().nullable()
 }))).optional();
@@ -49,12 +49,12 @@ const enquiryBaseSchema = z.object({
   company_name: z.string().min(2),
   product: z.string().min(1).optional(),
   products: enquiryProductsInputSchema,
-  quantity: z.number().int().positive().optional(),
+  quantity: z.number().positive().optional(),
   price: z.number().nonnegative().optional().nullable(),
   currency: z.string().length(3).optional().nullable(),
   unit_of_measurement: z.string().optional().nullable(),
   expected_timeline: z.string().min(2),
-  assigned_person: z.string().min(1),
+  assigned_person: z.string().min(1).optional(),
   notes_for_production: z.string().optional().nullable()
 });
 
@@ -110,7 +110,7 @@ export const createManualOrderRequestSchema = z.object({
   product: z.string().min(2).optional(),
   products: manualOrderRequestProductsInputSchema,
   grade: z.string().min(1).optional(),
-  quantity: z.number().int().positive().optional(),
+  quantity: z.number().positive().optional(),
   unit: z.string().min(1).optional(),
   delivery_date: z.string().min(4).optional().or(z.literal("")),
   dispatch_date: z.string().min(4).optional().or(z.literal("")),
@@ -197,6 +197,7 @@ export const updateProductionSchema = z.object({
   acm_rpm: z.number().int().positive().optional(),
   classifier_rpm: z.number().int().positive().optional(),
   blower_rpm: z.number().int().positive().optional(),
+  produced_quantity: z.number().int().nonnegative().optional(),
   batch_no: z.string().optional().nullable().or(z.literal("")),
   raw_materials: z.string().min(2).optional().or(z.literal("")),
   remarks: z.string().optional().nullable(),
@@ -206,6 +207,26 @@ export const updateProductionSchema = z.object({
 
 export const completeProductionSchema = z.object({
   completion_date: z.string().min(4).optional().nullable()
+});
+
+export const stockAdjustmentSchema = z.object({
+  item_id: z.string().min(1),
+  quantity: z.number().positive(),
+  direction: z.enum(["IN", "OUT"]),
+  reason: z.string().min(3)
+});
+
+export const inventoryOpeningStockRowSchema = z.object({
+  item_id:  z.string().min(1),
+  category: z.string().optional().nullable(),
+  uom:      z.string().optional().nullable(),
+  grade:    z.string().optional().nullable(),
+  batch_no: z.string().optional().nullable(),
+  quantity: z.number().nonnegative()
+});
+
+export const importInventoryOpeningStockSchema = z.object({
+  rows: z.array(inventoryOpeningStockRowSchema).min(1)
 });
 
 const dateOnlySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format.");
@@ -225,6 +246,15 @@ export const updateDispatchSchema = z.object({
   packing_done: z.boolean().optional(),
   shipment_status: z.enum(["PACKING", "SHIPPED", "DELIVERED"]).optional(),
   remarks: z.string().optional().nullable()
+});
+
+export const createPackingRecordSchema = z.object({
+  order_id:                  z.number().int().positive(),
+  packed_quantity:           z.number().positive(),
+  packing_material_item_id:  z.string().min(1),
+  packing_material_qty:      z.number().positive(),
+  packed_by:                 z.string().optional().nullable(),
+  remarks:                   z.string().optional().nullable()
 });
 
 export const updateOrderDispatchDateSchema = z.object({
@@ -312,6 +342,7 @@ export const createPurchaseOrderSchema = z.object({
   category: z.string().optional().nullable(),
   po_number_with_category: z.string().optional().nullable(),
   bill_to: z.string().optional().nullable(),
+  ship_to: z.string().optional().nullable(),
   order_date: z.string().min(4).optional().nullable(),
   expected_delivery_date: z.string().min(4).optional().nullable(),
   total_discount: z.number().nonnegative().optional().nullable(),
@@ -327,6 +358,7 @@ export const updatePurchaseOrderSchema = z.object({
   category: z.string().optional().nullable(),
   po_number_with_category: z.string().optional().nullable(),
   bill_to: z.string().optional().nullable(),
+  ship_to: z.string().optional().nullable(),
   order_date: z.string().min(4).optional().nullable(),
   expected_delivery_date: z.string().min(4).optional().nullable(),
   total_discount: z.number().nonnegative().optional().nullable(),
@@ -353,6 +385,110 @@ export const createGRNSchema = z.object({
   remarks:            z.string().optional().nullable(),
   items: z.array(z.object({
     po_item_id:        z.number().int().positive(),
-    quantity_received: z.number().int().min(0)
+    quantity_received: z.number().min(0)
   })).min(1, "At least one item is required")
+});
+
+const bomItemSchema = z.object({
+  category:    z.enum(["rm", "additives", "catalysts"]),
+  name:        z.string().min(1),
+  vendor:      z.string().optional().nullable(),
+  grade:       z.string().min(1, "Grade is required"),
+  qty_per_unit: z.number().positive(),
+  remark:      z.string().optional().nullable()
+});
+
+export const saveBomSchema = z.object({
+  product: z.string().min(1),
+  grade:   z.string().min(1),
+  items:   z.array(bomItemSchema).min(1, "At least one item is required")
+});
+
+export const importBomSchema = z.object({
+  rows: z.array(z.object({
+    product:      z.string().min(1),
+    grade:        z.string().min(1),
+    category:     z.enum(["rm", "additives", "catalysts"]),
+    name:         z.string().min(1),
+    vendor:       z.string().optional().nullable(),
+    material_grade: z.string().min(1, "Material grade is required"),
+    qty_per_unit: z.number().positive(),
+    remark:       z.string().optional().nullable()
+  })).min(1, "At least one row is required")
+});
+
+export const saveFinishedGoodsTestSheetSchema = z.object({
+  product_name:   z.string().optional().nullable(),
+  grade:          z.string().optional().nullable(),
+  batch_no:       z.string().optional().nullable(),
+  overall_result: z.enum(["PENDING", "PASS", "FAIL"]).optional(),
+  approved_by:    z.string().optional().nullable(),
+  items: z.array(z.object({
+    sr_no:          z.number().int().optional().nullable(),
+    sample_date:    z.string().min(4).optional().nullable(),
+    shift:          z.string().optional().nullable(),
+    sampling_by:    z.string().optional().nullable(),
+    sampling_time:  z.string().optional().nullable(),
+    black_particle: z.string().optional().nullable(),
+    bulk_density:   z.string().optional().nullable(),
+    sieve_residue:  z.string().optional().nullable(),
+    analysis_by:    z.string().optional().nullable(),
+    remarks:        z.string().optional().nullable()
+  })).min(1, "At least one test row is required")
+});
+
+export const saveInProcessTestSheetSchema = z.object({
+  product_name: z.string().optional().nullable(),
+  grade:        z.string().optional().nullable(),
+  batch_no:     z.string().optional().nullable(),
+  items: z.array(z.object({
+    analysis_date:   z.string().optional().nullable(),
+    shift:           z.string().optional().nullable(),
+    lot_no:          z.string().optional().nullable(),
+    reactor_no:      z.string().optional().nullable(),
+    sampling_by:     z.string().optional().nullable(),
+    sampling_time:   z.string().optional().nullable(),
+    free_fatty_acid: z.string().optional().nullable(),
+    ash:             z.string().optional().nullable(),
+    moisture:        z.string().optional().nullable(),
+    appearance:      z.string().optional().nullable(),
+    melting_point:   z.string().optional().nullable(),
+    analysis_by:     z.string().optional().nullable(),
+    ffa_inform_time: z.string().optional().nullable(),
+    remarks:         z.string().optional().nullable()
+  })).min(1, "At least one test row is required")
+});
+
+export const substituteProductionBatchSchema = z.object({
+  section:             z.enum(["rm", "additives", "catalysts"]),
+  row_index:           z.number().int().nonnegative(),
+  original_item_id:    z.string().min(1),
+  original_batch_no:   z.string().min(1),
+  quantity:            z.number().int().positive(),
+  substitute_item_id:  z.string().min(1),
+  substitute_batch_no: z.string().min(1),
+  substitute_vendor:   z.string().optional().nullable(),
+  substitute_grade:    z.string().optional().nullable(),
+  reason:              z.string().optional().nullable()
+});
+
+export const saveQcTestSheetSchema = z.object({
+  sheet_number:   z.string().optional().nullable(),
+  overall_result: z.enum(["PENDING", "PASS", "FAIL"]).optional(),
+  approved_by:    z.string().optional().nullable(),
+  items: z.array(z.object({
+    sr_no:          z.number().int().optional().nullable(),
+    sampling_date:  z.string().min(4).optional().nullable(),
+    product_name:   z.string().min(1),
+    batch_no:       z.string().optional().nullable(),
+    mfg_date:       z.string().min(4).optional().nullable(),
+    expiry_date:    z.string().min(4).optional().nullable(),
+    supplier:       z.string().optional().nullable(),
+    sample_qty:     z.number().nonnegative().optional().nullable(),
+    test_parameter: z.string().optional().nullable(),
+    result:         z.string().optional().nullable(),
+    analysis_by:    z.string().optional().nullable(),
+    analysis_date:  z.string().min(4).optional().nullable(),
+    remarks:        z.string().optional().nullable()
+  })).min(1, "At least one test row is required")
 });

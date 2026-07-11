@@ -4,6 +4,8 @@ import {
   setManualOrderDispatchDate,
   updateManualOrderRequestStatus
 } from "../services/manualOrderRequestService.js";
+import { emptyPaginatedOrArrayFallback, isMissingTableError } from "../utils/prismaListFallback.js";
+import { toPositiveIntOrThrow } from "../utils/routeParams.js";
 
 export async function getManualOrderRequests(req, res, next) {
   try {
@@ -11,6 +13,9 @@ export async function getManualOrderRequests(req, res, next) {
     res.setHeader("Cache-Control", "private, max-age=10");
     return res.json(requests);
   } catch (error) {
+    if (isMissingTableError(error)) {
+      return res.json(emptyPaginatedOrArrayFallback(req));
+    }
     return next(error);
   }
 }
@@ -26,7 +31,7 @@ export async function addManualOrderRequest(req, res, next) {
 
 export async function updateManualOrderRequest(req, res, next) {
   try {
-    const request = await updateManualOrderRequestStatus(Number(req.params.id), req.validatedBody.status, req.user);
+    const request = await updateManualOrderRequestStatus(toPositiveIntOrThrow(req.params.id, "id"), req.validatedBody.status, req.user);
     return res.json(request);
   } catch (error) {
     return next(error);
@@ -35,7 +40,7 @@ export async function updateManualOrderRequest(req, res, next) {
 
 export async function setManualOrderDate(req, res, next) {
   try {
-    const result = await setManualOrderDispatchDate(Number(req.params.id), req.validatedBody, req.user);
+    const result = await setManualOrderDispatchDate(toPositiveIntOrThrow(req.params.id, "id"), req.validatedBody, req.user);
     return res.json(result);
   } catch (error) {
     return next(error);

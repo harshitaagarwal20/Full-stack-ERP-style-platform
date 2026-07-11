@@ -4,7 +4,15 @@ import api from "../api/axiosClient";
 import { useAuth } from "../context/AuthContext";
 import ErpCard from "../components/erp/ErpCard";
 import { BoxesIcon, CheckIcon, ClipboardIcon, FactoryIcon, HomeIcon, HourglassIcon, InboxIcon, TruckIcon } from "../components/erp/ErpIcons";
+import { useIsMobile } from "../hooks/useIsMobile";
 import { logApiError } from "../utils/apiError";
+
+const MOBILE_TILES = [
+  { title: "New Enquiry", sub: "Log a lead", to: "/enquiries?new=1", icon: <InboxIcon />, v: "v1", roles: ["admin", "sales"] },
+  { title: "New Order", sub: "Raise sales order", to: "/orders?new=1", icon: <BoxesIcon />, v: "v2", roles: ["admin", "sales"] },
+  { title: "Production", sub: "Update jobs", to: "/production", icon: <FactoryIcon />, v: "v3", roles: ["admin"] },
+  { title: "Approvals", sub: "Review pending", to: "/approval", icon: <CheckIcon />, v: "v4", roles: ["admin", "sales"] }
+];
 
 const actions = [
   { title: "Manage Enquiries", desc: "Create and track all enquiry requests.", to: "/enquiries", icon: <InboxIcon />, tone: "primary", roles: ["admin", "sales"] },
@@ -115,6 +123,7 @@ function normalizeListResponse(data) {
 
 function DashboardPage() {
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const [summary, setSummary] = useState(() => normalizeDashboardSummary());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -163,6 +172,68 @@ function DashboardPage() {
 
   const maxTrendValue = Math.max(1, ...trendData.flatMap((item) => [item.enquiries, item.orders]));
   const totalStatus = Math.max(1, statusMix.reduce((sum, item) => sum + item.value, 0));
+
+  if (isMobile) {
+    const counts = summary.counts;
+    const firstName = (user?.name || "there").trim().split(/\s+/)[0];
+    const initials = (user?.name || "U").trim().split(/\s+/).map((p) => p[0]).slice(0, 2).join("").toUpperCase();
+    const today = new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "short" });
+    const tiles = MOBILE_TILES.filter((tile) => tile.roles.includes(user?.role));
+    const needs = [
+      { label: "Pending approvals", value: counts.pendingApprovals, to: "/approval", tone: "warn", roles: ["admin", "sales"] },
+      { label: "In production", value: counts.inProductionOrders, to: "/production", tone: "info", roles: ["admin"] },
+      { label: "Ready for dispatch", value: counts.readyForDispatchOrders, to: "/dispatch", tone: "ok", roles: ["admin"] }
+    ].filter((item) => item.roles.includes(user?.role) && item.value > 0);
+
+    return (
+      <div className="today-mobile">
+        <div className="today-hero">
+          <div>
+            <p className="today-date">{today}</p>
+            <h2 className="today-hi">Hi, {firstName} 👋</h2>
+          </div>
+          <div className="today-avatar">{initials}</div>
+        </div>
+
+        {error && (
+          <div className="today-empty" style={{ borderColor: "#fecaca", background: "#fff7f7", color: "#b91c1c" }}>
+            {error}
+          </div>
+        )}
+
+        <p className="today-sec">Quick actions</p>
+        <div className="today-tiles">
+          {tiles.map((tile) => (
+            <Link key={tile.title} to={tile.to} className={`today-tile ${tile.v}`}>
+              <span className="today-tile-ic">{tile.icon}</span>
+              <span>
+                <span className="today-tile-t" style={{ display: "block" }}>{tile.title}</span>
+                <span className="today-tile-s">{tile.sub}</span>
+              </span>
+            </Link>
+          ))}
+        </div>
+
+        <p className="today-sec">Needs your input</p>
+        {loading ? (
+          <div className="today-empty">Loading…</div>
+        ) : needs.length === 0 ? (
+          <div className="today-empty">You're all caught up. Nothing needs attention. ✅</div>
+        ) : (
+          <div className="today-needs">
+            {needs.map((item) => (
+              <Link key={item.label} to={item.to} className={`today-need ${item.tone}`}>
+                <span className="today-need-dot" />
+                <span className="today-need-label">{item.label}</span>
+                <span className="today-need-count">{item.value}</span>
+                <span className="today-need-chev">›</span>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="erp-dashboard">

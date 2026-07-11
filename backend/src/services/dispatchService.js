@@ -6,6 +6,7 @@ import { DISPATCH_LIST_SELECT, MANUAL_ORDER_REQUEST_SELECT } from "../utils/sele
 import { formatEnquiryProducts, getPrimaryEnquiryProduct } from "../utils/enquiryProducts.js";
 import { normalizeOrderUnit } from "../utils/orderUnits.js";
 import { getCustomerMasterProfileByName } from "../utils/customerCatalog.js";
+import { getAvailableInventoryQty } from "./inventoryService.js";
 import {
   extractSalesGroupSequence,
   formatSalesGroupNumber,
@@ -99,6 +100,38 @@ async function hasOrderDispatchDateColumn() {
   return hasDispatchDateColumnCache;
 }
 
+// Keeps the finished-goods inventory ledger in sync with dispatched quantity
+// for a given dispatch row: tops up the outward amount as it's dispatched,
+// and corrects it back if a dispatched quantity is ever edited downward.
+async function syncDispatchOutward(tx, dispatchId, itemId, dispatchedQty) {
+  const reference = `Dispatch #${dispatchId}`;
+  const normalizedItemId = String(itemId || "").trim();
+  if (!normalizedItemId || !Number.isFinite(dispatchedQty)) return;
+
+  const grouped = await tx.inventoryTransaction.groupBy({
+    by: ["type"],
+    where: { reference, itemId: normalizedItemId, type: { in: ["OUT", "ADJUSTMENT_IN"] } },
+    _sum: { quantity: true }
+  });
+
+  let alreadyOutward = 0;
+  for (const row of grouped) {
+    const qty = row._sum.quantity || 0;
+    alreadyOutward += row.type === "OUT" ? qty : -qty;
+  }
+
+  const delta = dispatchedQty - alreadyOutward;
+  if (delta > 0) {
+    await tx.inventoryTransaction.create({
+      data: { type: "OUT", itemId: normalizedItemId, quantity: delta, reference, remarks: "Finished goods dispatched" }
+    });
+  } else if (delta < 0) {
+    await tx.inventoryTransaction.create({
+      data: { type: "ADJUSTMENT_IN", itemId: normalizedItemId, quantity: -delta, reference, remarks: "Correction: dispatch quantity reduced" }
+    });
+  }
+}
+
 async function syncOrderDispatchStatus(tx, orderId) {
   const order = await tx.order.findUnique({
     where: { id: orderId },
@@ -154,8 +187,8 @@ async function buildDispatchDashboardData(query = {}, client = prisma) {
           status: {
             in: ["READY_FOR_DISPATCH", "PARTIALLY_DISPATCHED"]
           },
-          production: {
-            status: "COMPLETED"
+          productions: {
+            some: { status: "COMPLETED" }
           },
           ...(q
             ? {
@@ -190,12 +223,13 @@ async function buildDispatchDashboardData(query = {}, client = prisma) {
           countryCode: true,
           status: true,
           updatedAt: true,
-          production: {
+          productions: {
             select: {
               id: true,
               status: true,
               productionCompletionDate: true
-            }
+            },
+            orderBy: { createdAt: "desc" }
           },
           dispatches: {
             select: {
@@ -226,7 +260,7 @@ async function buildDispatchDashboardData(query = {}, client = prisma) {
             : {})
         },
         select: DISPATCH_LIST_SELECT,
-        orderBy: [{ createdAt: "asc" }, { id: "asc" }]
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }]
       })
     ]);
 
@@ -277,6 +311,13 @@ async function buildDispatchDashboardData(query = {}, client = prisma) {
         dispatch: null
       }));
       const combinedRows = [...autoRows, ...manualRows];
+      // Sort combined rows so dispatch rows appear first and newest dispatches come first
+      combinedRows.sort((a, b) => {
+        const ta = a.dispatch?.createdAt ? new Date(a.dispatch.createdAt).getTime() : 0;
+        const tb = b.dispatch?.createdAt ? new Date(b.dispatch.createdAt).getTime() : 0;
+        return tb - ta; // newest first; manual rows (ta/tb === 0) will be last
+      });
+
       const pagedItems = combinedRows.slice(skip, skip + take);
 
       return {
@@ -304,8 +345,8 @@ async function buildDispatchDashboardData(query = {}, client = prisma) {
           status: {
             in: ["READY_FOR_DISPATCH", "PARTIALLY_DISPATCHED"]
           },
-          production: {
-            status: "COMPLETED"
+          productions: {
+            some: { status: "COMPLETED" }
           },
           ...(q
             ? {
@@ -340,12 +381,13 @@ async function buildDispatchDashboardData(query = {}, client = prisma) {
           countryCode: true,
           status: true,
           updatedAt: true,
-          production: {
+          productions: {
             select: {
               id: true,
               status: true,
               productionCompletionDate: true
-            }
+            },
+            orderBy: { createdAt: "desc" }
           },
           dispatches: {
             select: {
@@ -376,7 +418,7 @@ async function buildDispatchDashboardData(query = {}, client = prisma) {
             : {})
         },
         select: DISPATCH_LIST_SELECT,
-        orderBy: [{ createdAt: "asc" }, { id: "asc" }]
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }]
       }),
       client.enquiry.findMany({
         where: {
@@ -566,6 +608,81 @@ export async function getDispatchDashboard(query = {}) {
 
 export { buildDispatchDashboardData };
 
+export async function createOrderFromEnquiry(enquiry, dispatchDate, actorUser, tx) {
+  const hasDispatchDateColumn = await hasOrderDispatchDateColumn();
+  const unit = normalizeOrderUnit(enquiry.unitOfMeasurement);
+
+  const salesGroupNumber = await resolveSalesGroupNumberForEnquiry(enquiry, tx);
+
+  // Carry the customer's known address/location over automatically instead
+  // of leaving it blank for someone to type again later on the order.
+  const customerProfile = await getCustomerMasterProfileByName(enquiry.companyName);
+
+  const createdOrder = await tx.order.create({
+    data: {
+      enquiryId: enquiry.id,
+      createdById: actorUser.id,
+      salesOrderNumber: `TSO-${Date.now()}-${enquiry.id}`,
+      salesGroupNumber,
+      orderNo: `TMP-${Date.now()}-${enquiry.id}`,
+      product: getPrimaryEnquiryProduct(enquiry),
+      grade: "NA",
+      // Order.quantity is a whole-unit Int column, but enquiries allow
+      // fractional quantities (e.g. 7.5 kg). Round up rather than truncate
+      // so the order never silently under-commits vs. what was enquired.
+      quantity: Math.ceil(Number(enquiry.quantity) || 0),
+      price: enquiry.price ?? null,
+      currency: enquiry.currency ?? null,
+      unit,
+      packingType: "NA",
+      packingSize: "NA",
+      deliveryDate: dispatchDate,
+      clientName: enquiry.companyName,
+      address: customerProfile?.address || "",
+      city: customerProfile?.city || "",
+      pincode: customerProfile?.pincode || "",
+      state: customerProfile?.state || "",
+      countryCode: customerProfile?.countryCode || "IN",
+      remarks: `Created from approved enquiry #${enquiry.id} via dispatch date`,
+      status: "CREATED",
+      ...(hasDispatchDateColumn ? { dispatchDate } : {})
+    },
+    select: {
+      id: true
+    }
+  });
+
+  const updated = await tx.order.update({
+    where: { id: createdOrder.id },
+    data: {
+      salesOrderNumber: formatSalesOrderNumber(createdOrder.id),
+      orderNo: generateOrderNo(createdOrder.id)
+    },
+    select: {
+      id: true,
+      salesOrderNumber: true,
+      orderNo: true
+    }
+  });
+
+  await recordAuditEvent({
+    tx,
+    action: "CREATE_ORDER",
+    entityType: "Order",
+    entityId: updated.id,
+    user: actorUser,
+    oldValue: null,
+    newValue: {
+      enquiryId: enquiry.id,
+      salesOrderNumber: updated.salesOrderNumber,
+      dispatchDate
+    },
+    note: `Created order #${updated.id} from approved enquiry #${enquiry.id} with dispatch date`
+  });
+
+  return updated;
+}
+
 export async function updateOrderDispatchDate(enquiryId, payload, actorUser) {
   const dispatchDate = parseDateInput(payload.dispatch_date);
   if (!dispatchDate) {
@@ -613,73 +730,8 @@ export async function updateOrderDispatchDate(enquiryId, payload, actorUser) {
     throw error;
   }
 
-  const hasDispatchDateColumn = await hasOrderDispatchDateColumn();
-
   const result = await prisma.$transaction(async (tx) => {
-    const unit = normalizeOrderUnit(enquiry.unitOfMeasurement);
-
-    const salesGroupNumber = await resolveSalesGroupNumberForEnquiry(enquiry, tx);
-
-    const createdOrder = await tx.order.create({
-      data: {
-        enquiryId: enquiry.id,
-        createdById: actorUser.id,
-        salesOrderNumber: `TSO-${Date.now()}-${enquiry.id}`,
-        salesGroupNumber,
-        orderNo: `TMP-${Date.now()}-${enquiry.id}`,
-        product: getPrimaryEnquiryProduct(enquiry),
-        grade: "NA",
-        quantity: enquiry.quantity,
-        price: enquiry.price ?? null,
-        currency: enquiry.currency ?? null,
-        unit,
-        packingType: "NA",
-        packingSize: "NA",
-        deliveryDate: dispatchDate,
-        clientName: enquiry.companyName,
-        address: "",
-        city: "",
-        pincode: "",
-        state: "",
-        countryCode: "IN",
-        remarks: `Created from approved enquiry #${enquiry.id} via dispatch date`,
-        status: "CREATED",
-        ...(hasDispatchDateColumn ? { dispatchDate } : {})
-      },
-      select: {
-        id: true
-      }
-    });
-
-    const updated = await tx.order.update({
-      where: { id: createdOrder.id },
-      data: {
-        salesOrderNumber: formatSalesOrderNumber(createdOrder.id),
-        orderNo: generateOrderNo(createdOrder.id)
-      },
-      select: {
-        id: true,
-        salesOrderNumber: true,
-        orderNo: true
-      }
-    });
-
-    await recordAuditEvent({
-      tx,
-      action: "CREATE_ORDER",
-      entityType: "Order",
-      entityId: updated.id,
-      user: actorUser,
-      oldValue: null,
-      newValue: {
-        enquiryId: enquiry.id,
-        salesOrderNumber: updated.salesOrderNumber,
-        dispatchDate
-      },
-      note: `Created order #${updated.id} from approved enquiry #${enquiry.id} with dispatch date`
-    });
-
-    return updated;
+    return createOrderFromEnquiry(enquiry, dispatchDate, actorUser, tx);
   }, DISPATCH_TRANSACTION_OPTIONS);
   invalidateDispatchReadCaches();
   return result;
@@ -701,16 +753,14 @@ export async function createDispatch(payload, actorUser) {
       status: true,
       salesOrderNumber: true,
       clientName: true,
-      production: {
-        select: {
-          id: true,
-          status: true
-        }
-      },
+      product: true,
       dispatches: {
         select: {
           dispatchedQuantity: true
         }
+      },
+      packingRecords: {
+        select: { packedQuantity: true }
       }
     }
   });
@@ -721,25 +771,42 @@ export async function createDispatch(payload, actorUser) {
     throw error;
   }
 
-  if (!order.production || order.production.status !== "COMPLETED") {
-    const error = new Error("Cannot dispatch unless production is completed.");
+  const deliveredQuantity = getDeliveredQuantity(order.dispatches);
+  const remainingOrderQty = Math.max(order.quantity - deliveredQuantity, 0);
+  if (remainingOrderQty <= 0) {
+    const error = new Error("Order already fully dispatched.");
     error.statusCode = 400;
     throw error;
   }
 
-  const deliveredQuantity = getDeliveredQuantity(order.dispatches);
-  const remainingQuantity = Math.max(order.quantity - deliveredQuantity, 0);
-  if (remainingQuantity <= 0) {
-    const error = new Error("Order is already fully dispatched.");
+  // Dispatch eligibility is driven by real-time finished-goods inventory
+  // (topped up when a batch's QC sheet passes) rather than any single
+  // production's status — an order can be fulfilled across several batches.
+  const availableQty = await getAvailableInventoryQty(order.product);
+  if (availableQty <= 0) {
+    const error = new Error("No finished goods stock available in inventory for dispatch.");
     error.statusCode = 409;
     throw error;
   }
-  if (payload.dispatch_quantity > remainingQuantity) {
-    const error = new Error(`Dispatch quantity cannot exceed remaining quantity (${remainingQuantity}).`);
+
+  // Hard gate: can't dispatch more than has actually been packed for this
+  // order. "Packed" is a recorded fact (see packingService) that consumes
+  // real packing-material inventory, not a free checkbox.
+  const packedQuantity = order.packingRecords.reduce((sum, r) => sum + Number(r.packedQuantity || 0), 0);
+  const packedNotYetDispatched = Math.max(packedQuantity - deliveredQuantity, 0);
+  if (packedNotYetDispatched <= 0) {
+    const error = new Error("No packed quantity available for this order yet — pack it before dispatching.");
+    error.statusCode = 409;
+    throw error;
+  }
+
+  const dispatchableQty = Math.min(remainingOrderQty, availableQty, packedNotYetDispatched);
+  if (payload.dispatch_quantity > dispatchableQty) {
+    const error = new Error(`Dispatch quantity cannot exceed available packed quantity (${dispatchableQty}).`);
     error.statusCode = 400;
     throw error;
   }
-  validateDeliveredShipmentStatus(payload.shipment_status, payload.dispatch_quantity, remainingQuantity);
+  validateDeliveredShipmentStatus(payload.shipment_status, payload.dispatch_quantity, remainingOrderQty);
 
   const dispatch = await prisma.$transaction(async (tx) => {
     const created = await tx.dispatch.create({
@@ -764,6 +831,7 @@ export async function createDispatch(payload, actorUser) {
     });
 
     await syncOrderDispatchStatus(tx, payload.order_id);
+    await syncDispatchOutward(tx, created.id, order.product, created.dispatchedQuantity);
     await recordAuditEvent({
       tx,
       action: "CREATE_DISPATCH",
@@ -802,11 +870,15 @@ export async function updateDispatch(dispatchId, payload, actorUser) {
         select: {
           id: true,
           quantity: true,
+          product: true,
           dispatches: {
             select: {
               id: true,
               dispatchedQuantity: true
             }
+          },
+          packingRecords: {
+            select: { packedQuantity: true }
           }
         }
       }
@@ -823,8 +895,11 @@ export async function updateDispatch(dispatchId, payload, actorUser) {
   const currentRowQty = dispatch.dispatchedQuantity || 0;
   const incomingQty = payload.dispatch_quantity ?? currentRowQty;
   const remainingWithoutCurrent = Math.max(dispatch.order.quantity - (currentTotal - currentRowQty), 0);
-  if (incomingQty > remainingWithoutCurrent) {
-    const error = new Error(`Dispatch quantity cannot exceed remaining quantity (${remainingWithoutCurrent}).`);
+  const packedQuantity = dispatch.order.packingRecords.reduce((sum, r) => sum + Number(r.packedQuantity || 0), 0);
+  const packedRemainingWithoutCurrent = Math.max(packedQuantity - (currentTotal - currentRowQty), 0);
+  const allowedQty = Math.min(remainingWithoutCurrent, packedRemainingWithoutCurrent);
+  if (incomingQty > allowedQty) {
+    const error = new Error(`Dispatch quantity cannot exceed available packed quantity (${allowedQty}).`);
     error.statusCode = 400;
     throw error;
   }
@@ -857,6 +932,7 @@ export async function updateDispatch(dispatchId, payload, actorUser) {
     });
 
     await syncOrderDispatchStatus(tx, dispatch.orderId);
+    await syncDispatchOutward(tx, dispatchId, dispatch.order.product, updated.dispatchedQuantity);
     await recordAuditEvent({
       tx,
       action: "UPDATE_DISPATCH",
@@ -878,7 +954,8 @@ export async function deleteDispatch(dispatchId, actorUser) {
     where: { id: dispatchId },
     select: {
       id: true,
-      orderId: true
+      orderId: true,
+      order: { select: { product: true } }
     }
   });
 
@@ -889,6 +966,8 @@ export async function deleteDispatch(dispatchId, actorUser) {
   }
 
   await prisma.$transaction(async (tx) => {
+    await syncDispatchOutward(tx, dispatchId, dispatch.order.product, 0);
+
     await recordAuditEvent({
       tx,
       action: "DELETE_DISPATCH",

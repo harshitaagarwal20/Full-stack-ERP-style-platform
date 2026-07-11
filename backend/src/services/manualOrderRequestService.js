@@ -149,7 +149,8 @@ async function createOrderFromManualRequest(request, actorUser) {
       data: {
         status: "ORDER_CREATED",
         dispatchDate: requestDispatchDate,
-        orderId: finalOrder.id
+        orderId: finalOrder.id,
+        approvedById: actorUser.id
       }
     });
 
@@ -179,7 +180,9 @@ export async function createManualOrderRequest(payload, createdByUser) {
   const normalizedProducts = products.map((product, index) => ({
     product,
     grade: normalizeText(productRows[index]?.grade || payload.grade, "NA"),
-    quantity: Number(productRows[index]?.quantity || payload.quantity || 0) || 1,
+    // ManualOrderRequest.quantity is a whole-unit Int column; round up rather
+    // than let a fractional value (e.g. 7.5) truncate silently on insert.
+    quantity: Math.ceil(Number(productRows[index]?.quantity || payload.quantity || 0)) || 1,
     unit: normalizeOrderUnit(productRows[index]?.unit_of_measurement || payload.unit)
   }));
   const requestDispatchDate = parseDateInput(payload.delivery_date || payload.dispatch_date);
@@ -290,6 +293,21 @@ export async function updateManualOrderRequestStatus(requestId, status, actorUse
     where: { id: requestId },
     select: {
       id: true,
+      requestNumber: true,
+      product: true,
+      grade: true,
+      quantity: true,
+      unit: true,
+      packingType: true,
+      packingSize: true,
+      clientName: true,
+      address: true,
+      city: true,
+      pincode: true,
+      state: true,
+      countryCode: true,
+      remarks: true,
+      dispatchDate: true,
       status: true,
       orderId: true
     }
@@ -307,32 +325,54 @@ export async function updateManualOrderRequestStatus(requestId, status, actorUse
     throw error;
   }
 
-  const updated = await prisma.$transaction(async (tx) => {
-    const next = await tx.manualOrderRequest.update({
+  if (status === "REJECTED") {
+    const updated = await prisma.$transaction(async (tx) => {
+      const next = await tx.manualOrderRequest.update({
+        where: { id: requestId },
+        data: {
+          status,
+          approvedById: actorUser.id
+        },
+        select: MANUAL_ORDER_REQUEST_SELECT
+      });
+
+      await recordAuditEvent({
+        tx,
+        action: "REJECT_MANUAL_ORDER_REQUEST",
+        entityType: "ManualOrderRequest",
+        entityId: requestId,
+        user: actorUser,
+        oldValue: request,
+        newValue: next,
+        note: `Rejected manual order request #${requestId}`
+      });
+
+      return next;
+    });
+
+    invalidateManualOrderRequestCaches();
+    return updated;
+  } else if (status === "APPROVED") {
+    const order = await createOrderFromManualRequest(request, actorUser);
+
+    const updatedRequest = await prisma.manualOrderRequest.findUnique({
       where: { id: requestId },
-      data: {
-        status,
-        approvedById: actorUser.id
-      },
       select: MANUAL_ORDER_REQUEST_SELECT
     });
 
     await recordAuditEvent({
-      tx,
-      action: status === "APPROVED" ? "APPROVE_MANUAL_ORDER_REQUEST" : "REJECT_MANUAL_ORDER_REQUEST",
+      action: "APPROVE_MANUAL_ORDER_REQUEST",
       entityType: "ManualOrderRequest",
       entityId: requestId,
       user: actorUser,
       oldValue: request,
-      newValue: next,
-      note: `${status === "APPROVED" ? "Approved" : "Rejected"} manual order request #${requestId}`
+      newValue: updatedRequest,
+      note: `Approved manual order request #${requestId} and created order #${order.id}`
     });
 
-    return next;
-  });
-
-  invalidateManualOrderRequestCaches();
-  return updated;
+    invalidateManualOrderRequestCaches();
+    return updatedRequest;
+  }
 }
 
 export async function setManualOrderDispatchDate(requestId, payload, actorUser, client = prisma) {

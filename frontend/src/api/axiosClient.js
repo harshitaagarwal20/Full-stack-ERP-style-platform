@@ -32,7 +32,8 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error?.response?.status === 401) {
+    const isLoginRequest = String(error?.config?.url || "").includes("/auth/login");
+    if (error?.response?.status === 401 && !isLoginRequest) {
       const message = error?.response?.data?.message || "Session expired. Please sign in again.";
       safeRemoveItem("fms_token");
       safeRemoveItem("fms_user");

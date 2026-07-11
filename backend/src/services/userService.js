@@ -67,6 +67,7 @@ export async function updateUser(userId, payload) {
   const data = { ...payload };
   if (payload.password) {
     data.password = await bcrypt.hash(payload.password, 10);
+    data.passwordChangedAt = new Date();
   }
 
   try {
@@ -108,7 +109,11 @@ export async function changePassword(userId, currentPassword, newPassword) {
   }
 
   const hashed = await bcrypt.hash(newPassword, 10);
-  return prisma.user.update({ where: { id: userId }, data: { password: hashed }, select: { id: true } });
+  return prisma.user.update({
+    where: { id: userId },
+    data: { password: hashed, passwordChangedAt: new Date() },
+    select: { id: true }
+  });
 }
 
 export async function deleteUser(userId) {

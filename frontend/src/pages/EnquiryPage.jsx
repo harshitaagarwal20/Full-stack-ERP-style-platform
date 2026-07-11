@@ -10,6 +10,7 @@ import { exportRowsToExcel } from "../utils/exportExcel";
 import { CURRENCY_OPTIONS, formatPriceValue } from "../utils/commerce";
 import { getDisplayEnquiryNumber } from "../utils/businessNumbers";
 import { formatEnquiryProducts, normalizeEnquiryProductRows } from "../utils/enquiryProducts";
+import SearchableSelect from "../components/common/SearchableSelect";
 
 function prettyLabel(value) {
   return String(value || "")
@@ -48,18 +49,24 @@ function createEmptyForm() {
     enquiry_date: "",
     mode_of_enquiry: "",
     company_name: "",
+    customer_type: "",
+    enquiry_type: "",
     price: "",
     currency: "INR",
     product: "",
     products: [createEmptyProductRow()],
     expected_timeline: "",
     assigned_person: "",
+    inco_term: "",
+    country: "",
+    port: "",
+    last_transaction: "",
     notes_for_production: ""
   };
 }
 
 function createEmptyProductRow() {
-  return { product: "", grade: "", quantity: "", unit_of_measurement: "" };
+  return { product: "", grade: "", quantity: "", unit_of_measurement: "", price_per_uom: "" };
 }
 
 function getEnquiryProducts(enquiry) {
@@ -74,6 +81,41 @@ function getEnquiryProductGrades(enquiry) {
 }
 
 const UNIT_OPTIONS = ["MT", "KG"];
+const INCO_TERMS = [
+  { value: "EXW", label: "EXW (Ex Works)" },
+  { value: "FCA", label: "FCA (Free Carrier)" },
+  { value: "FAS", label: "FAS (Free Alongside Ship)" },
+  { value: "FOB", label: "FOB (Free on Board)" },
+  { value: "CFR", label: "CFR (Cost and Freight)" },
+  { value: "CIF", label: "CIF (Cost, Insurance and Freight)" },
+  { value: "CPT", label: "CPT (Carriage Paid To)" },
+  { value: "CIP", label: "CIP (Carriage and Insurance Paid)" },
+  { value: "DAP", label: "DAP (Delivered at Place)" },
+  { value: "DPU", label: "DPU (Delivered at Place Unloaded)" },
+  { value: "DDP", label: "DDP (Delivered Duty Paid)" }
+];
+const COUNTRY_OPTIONS_INTL = [
+  "Afghanistan", "Albania", "Algeria", "Andorra", "Angola", "Argentina", "Armenia", "Australia", "Austria", "Azerbaijan",
+  "Bahamas", "Bahrain", "Bangladesh", "Barbados", "Belarus", "Belgium", "Belize", "Benin", "Bhutan", "Bolivia",
+  "Bosnia and Herzegovina", "Botswana", "Brazil", "Brunei", "Bulgaria", "Burkina Faso", "Burundi", "Cambodia", "Cameroon", "Canada",
+  "Cape Verde", "Central African Republic", "Chad", "Chile", "China", "Colombia", "Comoros", "Congo", "Costa Rica", "Croatia",
+  "Cuba", "Cyprus", "Czech Republic", "Czechia", "Denmark", "Djibouti", "Dominica", "Dominican Republic", "East Timor", "Ecuador",
+  "Egypt", "El Salvador", "Equatorial Guinea", "Eritrea", "Estonia", "Eswatini", "Ethiopia", "Fiji", "Finland", "France",
+  "Gabon", "Gambia", "Georgia", "Germany", "Ghana", "Greece", "Grenada", "Guatemala", "Guinea", "Guinea-Bissau",
+  "Guyana", "Haiti", "Honduras", "Hong Kong", "Hungary", "Iceland", "India", "Indonesia", "Iran", "Iraq",
+  "Ireland", "Israel", "Italy", "Ivory Coast", "Jamaica", "Japan", "Jordan", "Kazakhstan", "Kenya", "Kiribati",
+  "Korea North", "Korea South", "Kuwait", "Kyrgyzstan", "Laos", "Latvia", "Lebanon", "Lesotho", "Liberia", "Libya",
+  "Liechtenstein", "Lithuania", "Luxembourg", "Macao", "Madagascar", "Malawi", "Malaysia", "Maldives", "Mali", "Malta",
+  "Marshall Islands", "Mauritania", "Mauritius", "Mexico", "Micronesia", "Moldova", "Monaco", "Mongolia", "Montenegro", "Morocco",
+  "Mozambique", "Myanmar", "Namibia", "Nauru", "Nepal", "Netherlands", "New Zealand", "Nicaragua", "Niger", "Nigeria",
+  "North Macedonia", "Norway", "Oman", "Pakistan", "Palau", "Palestine", "Panama", "Papua New Guinea", "Paraguay", "Peru",
+  "Philippines", "Poland", "Portugal", "Puerto Rico", "Qatar", "Romania", "Russia", "Rwanda", "Saint Kitts and Nevis", "Saint Lucia",
+  "Saint Vincent and the Grenadines", "Samoa", "San Marino", "Sao Tome and Principe", "Saudi Arabia", "Senegal", "Serbia", "Seychelles", "Sierra Leone", "Singapore",
+  "Slovakia", "Slovenia", "Solomon Islands", "Somalia", "South Africa", "South Sudan", "Spain", "Sri Lanka", "Sudan", "Suriname",
+  "Sweden", "Switzerland", "Syria", "Taiwan", "Tajikistan", "Tanzania", "Thailand", "Togo", "Tonga", "Trinidad and Tobago",
+  "Tunisia", "Turkey", "Turkmenistan", "Tuvalu", "Uganda", "Ukraine", "United Arab Emirates", "United Kingdom", "United States", "Uruguay",
+  "Uzbekistan", "Vanuatu", "Vatican City", "Venezuela", "Vietnam", "Yemen", "Zambia", "Zimbabwe"
+];
 
 function EnquiryPage() {
   const PAGE_SIZE = 10;
@@ -97,8 +139,6 @@ function EnquiryPage() {
   const [totalRecords, setTotalRecords] = useState(0);
   const [enquiries, setEnquiries] = useState([]);
   const [form, setForm] = useState(createEmptyForm());
-  const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
-  const companyDropdownRef = useRef(null);
   const canManageEnquiries = user?.role === "admin" || user?.role === "sales";
   const tableWrapRef = useRef(null);
   const statusOptions = useMemo(
@@ -115,13 +155,6 @@ function EnquiryPage() {
     () => (Array.isArray(masterData.companyNames) ? masterData.companyNames : []),
     [masterData.companyNames]
   );
-  const filteredCompanyOptions = useMemo(() => {
-    const inputValue = String(form.company_name || "").trim().toLowerCase();
-    if (!inputValue) return companyOptions;
-    return companyOptions.filter((option) =>
-      String(option.label || option.value || "").toLowerCase().includes(inputValue)
-    );
-  }, [companyOptions, form.company_name]);
   const fetchEnquiries = async () => {
     setLoading(true);
     try {
@@ -150,16 +183,6 @@ function EnquiryPage() {
   useEffect(() => {
     fetchEnquiries();
   }, [query, statusFilter, assignedFilter, dateFilter, currentPage]);
-
-  useEffect(() => {
-    const onOutsideClick = (event) => {
-      if (!companyDropdownRef.current?.contains(event.target)) {
-        setIsCompanyDropdownOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onOutsideClick);
-    return () => document.removeEventListener("mousedown", onOutsideClick);
-  }, []);
 
   const pendingCount = useMemo(
     () => enquiries.filter((item) => item.status === "PENDING").length,
@@ -236,7 +259,7 @@ function EnquiryPage() {
       return;
     }
 
-    const invalidRow = productRows.find((row) => !row.quantity || !row.unit_of_measurement);
+    const invalidRow = productRows.find((row) => !row.grade || !row.quantity || !row.unit_of_measurement);
     if (invalidRow) {
       window.alert("Fill product, grade, quantity, and unit of measurement for each row.");
       return;
@@ -264,6 +287,12 @@ function EnquiryPage() {
         price: form.price === "" ? null : Number(form.price),
         currency: form.currency || null,
         mode_of_enquiry: form.mode_of_enquiry || null,
+        customer_type: form.customer_type || null,
+        enquiry_type: form.enquiry_type || null,
+        inco_term: form.inco_term || null,
+        country: form.country || null,
+        port: form.port || null,
+        last_transaction: form.last_transaction || null,
         unit_of_measurement: unitOfMeasurement,
         notes_for_production: form.notes_for_production || null
       };
@@ -346,12 +375,18 @@ function EnquiryPage() {
       enquiry_date: toDateInput(enquiry.enquiryDate),
       mode_of_enquiry: enquiry.modeOfEnquiry || "",
       company_name: enquiry.companyName || "",
+      customer_type: enquiry.customerType || "",
+      enquiry_type: enquiry.enquiryType || "",
       price: enquiry.price ?? "",
       currency: enquiry.currency || "",
       product: enquiry.product || "",
       products: enquiryProducts.length ? enquiryProducts : [createEmptyProductRow()],
       expected_timeline: toDateInput(enquiry.expectedTimeline),
       assigned_person: enquiry.assignedPerson || "",
+      inco_term: enquiry.incoTerm || "",
+      country: enquiry.country || "",
+      port: enquiry.port || "",
+      last_transaction: enquiry.lastTransaction || "",
       notes_for_production: enquiry.notesForProduction || ""
     });
     setIsCreateModalOpen(true);
@@ -406,11 +441,12 @@ function EnquiryPage() {
 
         <div className="enquiry-toolbar">
           <div className="enquiry-filter-grid">
-            <select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setCurrentPage(1); }}>
-              {statusOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              options={statusOptions}
+              value={statusFilter}
+              onChange={(value) => { setStatusFilter(value); setCurrentPage(1); }}
+              placeholder="All Status"
+            />
             {!isMobile && <input type="date" value={dateFilter} onChange={(event) => { setDateFilter(event.target.value); setCurrentPage(1); }} />}
             <input
               type="text"
@@ -572,73 +608,99 @@ function EnquiryPage() {
                 <input type="date" value={form.enquiry_date} onChange={(e) => setForm((p) => ({ ...p, enquiry_date: e.target.value }))} required />
               </div>
               <div>
-                <label>Mode of Enquiry</label>
-                <select value={form.mode_of_enquiry} onChange={(e) => setForm((p) => ({ ...p, mode_of_enquiry: e.target.value }))}>
-                  <option value="">Select mode</option>
-                  {masterData.modeOfEnquiry.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
+                <label>Customer Type*</label>
+                <select value={form.customer_type} onChange={(e) => setForm((p) => ({ ...p, customer_type: e.target.value }))} required>
+                  <option value="">Select customer type</option>
+                  <option value="Old">Old Customer</option>
+                  <option value="New">New Customer</option>
                 </select>
               </div>
               <div>
-                <label>Company Name*</label>
-                <div className="enquiry-company-select" ref={companyDropdownRef}>
-                  <input
-                    type="text"
-                    value={form.company_name}
-                    placeholder="Search or select company"
-                    onFocus={() => setIsCompanyDropdownOpen(true)}
-                    onChange={(e) => {
-                      setForm((p) => ({ ...p, company_name: e.target.value }));
-                      setIsCompanyDropdownOpen(true);
-                    }}
-                    required
-                  />
-                  {isCompanyDropdownOpen && (
-                    <div className="enquiry-company-select-menu">
-                      {filteredCompanyOptions.length ? (
-                        filteredCompanyOptions.map((option) => (
-                          <button
-                            type="button"
-                            key={option.value}
-                            className="enquiry-company-select-item"
-                            onClick={() => {
-                              setForm((p) => ({ ...p, company_name: option.value }));
-                              setIsCompanyDropdownOpen(false);
-                            }}
-                          >
-                            {option.label}
-                          </button>
-                        ))
-                      ) : (
-                        <div className="enquiry-company-select-empty">No matching company found</div>
-                      )}
-                    </div>
-                  )}
-                </div>
+                <label>Enquiry Type*</label>
+                <select value={form.enquiry_type} onChange={(e) => setForm((p) => ({ ...p, enquiry_type: e.target.value }))} required>
+                  <option value="">Select enquiry type</option>
+                  <option value="Domestic">Domestic</option>
+                  <option value="International">International</option>
+                </select>
               </div>
+              {form.customer_type && form.enquiry_type && (
+                <div style={{ gridColumn: '1 / -1', padding: '12px', backgroundColor: '#f0f9ff', borderRadius: '4px', marginBottom: '12px', fontSize: '13px', color: '#0369a1' }}>
+                  Form for: {form.customer_type} Customer - {form.enquiry_type} Enquiry
+                </div>
+              )}
               <div>
-                <label>Price</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.price}
-                  onChange={(e) => setForm((p) => ({ ...p, price: e.target.value }))}
-                  placeholder="Enter price"
+                <label>Mode of Enquiry</label>
+                <SearchableSelect
+                  options={masterData.modeOfEnquiry}
+                  value={form.mode_of_enquiry}
+                  onChange={(value) => setForm((p) => ({ ...p, mode_of_enquiry: value }))}
+                  placeholder="Select mode"
                 />
               </div>
               <div>
-                <label>Currency</label>
-                <select value={form.currency} onChange={(e) => setForm((p) => ({ ...p, currency: e.target.value }))}>
-                  <option value="">Select currency</option>
-                  {CURRENCY_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                <label>Company Name*</label>
+                <SearchableSelect
+                  options={companyOptions}
+                  value={form.company_name}
+                  onChange={(value) => setForm((p) => ({ ...p, company_name: value }))}
+                  placeholder="Search or select company"
+                  allowCustom
+                />
               </div>
+              {form.enquiry_type === "International" && (
+                <>
+                  <div>
+                    <label>Inco Term*</label>
+                    <select value={form.inco_term} onChange={(e) => setForm((p) => ({ ...p, inco_term: e.target.value }))} required>
+                      <option value="">Select Inco Term</option>
+                      {INCO_TERMS.map((term) => (
+                        <option key={term.value} value={term.value}>{term.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label>Country*</label>
+                    <select value={form.country} onChange={(e) => setForm((p) => ({ ...p, country: e.target.value }))} required>
+                      <option value="">Select country</option>
+                      {COUNTRY_OPTIONS_INTL.map((country) => (
+                        <option key={country} value={country}>{country}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label>Port*</label>
+                    <input
+                      type="text"
+                      value={form.port}
+                      onChange={(e) => setForm((p) => ({ ...p, port: e.target.value }))}
+                      placeholder="Enter port name"
+                      required
+                    />
+                  </div>
+                </>
+              )}
+              {form.customer_type === "Old" && (
+                <div className="full-row">
+                  <label>Last Transaction Details</label>
+                  <textarea
+                    rows="4"
+                    value={form.last_transaction}
+                    onChange={(e) => setForm((p) => ({ ...p, last_transaction: e.target.value }))}
+                    placeholder="Enter previous transaction details:&#10;Product: [Product Name]&#10;Grade: [Grade]&#10;UOM: [MT/KG]&#10;Packaging: [Packaging Details]"
+                  />
+                </div>
+              )}
+              {form.enquiry_type === "International" && (
+                <div>
+                  <label>Currency</label>
+                  <SearchableSelect
+                    options={CURRENCY_OPTIONS}
+                    value={form.currency}
+                    onChange={(value) => setForm((p) => ({ ...p, currency: value }))}
+                    placeholder="Select currency"
+                  />
+                </div>
+              )}
               <div className="full-row">
                 <label>Products Enquired*</label>
                 <div className="enquiry-product-rows">
@@ -646,28 +708,22 @@ function EnquiryPage() {
                     <div key={index} className="enquiry-product-row">
                       <div>
                         <label>Product</label>
-                        <select
+                        <SearchableSelect
+                          options={masterData.products}
                           value={row.product}
-                          onChange={(e) =>
+                          onChange={(value) =>
                             setForm((prev) => ({
                               ...prev,
                               products: prev.products.map((item, rowIndex) =>
-                                rowIndex === index ? { ...item, product: e.target.value } : item
+                                rowIndex === index ? { ...item, product: value } : item
                               )
                             }))
                           }
-                          required
-                        >
-                          <option value="">Select product</option>
-                          {masterData.products.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
+                          placeholder="Select product"
+                        />
                       </div>
                       <div>
-                        <label>Grade</label>
+                        <label>Grade *</label>
                         <input
                           type="text"
                           value={row.grade}
@@ -680,6 +736,7 @@ function EnquiryPage() {
                             }))
                           }
                           placeholder="Enter grade"
+                          required
                         />
                       </div>
                       <div>
@@ -701,22 +758,37 @@ function EnquiryPage() {
                       </div>
                       <div>
                         <label>Unit of Measurement</label>
-                        <select
+                        <SearchableSelect
+                          options={UNIT_OPTIONS.map((unit) => ({ value: unit, label: unit }))}
                           value={row.unit_of_measurement}
+                          onChange={(value) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              products: prev.products.map((item, rowIndex) =>
+                                rowIndex === index ? { ...item, unit_of_measurement: value } : item
+                              )
+                            }))
+                          }
+                          placeholder="Select unit"
+                        />
+                      </div>
+                      <div>
+                        <label>Price per {row.unit_of_measurement || "UOM"}</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={row.price_per_uom}
                           onChange={(e) =>
                             setForm((prev) => ({
                               ...prev,
                               products: prev.products.map((item, rowIndex) =>
-                                rowIndex === index ? { ...item, unit_of_measurement: e.target.value } : item
+                                rowIndex === index ? { ...item, price_per_uom: e.target.value } : item
                               )
                             }))
                           }
-                        >
-                          <option value="">Select unit</option>
-                          {UNIT_OPTIONS.map((unit) => (
-                            <option key={unit} value={unit}>{unit}</option>
-                          ))}
-                        </select>
+                          placeholder="Enter price per UOM"
+                        />
                       </div>
                       <div className="enquiry-product-row-actions">
                         <button
@@ -753,12 +825,12 @@ function EnquiryPage() {
               </div>
               <div>
                 <label>Assigned To?</label>
-                <select value={form.assigned_person} onChange={(e) => setForm((p) => ({ ...p, assigned_person: e.target.value }))} required>
-                  <option value="">Select assignee</option>
-                  {masterData.assignedPersons.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
+                <SearchableSelect
+                  options={masterData.assignedPersons}
+                  value={form.assigned_person}
+                  onChange={(value) => setForm((p) => ({ ...p, assigned_person: value }))}
+                  placeholder="Select assignee"
+                />
               </div>
               <div>
                 <label>Status</label>

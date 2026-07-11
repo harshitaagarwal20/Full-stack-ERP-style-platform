@@ -4,6 +4,7 @@ import api from "../api/axiosClient";
 import { PrinterIcon } from "../components/erp/ErpIcons";
 import { logApiError } from "../utils/apiError";
 import { dispatchUserMessage } from "../utils/errorMessages";
+import { getShipToLocation } from "../config/shipToLocations";
 
 function formatDate(val) {
   if (!val) return "-";
@@ -13,8 +14,12 @@ function formatDate(val) {
 }
 
 function calcAmountAfterTax(item) {
-  const total = (item.qty || 0) * (item.unitPrice || 0);
+  const total = calcRowTotal(item);
   return total * (1 + (item.taxPercent || 0) / 100);
+}
+
+function calcRowTotal(item) {
+  return Number(item.receivedQty || 0) * Number(item.unitPrice || 0);
 }
 
 function formatDateTime(val) {
@@ -162,6 +167,7 @@ function PurchaseOrderDetailPage() {
   if (!po) return null;
 
   const grnItems = po.grns || [];
+  const shipToLocation = getShipToLocation(po.shipTo);
 
   return (
     <div className="order-page">
@@ -209,6 +215,7 @@ function PurchaseOrderDetailPage() {
             <p><span>PO Number</span> {po.poNumber}</p>
             <p><span>Order Date</span> {formatDate(po.orderDate)}</p>
             <p><span>Exp. Delivery</span> {formatDate(po.expectedDeliveryDate)}</p>
+            <p><span>Ship To</span> {shipToLocation.label}</p>
             {po.department && <p><span>Department</span> {po.department}</p>}
             <p><span>Total Amount</span> <strong>{formatAmount(po.totalAmount)}</strong></p>
             <p><span>Created By</span> {po.createdBy?.name || "-"}</p>
@@ -237,8 +244,8 @@ function PurchaseOrderDetailPage() {
         <h3 style={{ margin: "0 0 14px", fontSize: 15, color: "#334155" }}>
           Line Items ({po.items?.length || 0})
         </h3>
-        <div className="order-table-wrap">
-          <table className="order-table">
+        <div className="responsive-table-wrap">
+          <table className="order-table responsive-table">
             <thead>
               <tr>
                 <th>#</th>
@@ -257,27 +264,26 @@ function PurchaseOrderDetailPage() {
             <tbody>
               {(po.items || []).map((item, index) => (
                 <tr key={item.id}>
-                  <td>{index + 1}</td>
-                  <td>{item.itemId || "-"}</td>
-                  <td>{item.qty}</td>
-                  <td>{item.uom || "-"}</td>
-                  <td>{item.grade || "-"}</td>
-                  <td>{item.currency || "INR"}</td>
-                  <td>{formatAmount(item.unitPrice)}</td>
-                  <td>{formatAmount((item.qty || 0) * (item.unitPrice || 0))}</td>
-                  <td>{item.taxPercent != null ? `${item.taxPercent}%` : "-"}</td>
-                  <td style={{ fontWeight: 600 }}>{formatAmount(calcAmountAfterTax(item))}</td>
-                  <td>{item.receivedQty}</td>
+                  <td data-label="">{index + 1}</td>
+                  <td data-label="Item ID">{item.itemId || "-"}</td>
+                  <td data-label="QTY">{item.qty}</td>
+                  <td data-label="UoM">{item.uom || "-"}</td>
+                  <td data-label="Grade">{item.grade || "-"}</td>
+                  <td data-label="Currency">{item.currency || "INR"}</td>
+                  <td data-label="Price/Unit">{formatAmount(item.unitPrice)}</td>
+                  <td data-label="Total Amount">{formatAmount(calcRowTotal(item))}</td>
+                  <td data-label="Tax %">{item.taxPercent != null ? `${item.taxPercent}%` : "-"}</td>
+                  <td data-label="Amt After Tax" style={{ fontWeight: 600 }}>{formatAmount(calcAmountAfterTax(item))}</td>
+                  <td data-label="Qty Received">{item.receivedQty}</td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
               <tr>
                 <td colSpan={9} style={{ textAlign: "right", fontWeight: 700, paddingRight: 12 }}>Gross Amount</td>
-                <td style={{ fontWeight: 700 }}>
+                <td data-label="Gross Amount" style={{ fontWeight: 700 }}>
                   {formatAmount((po.items || []).reduce((s, i) => s + calcAmountAfterTax(i), 0))}
                 </td>
-                <td />
               </tr>
             </tfoot>
           </table>
@@ -305,8 +311,8 @@ function PurchaseOrderDetailPage() {
             <p style={{ color: "#64748b", margin: 0 }}>No GRNs received yet</p>
           </div>
         ) : (
-          <div className="order-table-wrap">
-            <table className="order-table">
+          <div className="responsive-table-wrap">
+            <table className="order-table responsive-table">
               <thead>
                 <tr>
                   <th>#</th>
@@ -324,16 +330,16 @@ function PurchaseOrderDetailPage() {
                     style={{ cursor: "pointer" }}
                     onClick={() => navigate(`/grns/${grn.id}`)}
                   >
-                    <td>{index + 1}</td>
-                    <td style={{ color: "#2563eb", fontWeight: 600 }}>{grn.grnNumber}</td>
-                    <td>
+                    <td data-label="">{index + 1}</td>
+                    <td data-label="GRN Number" style={{ color: "#2563eb", fontWeight: 600 }}>{grn.grnNumber}</td>
+                    <td data-label="Status">
                       <span className={`order-status ${grn.status === "CONFIRMED" ? "approved" : "created"}`}>
                         {grn.status === "CONFIRMED" ? "Confirmed" : "Draft"}
                       </span>
                     </td>
-                    <td>{formatDate(grn.receivedDate)}</td>
-                    <td>{grn.warehouseLocation || "-"}</td>
-                    <td>{formatDateTime(grn.createdAt)}</td>
+                    <td data-label="Received Date">{formatDate(grn.receivedDate)}</td>
+                    <td data-label="Warehouse">{grn.warehouseLocation || "-"}</td>
+                    <td data-label="Created At">{formatDateTime(grn.createdAt)}</td>
                   </tr>
                 ))}
               </tbody>

@@ -8,9 +8,34 @@ import { extractSupplierCodeSequence, formatPONumber, formatSupplierCode } from 
 const PO_CACHE_PREFIX = "purchase-orders:list";
 const PO_CACHE_TTL_MS = 12 * 1000;
 
+const PO_LIST_WITH_ITEMS_SELECT = {
+  ...PO_LIST_SELECT,
+  items: { select: { receivedQty: true, unitPrice: true } }
+};
+
 function invalidatePOCaches() {
   invalidateCacheByPrefix("purchase-orders:");
   invalidateCacheByPrefix("dashboard:");
+}
+
+export function calculateReceivedTotal(items = []) {
+  return Math.round(
+    items.reduce((sum, item) => sum + Number(item.receivedQty || 0) * Number(item.unitPrice || 0), 0) * 100
+  ) / 100;
+}
+
+function calculateOrderedTotal(items = []) {
+  return Math.round(
+    items.reduce((sum, item) => sum + Number(item.qty ?? item.quantity_ordered ?? 0) * Number(item.unitPrice ?? item.unit_price ?? 0), 0) * 100
+  ) / 100;
+}
+
+function withReceivedTotal(po, { keepItems = true } = {}) {
+  if (!po) return po;
+  const totalAmount = calculateReceivedTotal(po.items || []);
+  if (keepItems) return { ...po, totalAmount };
+  const { items, ...rest } = po;
+  return { ...rest, totalAmount };
 }
 
 async function findOrCreateSupplier(supplierName, supplierDetails = {}) {
@@ -62,26 +87,43 @@ function generateUniqueKey(poId, itemIndex) {
   return `POI-${poId}-${itemIndex}-${Date.now()}`;
 }
 
-function buildItemsCreateData(items, poId, supplierName, poNumber) {
-  return items.map((item, index) => ({
-    uniqueKey: generateUniqueKey(poId, index),
-    poNumber,
-    supplier: supplierName,
-    itemId: String(item.item_description || "").trim(),
-    category: item.category || null,
-    uom: item.uom || null,
-    grade: item.grade || null,
-    currency: item.currency || "INR",
-    unitPrice: Number(item.unit_price || 0),
-    taxPercent: Number(item.tax_percent || 0),
-    expDaysDelivery: item.exp_days_delivery || null,
-    qty: Number(item.quantity_ordered),
-    outwardKey: item.outward_key || null,
-    batchNo: item.batch_no || null
-  }));
+function buildItemsCreateData(items, poId, supplierName, poNumber, existingItems = []) {
+  return items.map((item, index) => {
+    const preserved = existingItems[index];
+    return {
+      uniqueKey: generateUniqueKey(poId, index),
+      poNumber,
+      supplier: supplierName,
+      itemId: String(item.item_description || "").trim(),
+      category: item.category || null,
+      uom: item.uom || null,
+      grade: item.grade || null,
+      currency: item.currency !== undefined ? (item.currency || "INR") : (preserved?.currency || "INR"),
+      unitPrice: item.unit_price !== undefined ? Number(item.unit_price || 0) : Number(preserved?.unitPrice || 0),
+      taxPercent: item.tax_percent !== undefined ? Number(item.tax_percent || 0) : Number(preserved?.taxPercent || 0),
+      expDaysDelivery: item.exp_days_delivery || null,
+      qty: Number(item.quantity_ordered),
+      outwardKey: item.outward_key || null,
+      batchNo: item.batch_no || null
+    };
+  });
+}
+
+// Requisition-only users (role !== admin) can create/edit the "what to order" fields,
+// but pricing (unit price, tax, currency, discount, freight) is admin-only — any pricing
+// values they submit are dropped here rather than trusted from the request body.
+function stripPricingForNonAdmin(items, isAdmin) {
+  if (isAdmin) return items;
+  return items.map((item) => {
+    const { unit_price, tax_percent, currency, ...rest } = item;
+    return rest;
+  });
 }
 
 export async function createPurchaseOrder(payload, user) {
+  const isAdmin = user.role === "admin";
+  const items = stripPricingForNonAdmin(payload.items, isAdmin);
+
   const supplier = await findOrCreateSupplier(payload.supplier_name, {
     supplier_code:  payload.supplier_code,
     contact_person: payload.supplier_contact_person,
@@ -93,11 +135,6 @@ export async function createPurchaseOrder(payload, user) {
     pan_no:         payload.supplier_pan_no
   });
 
-  const totalAmount = payload.items.reduce(
-    (sum, item) => sum + Number(item.quantity_ordered) * Number(item.unit_price || 0),
-    0
-  );
-
   const tmpKey = `TMP-${Date.now()}`;
   const po = await prisma.purchaseOrder.create({
     data: {
@@ -105,13 +142,14 @@ export async function createPurchaseOrder(payload, user) {
       poNumberWithCategory: payload.po_number_with_category || null,
       category: payload.category || payload.department || null,
       billTo: payload.bill_to || "NIMBASIA STABILIZERS",
+      shipTo: payload.ship_to || null,
       supplierId: supplier.id,
       orderDate: payload.order_date ? new Date(payload.order_date) : new Date(),
       expectedDeliveryDate: payload.expected_delivery_date ? new Date(payload.expected_delivery_date) : null,
-      totalDiscount: payload.total_discount ?? 0,
-      freight: payload.freight || null,
+      totalDiscount: isAdmin ? (payload.total_discount ?? 0) : 0,
+      freight: isAdmin ? (payload.freight || null) : null,
       status: "DRAFT",
-      totalAmount,
+      totalAmount: 0,
       notes: payload.notes || null,
       department: payload.department || null,
       createdById: user.id
@@ -119,7 +157,7 @@ export async function createPurchaseOrder(payload, user) {
   });
 
   const poNumber = formatPONumber(po.id);
-  const itemsData = buildItemsCreateData(payload.items, po.id, supplier.name, poNumber);
+  const itemsData = buildItemsCreateData(items, po.id, supplier.name, poNumber);
 
   const updated = await prisma.purchaseOrder.update({
     where: { id: po.id },
@@ -136,11 +174,11 @@ export async function createPurchaseOrder(payload, user) {
     entityType: "PurchaseOrder",
     entityId: po.id,
     user,
-    newValue: { poNumber, supplierId: supplier.id, totalAmount }
+    newValue: { poNumber, supplierId: supplier.id, totalAmount: 0 }
   });
 
   invalidatePOCaches();
-  return updated;
+  return withReceivedTotal(updated);
 }
 
 export async function listPurchaseOrders(query = {}) {
@@ -175,7 +213,7 @@ export async function listPurchaseOrders(query = {}) {
     const [items, total] = await Promise.all([
       prisma.purchaseOrder.findMany({
         where,
-        select: PO_LIST_SELECT,
+        select: PO_LIST_WITH_ITEMS_SELECT,
         orderBy: { createdAt: "desc" },
         skip,
         take
@@ -184,7 +222,7 @@ export async function listPurchaseOrders(query = {}) {
     ]);
 
     return {
-      items,
+      items: items.map((po) => withReceivedTotal(po, { keepItems: false })),
       pagination: {
         page,
         limit: take,
@@ -207,11 +245,15 @@ export async function getPurchaseOrder(id) {
     throw error;
   }
 
-  return po;
+  return withReceivedTotal(po);
 }
 
 export async function updatePurchaseOrder(id, payload, user) {
-  const existing = await prisma.purchaseOrder.findUnique({ where: { id } });
+  const isAdmin = user.role === "admin";
+  const existing = await prisma.purchaseOrder.findUnique({
+    where: { id },
+    include: { items: { orderBy: { id: "asc" } } }
+  });
 
   if (!existing) {
     const error = new Error("Purchase order not found.");
@@ -243,21 +285,21 @@ export async function updatePurchaseOrder(id, payload, user) {
     supplierName = supplier.name;
   }
 
-  let totalAmount = existing.totalAmount;
-  if (payload.items) {
-    totalAmount = payload.items.reduce(
-      (sum, item) => sum + Number(item.quantity_ordered) * Number(item.unit_price || 0),
-      0
-    );
-  }
-
   const resolvedSupplierName = supplierName || (await prisma.supplier.findUnique({ where: { id: supplierId }, select: { name: true } }))?.name || "";
 
+  const items = payload.items ? stripPricingForNonAdmin(payload.items, isAdmin) : null;
+
+  let totalAmount = existing.totalAmount;
+  let itemsData = null;
+  if (items) {
+    itemsData = buildItemsCreateData(items, id, resolvedSupplierName, existing.poNumber, existing.items);
+    totalAmount = calculateReceivedTotal(itemsData);
+  }
+
   const updated = await prisma.$transaction(async (tx) => {
-    if (payload.items) {
+    if (itemsData) {
       await tx.purchaseOrderItem.deleteMany({ where: { poId: id } });
-      const newItems = buildItemsCreateData(payload.items, id, resolvedSupplierName, existing.poNumber);
-      await tx.purchaseOrderItem.createMany({ data: newItems.map((item) => ({ ...item, poId: id })) });
+      await tx.purchaseOrderItem.createMany({ data: itemsData.map((item) => ({ ...item, poId: id })) });
     }
 
     return tx.purchaseOrder.update({
@@ -269,12 +311,13 @@ export async function updatePurchaseOrder(id, payload, user) {
           ? (payload.po_number_with_category || null)
           : undefined,
         billTo: payload.bill_to !== undefined ? (payload.bill_to || null) : undefined,
+        shipTo: payload.ship_to !== undefined ? (payload.ship_to || null) : undefined,
         orderDate: payload.order_date ? new Date(payload.order_date) : undefined,
         expectedDeliveryDate: payload.expected_delivery_date !== undefined
           ? (payload.expected_delivery_date ? new Date(payload.expected_delivery_date) : null)
           : undefined,
-        totalDiscount: payload.total_discount !== undefined ? payload.total_discount : undefined,
-        freight: payload.freight !== undefined ? (payload.freight || null) : undefined,
+        totalDiscount: !isAdmin ? undefined : (payload.total_discount !== undefined ? payload.total_discount : undefined),
+        freight: !isAdmin ? undefined : (payload.freight !== undefined ? (payload.freight || null) : undefined),
         totalAmount,
         notes: payload.notes !== undefined ? payload.notes : undefined,
         department: payload.department !== undefined ? payload.department : undefined
@@ -293,7 +336,7 @@ export async function updatePurchaseOrder(id, payload, user) {
   });
 
   invalidatePOCaches();
-  return updated;
+  return withReceivedTotal(updated);
 }
 
 const VALID_TRANSITIONS = {
@@ -320,6 +363,18 @@ export async function updatePurchaseOrderStatus(id, newStatus, user) {
     throw error;
   }
 
+  if (po.status === "DRAFT" && newStatus === "SENT_TO_SUPPLIER") {
+    const items = await prisma.purchaseOrderItem.findMany({
+      where: { poId: id },
+      select: { qty: true, unitPrice: true }
+    });
+    if (calculateOrderedTotal(items) <= 0) {
+      const error = new Error("Add pricing to all items before generating the PO.");
+      error.statusCode = 400;
+      throw error;
+    }
+  }
+
   const updated = await prisma.purchaseOrder.update({
     where: { id },
     data: { status: newStatus },
@@ -336,7 +391,7 @@ export async function updatePurchaseOrderStatus(id, newStatus, user) {
   });
 
   invalidatePOCaches();
-  return updated;
+  return withReceivedTotal(updated);
 }
 
 export async function deletePurchaseOrder(id, user) {

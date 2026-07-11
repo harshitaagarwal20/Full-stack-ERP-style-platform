@@ -30,21 +30,21 @@ export function normalizeEnquiryProductRows(value) {
       ? value.split(",")
       : [];
 
-  const seen = new Set();
-
   return rawValues
     .map(normalizeProductGradePair)
-    .filter((item) => {
-      if (!item) return false;
-      const key = `${item.product.toLowerCase()}::${item.grade.toLowerCase()}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+    .filter(Boolean);
 }
 
 export function normalizeEnquiryProducts(value) {
-  return normalizeEnquiryProductRows(value).map((item) => item.product);
+  const seen = new Set();
+  return normalizeEnquiryProductRows(value).reduce((products, item) => {
+    const key = item.product.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      products.push(item.product);
+    }
+    return products;
+  }, []);
 }
 
 export function formatEnquiryProducts(products, fallback = "") {

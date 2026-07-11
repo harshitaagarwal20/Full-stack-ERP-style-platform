@@ -9,6 +9,7 @@ let masterDataInFlight = null;
 const EDITABLE_MASTER_DATA_CATEGORIES = Object.freeze([
   "products",
   "assignedPersons",
+  "supervisors",
   "modeOfEnquiry",
   "units",
   "countryCodes"
@@ -147,6 +148,7 @@ function toMasterDataObject(rows) {
   grouped.productionStatuses = grouped.productionStatuses.map((item) => {
     if (item.value === "PENDING") return { ...item, label: "Not Started" };
     if (item.value === "IN_PROGRESS") return { ...item, label: "Started" };
+    if (item.value === "PARTIALLY_PRODUCED") return { ...item, label: "Partially Produced" };
     if (item.value === "COMPLETED") return { ...item, label: "Completed" };
     return item;
   });
@@ -393,7 +395,7 @@ export async function addCustomerMasterRow(payload, user, options = {}) {
   const countryCode = String(payload.country_code || "").trim();
   const custInitials = String(payload.cust_initials || "").trim();
   const sNoCode = String(payload.s_no_code || "").trim();
-  const customerCode = String(payload.customer_code || "").trim() || null;
+  let customerCode = String(payload.customer_code || "").trim() || null;
   const contactPerson = String(payload.contact_person || "").trim();
   const contactPersonNumber = String(payload.contact_person_number || "").trim();
   const companyEmail = String(payload.company_email || "").trim();
@@ -406,6 +408,22 @@ export async function addCustomerMasterRow(payload, user, options = {}) {
     const error = new Error("Customer Name is required.");
     error.statusCode = 400;
     throw error;
+  }
+
+  if (!customerCode) {
+    const existing = await prisma.$queryRaw`
+      SELECT \`customerCode\` FROM \`CustomerMaster\`
+      WHERE \`customerCode\` LIKE 'CU-%'
+    `;
+    const maxNum = existing.reduce((max, row) => {
+      const match = String(row.customerCode || "").match(/^CU-(\d+)$/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        return num > max ? num : max;
+      }
+      return max;
+    }, 0);
+    customerCode = `CU-${String(maxNum + 1).padStart(3, "0")}`;
   }
 
   await prisma.$executeRaw`

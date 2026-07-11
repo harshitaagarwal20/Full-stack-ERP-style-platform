@@ -90,7 +90,7 @@ body {
 
   --erp-sidebar-bg: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
   --erp-sidebar-text: #dbeafe;
-  --erp-sidebar-active: #2563eb;
+  --erp-sidebar-active: #1e40af;
 
   --erp-blue: #2563eb;
   --erp-green: #16a34a;
@@ -6430,3 +6430,674 @@ th.rm-th-right { text-align: right; }
   }
 }
 
+/* Mobile List Card Component */
+.mobile-list-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+  margin-left: 0;
+  margin-right: 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+  cursor: pointer;
+  width: 100%;
+}
+
+.mobile-list-card:active {
+  transform: scale(0.98);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.mobile-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.mobile-card-title-section {
+  flex: 1;
+  min-width: 0;
+}
+
+.mobile-card-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-card-subtitle {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #64748b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-card-badge {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  display: inline-block;
+}
+
+.mobile-card-badge-default {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+
+.mobile-card-badge-blue {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
+.mobile-card-badge-green {
+  background: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
+.mobile-card-badge-orange {
+  background: #fff7ed;
+  color: #c2410c;
+  border: 1px solid #fed7aa;
+}
+
+.mobile-card-badge-red {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+.mobile-card-badge-purple {
+  background: #faf5ff;
+  color: #7c3aed;
+  border: 1px solid #e9d5ff;
+}
+
+.mobile-card-fields {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.mobile-card-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mobile-card-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #94a3b8;
+}
+
+.mobile-card-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-card-action-btn {
+  width: 100%;
+  padding: 10px 12px;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.mobile-card-action-btn:active {
+  background: #1d4ed8;
+  transform: scale(0.98);
+}
+
+/* Hide tables on mobile - MOBILE FIRST */
+@media screen and (max-width: 768px) {
+  .order-table-wrap,
+  .enquiry-table-wrap,
+  .grn-table-wrap,
+  .dispatch-table-wrap,
+  .production-table-wrap,
+  .pending-table-wrap,
+  .activity-table-wrap {
+    display: none !important;
+  }
+
+  .order-mobile-list,
+  .enquiry-mobile-list,
+  .grn-mobile-list,
+  .dispatch-mobile-list,
+  .production-mobile-list,
+  .pending-mobile-list,
+  .activity-mobile-list {
+    display: block !important;
+    padding: 12px !important;
+  }
+
+  /* Hide desktop pagination on mobile, show mobile pagination */
+  .order-pagination,
+  .enquiry-pagination,
+  .grn-pagination,
+  .dispatch-pagination,
+  .production-pagination,
+  .pending-pagination,
+  .activity-pagination {
+    display: none !important;
+  }
+
+  /* Ensure mobile pagination inside mobile list is visible */
+  .order-mobile-list .order-pagination,
+  .enquiry-mobile-list .enquiry-pagination,
+  .grn-mobile-list .grn-pagination,
+  .dispatch-mobile-list .dispatch-pagination,
+  .production-mobile-list .production-pagination,
+  .pending-mobile-list .pending-pagination,
+  .activity-mobile-list .activity-pagination {
+    display: block !important;
+  }
+
+  .mobile-list-container {
+    display: block !important;
+  }
+}
+
+/* Show tables on desktop */
+@media screen and (min-width: 769px) {
+  .order-mobile-list,
+  .enquiry-mobile-list,
+  .grn-mobile-list,
+  .dispatch-mobile-list,
+  .production-mobile-list,
+  .pending-mobile-list,
+  .activity-mobile-list {
+    display: none !important;
+  }
+
+  .mobile-list-container {
+    display: none !important;
+  }
+
+  .order-table-wrap,
+  .enquiry-table-wrap,
+  .grn-table-wrap,
+  .dispatch-table-wrap,
+  .production-table-wrap,
+  .pending-table-wrap,
+  .activity-table-wrap {
+    display: block !important;
+  }
+}
+
+/* ============================================================
+   Responsive line-item tables → stacked cards on mobile.
+   Add class "responsive-table" to a <table> and wrap it in
+   "responsive-table-wrap". Give each <td> a data-label="..."
+   so the field name shows next to its value on phones.
+   ============================================================ */
+.responsive-table-wrap {
+  margin-top: 14px;
+  overflow-x: auto;
+}
+
+@media screen and (max-width: 768px) {
+  .responsive-table-wrap {
+    overflow-x: visible;
+    margin-top: 12px;
+  }
+
+  table.responsive-table,
+  table.responsive-table tbody {
+    display: block;
+    width: 100%;
+    min-width: 0 !important;
+  }
+
+  table.responsive-table thead {
+    display: none;
+  }
+
+  table.responsive-table tr {
+    display: block;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 4px 14px;
+    margin-bottom: 12px;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  }
+
+  table.responsive-table td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: auto !important;
+    min-width: 0 !important;
+    text-align: right !important;
+    padding: 9px 0 !important;
+    border: none !important;
+    border-bottom: 1px solid #f1f5f9 !important;
+    white-space: normal !important;
+    font-size: 13px;
+  }
+
+  table.responsive-table td:last-child {
+    border-bottom: none !important;
+  }
+
+  table.responsive-table td::before {
+    content: attr(data-label);
+    flex: 0 0 42%;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  /* Cells with an empty/absent data-label render full-width, no label
+     (e.g. row-number cells or action buttons). */
+  table.responsive-table td[data-label=""]::before,
+  table.responsive-table td:not([data-label])::before {
+    content: none;
+  }
+
+  table.responsive-table td[data-label=""],
+  table.responsive-table td:not([data-label]) {
+    justify-content: flex-end;
+  }
+
+  /* Inputs/selects inside a stacked cell fill the remaining width. */
+  table.responsive-table td .input,
+  table.responsive-table td input,
+  table.responsive-table td select,
+  table.responsive-table td textarea {
+    flex: 1 1 auto;
+    width: auto !important;
+    min-width: 0 !important;
+  }
+
+  /* Empty-state / colspan rows should stay centered and simple. */
+  table.responsive-table td[colspan] {
+    justify-content: center;
+    text-align: center !important;
+  }
+  table.responsive-table td[colspan]::before {
+    content: none;
+  }
+}
+
+/* ============================================================
+   MOBILE HARDENING (≤768px) — mobile-only safety net.
+   Prevents horizontal scroll, guarantees 44px touch targets,
+   and stops long text / fixed-width elements from overflowing.
+   Desktop (≥769px) is untouched.
+   ============================================================ */
+@media screen and (max-width: 768px) {
+  /* 1. Kill horizontal scrolling at the page level.
+     Scoped to html/body only — putting overflow-x on the sticky
+     topbar's intermediate ancestors (#root/.erp-shell/.erp-main-panel)
+     would break position: sticky, so we deliberately don't. */
+  html,
+  body {
+    overflow-x: hidden;
+    max-width: 100%;
+  }
+
+  /* Media & embedded content never exceed their column. */
+  img,
+  video,
+  canvas,
+  iframe {
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* 2. Touch targets — minimum 44×44px for anything tappable. */
+  .erp-bottom-nav-item,
+  .erp-nav-item,
+  .order-btn-primary,
+  .order-btn-secondary,
+  .masterdata-btn-primary,
+  .masterdata-btn-secondary,
+  .users-btn,
+  .mapp-btn,
+  .production-link-btn,
+  .approval-btn-primary,
+  .approval-btn-danger,
+  .dispatch-btn-primary,
+  .dispatch-btn-secondary,
+  .enquiry-btn-primary,
+  .enquiry-btn-secondary,
+  button.order-sort-btn {
+    min-height: 44px;
+  }
+
+  /* Approve / Reject sit side-by-side and fill the card width. */
+  .approval-request-buttons button {
+    flex: 1 1 0;
+    min-height: 44px;
+  }
+
+  .icon-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Native form controls are comfortable to tap and never zoom on
+     focus (iOS zooms when font-size < 16px). */
+  .input,
+  input,
+  select,
+  textarea {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  textarea {
+    min-height: 88px;
+  }
+
+  /* 3. Long / unbreakable text must wrap instead of pushing width. */
+  .mobile-card-value,
+  .mobile-card-title,
+  .mobile-card-subtitle,
+  .order-status,
+  .production-status,
+  .mobile-card-badge {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  /* Status pills wrap their text rather than force a wide row. */
+  .order-status,
+  .production-status,
+  .mobile-card-badge {
+    white-space: normal;
+    height: auto;
+  }
+
+  /* 4. Any inline flex "toolbar" row wraps rather than overflow. */
+  .order-header-card,
+  .order-header-right {
+    flex-wrap: wrap;
+  }
+}
+
+/* Extra tuning for the smallest phones (≤360px, e.g. 320px). */
+@media screen and (max-width: 360px) {
+  .erp-content {
+    padding: 8px;
+    padding-bottom: calc(var(--erp-bottom-nav-height) + env(safe-area-inset-bottom, 0px) + 8px);
+  }
+
+  /* Filter/search selects and inputs go full-width so they never
+     collide side-by-side on a very narrow screen. */
+  .order-card .input,
+  .order-card select,
+  .order-card input[type="text"] {
+    flex: 1 1 100%;
+    max-width: 100% !important;
+  }
+
+  .erp-bottom-nav-label {
+    font-size: 10px;
+  }
+
+  .mobile-card-title {
+    font-size: 15px;
+  }
+}
+
+/* ============================================================
+   MOBILE PRODUCTION CARD — tap-to-update job card (mobile only,
+   JS-gated by isMobile, so no media query needed).
+   Professional corporate-blue palette.
+   ============================================================ */
+.prod-mcard {
+  position: relative;
+  background: #ffffff;
+  border: 1px solid #e7e8f2;
+  border-left: 4px solid #94a3b8;
+  border-radius: 16px;
+  padding: 14px;
+  box-shadow: 0 4px 14px rgba(31, 27, 90, 0.06);
+  margin-bottom: 12px;
+  cursor: pointer;
+}
+.prod-mcard.is-progress { border-left-color: #2563eb; }
+.prod-mcard.is-hold { border-left-color: #d97706; }
+.prod-mcard.is-complete { border-left-color: #059669; }
+
+.prod-mcard-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.prod-mcard-idwrap { min-width: 0; }
+.prod-mcard-code {
+  display: block;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #2563eb;
+}
+.prod-mcard-name {
+  display: block;
+  font-size: 15.5px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #0f172a;
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+.prod-mcard-pill {
+  flex: none;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 5px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+  color: #475569;
+  background: #eef1f6;
+}
+.prod-mcard-pill.is-progress { color: #1d4ed8; background: #e8f1ff; }
+.prod-mcard-pill.is-hold { color: #b45309; background: #fdf2dc; }
+.prod-mcard-pill.is-complete { color: #047857; background: #e7f8f1; }
+
+.prod-mcard-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #64748b;
+}
+.prod-mcard-meta span { position: relative; }
+.prod-mcard-meta span + span::before {
+  content: "";
+  position: absolute;
+  left: -7px;
+  top: 50%;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #cbd5e1;
+  transform: translateY(-50%);
+}
+
+/* Lifecycle stepper: Pending → Started → Completed */
+.prod-steps {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 13px;
+}
+.prod-step {
+  flex: 1;
+  height: 5px;
+  border-radius: 999px;
+  background: #e7e8f2;
+}
+.prod-step.done { background: #2563eb; }
+.prod-step.done.is-complete { background: #059669; }
+.prod-step.done.is-hold { background: #d97706; }
+.prod-steps-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.prod-mcard-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 13px;
+}
+.prod-mcard-actions button {
+  flex: 1;
+  min-height: 44px;
+  border-radius: 12px;
+  border: 1.5px solid #e2e8f0;
+  background: #f8fafc;
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 13px;
+  color: #475569;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: transform 0.12s ease;
+}
+.prod-mcard-actions button:active { transform: scale(0.97); }
+.prod-mcard-actions .pa-primary {
+  border-color: #2563eb;
+  background: linear-gradient(135deg, #2563eb, #1e40af);
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.28);
+}
+.prod-mcard-actions .pa-complete {
+  border-color: #059669;
+  background: linear-gradient(135deg, #059669, #047857);
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(5, 150, 105, 0.26);
+}
+.prod-mcard-actions .pa-ghost {
+  flex: 0 0 auto;
+  width: 52px;
+}
+.prod-mcard-actions .pa-ghost.danger {
+  border-color: #fecaca;
+  color: #dc2626;
+  background: #fff5f5;
+}
+
+/* ============================================================
+   MOBILE "TODAY" HOME — action-first launchpad (mobile only,
+   JS-gated). Professional corporate-blue palette.
+   ============================================================ */
+.today-mobile { display: flex; flex-direction: column; }
+
+.today-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.today-date { margin: 0; font-size: 13px; font-weight: 600; color: #64748b; }
+.today-hi { margin: 3px 0 0; font-size: 22px; font-weight: 800; letter-spacing: -0.02em; color: #0f172a; }
+.today-avatar {
+  width: 44px; height: 44px; border-radius: 50%; flex: none;
+  background: linear-gradient(135deg, #2563eb, #1e40af);
+  color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 15px;
+}
+
+.today-sec {
+  margin: 20px 2px 10px;
+  font-size: 11px; font-weight: 800; letter-spacing: 0.1em;
+  text-transform: uppercase; color: #94a3b8;
+}
+
+.today-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
+.today-tile {
+  display: flex; flex-direction: column; justify-content: space-between;
+  min-height: 104px; border-radius: 18px; padding: 15px; color: #fff;
+  text-decoration: none; box-shadow: 0 10px 22px rgba(37, 99, 235, 0.24);
+}
+.today-tile.v1 { background: linear-gradient(150deg, #2563eb, #1e40af); }
+.today-tile.v2 { background: linear-gradient(150deg, #0e7490, #155e75); box-shadow: 0 10px 22px rgba(14,116,144,0.24); }
+.today-tile.v3 { background: linear-gradient(150deg, #b45309, #92400e); box-shadow: 0 10px 22px rgba(180,83,9,0.22); }
+.today-tile.v4 { background: linear-gradient(150deg, #047857, #065f46); box-shadow: 0 10px 22px rgba(4,120,87,0.22); }
+.today-tile-ic {
+  width: 34px; height: 34px; border-radius: 11px; background: rgba(255,255,255,0.22);
+  display: grid; place-items: center;
+}
+.today-tile-ic svg { width: 18px; height: 18px; }
+.today-tile-t { font-size: 15px; font-weight: 800; letter-spacing: -0.01em; }
+.today-tile-s { font-size: 11.5px; opacity: 0.88; font-weight: 600; margin-top: 1px; }
+
+.today-needs {
+  background: #ffffff; border: 1px solid #e7e8f2; border-radius: 18px;
+  padding: 4px 14px; box-shadow: 0 4px 14px rgba(31, 27, 90, 0.06);
+}
+.today-need {
+  display: flex; align-items: center; gap: 12px; padding: 13px 0;
+  border-bottom: 1px solid #f1f5f9; text-decoration: none;
+}
+.today-need:last-child { border-bottom: 0; }
+.today-need-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.today-need.warn .today-need-dot { background: #d97706; }
+.today-need.info .today-need-dot { background: #2563eb; }
+.today-need.ok .today-need-dot { background: #059669; }
+.today-need-label { flex: 1; font-size: 14px; font-weight: 700; color: #0f172a; }
+.today-need-count {
+  font-size: 13px; font-weight: 800; min-width: 26px; text-align: center;
+  padding: 3px 9px; border-radius: 999px; color: #475569; background: #eef1f6;
+}
+.today-need.warn .today-need-count { color: #b45309; background: #fdf2dc; }
+.today-need.info .today-need-count { color: #1d4ed8; background: #e8f1ff; }
+.today-need.ok .today-need-count { color: #047857; background: #e7f8f1; }
+.today-need-chev { color: #cbd5e1; font-size: 18px; }
+
+.today-empty {
+  padding: 26px 16px; text-align: center; color: #64748b; font-size: 14px;
+  background: #ffffff; border: 1px solid #e7e8f2; border-radius: 18px;
+}

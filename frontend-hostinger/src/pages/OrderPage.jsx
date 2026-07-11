@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "../api/axiosClient";
 import VirtualizedTableBody from "../components/common/VirtualizedTableBody";
+import MobileListCard from "../components/common/MobileListCard";
 import { BoxesIcon, EditIcon, EyeIcon, SearchIcon, TrashIcon } from "../components/erp/ErpIcons";
 import { useAuth } from "../context/AuthContext";
 import useMasterData from "../hooks/useMasterData";
@@ -114,6 +115,7 @@ function createCreateForm() {
 function OrderPage() {
   const PAGE_SIZE = 10;
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const masterData = useMasterData();
   const [loading, setLoading] = useState(true);
@@ -480,6 +482,18 @@ function OrderPage() {
 
   const canCreate = user.role === "sales" || user.role === "admin";
 
+  // Deep-link: /orders?new=1 opens the create sheet directly (from mobile Today tiles).
+  useEffect(() => {
+    if (searchParams.get("new") === "1" && canCreate) {
+      setEditingOrderId(null);
+      setForm(createCreateForm());
+      setIsCreateModalOpen(true);
+      searchParams.delete("new");
+      setSearchParams(searchParams, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, canCreate]);
+
   const onCustomerChange = (customerName) => {
     const normalizedName = String(customerName || "").trim();
     const profile = findCustomerProfile(customerMasterRows, normalizedName);
@@ -567,7 +581,8 @@ function OrderPage() {
           </div>
         ) : sortedOrders.length ? (
           <>
-            <div className="order-table-wrap" ref={tableWrapRef}>
+            {/* Desktop Table View */}
+            {!isMobile && <div className="order-table-wrap" ref={tableWrapRef}>
               <div className="order-table-meta">
                 Showing {Math.min((currentPage - 1) * PAGE_SIZE + 1, totalRecords)}-
                 {Math.min(currentPage * PAGE_SIZE, totalRecords)} of {totalRecords} records
@@ -650,14 +665,49 @@ function OrderPage() {
                   }}
                 />
               </table>
-            </div>
-            <div className="order-pagination">
-              <div className="order-pagination-info">Page {currentPage} of {totalPages}</div>
-              <div className="order-page-controls">
-                <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1}>Prev</button>
-                <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Next</button>
+              <div className="order-pagination">
+                <div className="order-pagination-info">Page {currentPage} of {totalPages}</div>
+                <div className="order-page-controls">
+                  <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1}>Prev</button>
+                  <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Next</button>
+                </div>
               </div>
-            </div>
+            </div>}
+
+            {/* Mobile Card View */}
+            {isMobile && <div className="order-mobile-list">
+              <div style={{ marginBottom: 12, fontSize: 12, color: '#64748b', paddingLeft: 4 }}>
+                Showing {Math.min((currentPage - 1) * PAGE_SIZE + 1, totalRecords)}-{Math.min(currentPage * PAGE_SIZE, totalRecords)} of {totalRecords} records
+              </div>
+              {sortedOrders.map((order, index) => {
+                const location = getOrderLocation(order);
+                return (
+                  <MobileListCard
+                    key={order.id}
+                    title={getDisplaySalesGroupNumber(order)}
+                    subtitle={order.clientName || "-"}
+                    badge={getOrderStatusLabel(order.status)}
+                    badgeColor={getOrderStatusClass(order.status) === "dispatched" ? "green" : getOrderStatusClass(order.status) === "in-production" ? "blue" : getOrderStatusClass(order.status) === "approved" ? "purple" : "default"}
+                    fields={[
+                      { label: "Product", value: order.product || "-" },
+                      { label: "Quantity", value: `${order.quantity} ${order.unit}` },
+                      { label: "Delivery Date", value: formatDate(order.deliveryDate) },
+                      { label: "City", value: location.city || "-" }
+                    ]}
+                    onClick={() => setSelectedOrder(order)}
+                    onActionClick={() => setSelectedOrder(order)}
+                    actionLabel="View Details"
+                  />
+                );
+              })}
+              <div className="order-pagination" style={{ borderTop: "none", paddingTop: 16 }}>
+                <div className="order-pagination-info">Page {currentPage} of {totalPages}</div>
+                <div className="order-page-controls">
+                  <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1}>Prev</button>
+                  <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Next</button>
+                </div>
+              </div>
+            </div>}
           </>
         ) : (
           <div className="order-empty-state">

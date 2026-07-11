@@ -6,16 +6,7 @@ import {
   updateOrderDispatchDate
 } from "../services/dispatchService.js";
 import { setManualOrderDispatchDate } from "../services/manualOrderRequestService.js";
-
-function toPositiveIntOrThrow(rawValue, fieldLabel) {
-  const value = Number(rawValue);
-  if (!Number.isInteger(value) || value <= 0) {
-    const error = new Error(`Invalid ${fieldLabel}.`);
-    error.statusCode = 400;
-    throw error;
-  }
-  return value;
-}
+import { toPositiveIntOrThrow } from "../utils/routeParams.js";
 
 export async function getDispatch(req, res, next) {
   try {

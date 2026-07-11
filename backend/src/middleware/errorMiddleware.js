@@ -27,14 +27,13 @@ function getStatusCode(error) {
   }
 }
 
-function getMessage(error) {
+function getMessage(error, status) {
   if (error?.details) return "Please review the highlighted fields.";
   if (error?.code === "P2002") return "A record with this value already exists.";
   if (error?.code === "P2003") return "A related record is missing.";
   if (error?.code === "P2025") return "Requested record not found.";
   if (error?.code === "P2000") return "One or more values are too long for the database field.";
   if (error?.code === "P2011") return "A required field is missing.";
-  console.log("Server running on middleware 3000 ", error?.code);
   if (
     error?.code === "P1001" ||
     error?.code === "P1002" ||
@@ -49,8 +48,15 @@ function getMessage(error) {
     return "Invalid JSON payload.";
   }
   if (error?.name === "PrismaClientValidationError") return "Invalid data provided to the database.";
-  const message = String(error?.message || "").trim();
-  if (message && !message.toLowerCase().includes("route not found")) return message;
+
+  // Only trust the raw error message for errors app code deliberately threw
+  // with a non-5xx status (e.g. `error.statusCode = 400`). Anything that
+  // fell through to an unrecognized 5xx — a bug, a third-party library
+  // exception — gets a generic message instead of leaking internal detail.
+  if (status < 500) {
+    const message = String(error?.message || "").trim();
+    if (message && !message.toLowerCase().includes("route not found")) return message;
+  }
   return "Something went wrong on the server.";
 }
 
@@ -61,7 +67,7 @@ export function errorMiddleware(error, req, res, next) {
 
   const status = getStatusCode(error);
   const payload = {
-    message: getMessage(error)
+    message: getMessage(error, status)
   };
 
   if (error?.details) {

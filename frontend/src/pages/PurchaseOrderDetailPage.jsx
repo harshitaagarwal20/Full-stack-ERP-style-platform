@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../api/axiosClient";
 import { PrinterIcon } from "../components/erp/ErpIcons";
+import { useAuth } from "../context/AuthContext";
 import { logApiError } from "../utils/apiError";
 import { dispatchUserMessage } from "../utils/errorMessages";
+import { getShipToLocation } from "../config/shipToLocations";
 
 function formatDate(val) {
   if (!val) return "-";
@@ -13,8 +15,12 @@ function formatDate(val) {
 }
 
 function calcAmountAfterTax(item) {
-  const total = (item.qty || 0) * (item.unitPrice || 0);
+  const total = calcRowTotal(item);
   return total * (1 + (item.taxPercent || 0) / 100);
+}
+
+function calcRowTotal(item) {
+  return Number(item.receivedQty || 0) * Number(item.unitPrice || 0);
 }
 
 function formatDateTime(val) {
@@ -28,6 +34,8 @@ function formatAmount(val) {
 
 function getPOStatusClass(status) {
   if (status === "DRAFT") return "created";
+  if (status === "SUBMITTED") return "partial";
+  if (status === "APPROVED") return "ready";
   if (status === "SENT_TO_SUPPLIER") return "in-production";
   if (status === "PARTIALLY_RECEIVED") return "partial";
   if (status === "FULLY_RECEIVED") return "ready";
@@ -37,6 +45,8 @@ function getPOStatusClass(status) {
 
 function getPOStatusLabel(status) {
   if (status === "DRAFT") return "Draft";
+  if (status === "SUBMITTED") return "Submitted";
+  if (status === "APPROVED") return "Approved";
   if (status === "SENT_TO_SUPPLIER") return "Sent to Supplier";
   if (status === "PARTIALLY_RECEIVED") return "Partially Received";
   if (status === "FULLY_RECEIVED") return "Fully Received";
@@ -44,7 +54,7 @@ function getPOStatusLabel(status) {
   return status;
 }
 
-function StatusActions({ po, onStatusChange, onDelete, navigateToEdit, navigateToGRN }) {
+function StatusActions({ po, onStatusChange, onDelete, navigateToEdit, navigateToGRN, isAdmin }) {
   const [updating, setUpdating] = useState(false);
 
   const doStatus = async (newStatus) => {
@@ -65,16 +75,20 @@ function StatusActions({ po, onStatusChange, onDelete, navigateToEdit, navigateT
         <button className="order-btn-secondary" onClick={navigateToEdit}>
           Edit PO
         </button>
-        <button className="order-btn-primary" disabled={updating} onClick={() => doStatus("SENT_TO_SUPPLIER")}>
-          Send to Supplier
-        </button>
-        <button
-          className="order-btn-secondary po-btn-danger"
-          disabled={updating}
-          onClick={onDelete}
-        >
-          Delete
-        </button>
+        {isAdmin && (
+          <button className="order-btn-primary" disabled={updating} onClick={() => doStatus("SENT_TO_SUPPLIER")}>
+            Generate PO — Send to Supplier
+          </button>
+        )}
+        {isAdmin && (
+          <button
+            className="order-btn-secondary po-btn-danger"
+            disabled={updating}
+            onClick={onDelete}
+          >
+            Delete
+          </button>
+        )}
       </>
     );
   }
@@ -101,6 +115,8 @@ function StatusActions({ po, onStatusChange, onDelete, navigateToEdit, navigateT
 function PurchaseOrderDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
 
   const [po, setPo] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -162,6 +178,7 @@ function PurchaseOrderDetailPage() {
   if (!po) return null;
 
   const grnItems = po.grns || [];
+  const shipToLocation = getShipToLocation(po.shipTo);
 
   return (
     <div className="order-page">
@@ -193,6 +210,7 @@ function PurchaseOrderDetailPage() {
           </a>
           <StatusActions
             po={po}
+            isAdmin={isAdmin}
             onStatusChange={handleStatusChange}
             onDelete={handleDelete}
             navigateToEdit={() => navigate(`/purchase-orders/${id}/edit`)}
@@ -209,10 +227,11 @@ function PurchaseOrderDetailPage() {
             <p><span>PO Number</span> {po.poNumber}</p>
             <p><span>Order Date</span> {formatDate(po.orderDate)}</p>
             <p><span>Exp. Delivery</span> {formatDate(po.expectedDeliveryDate)}</p>
+            <p><span>Ship To</span> {shipToLocation.label}</p>
             {po.department && <p><span>Department</span> {po.department}</p>}
             <p><span>Total Amount</span> <strong>{formatAmount(po.totalAmount)}</strong></p>
             <p><span>Created By</span> {po.createdBy?.name || "-"}</p>
-            {po.notes && <p style={{ gridColumn: "1 / -1" }}><span>Notes</span> {po.notes}</p>}
+            {po.notes && <p style={{ gridColumn: "1 / -1" }}><span>Remarks</span> {po.notes}</p>}
           </div>
         </section>
 
@@ -264,7 +283,7 @@ function PurchaseOrderDetailPage() {
                   <td>{item.grade || "-"}</td>
                   <td>{item.currency || "INR"}</td>
                   <td>{formatAmount(item.unitPrice)}</td>
-                  <td>{formatAmount((item.qty || 0) * (item.unitPrice || 0))}</td>
+                  <td>{formatAmount(calcRowTotal(item))}</td>
                   <td>{item.taxPercent != null ? `${item.taxPercent}%` : "-"}</td>
                   <td style={{ fontWeight: 600 }}>{formatAmount(calcAmountAfterTax(item))}</td>
                   <td>{item.receivedQty}</td>

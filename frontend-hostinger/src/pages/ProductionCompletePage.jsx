@@ -152,8 +152,8 @@ function ProductionCompletePage() {
 
       {canManageProduction ? (
         <form className="mapp-form" onSubmit={onSubmit}>
-          <div className="production-table-wrap">
-            <table className="production-table">
+          <div className="responsive-table-wrap">
+            <table className="production-table responsive-table">
               <thead>
                 <tr>
                   <th>#</th>
@@ -172,16 +172,16 @@ function ProductionCompletePage() {
                   const tracked = trackedRows[index] || {};
                   return (
                     <tr key={`${row.batch_no}-${index}`}>
-                      <td>{index + 1}</td>
-                      <td>{row.sales_order_no}</td>
-                      <td>{row.product}</td>
-                      <td>
+                      <td data-label="">{index + 1}</td>
+                      <td data-label="Sales ID">{row.sales_order_no}</td>
+                      <td data-label="Product">{row.product}</td>
+                      <td data-label="Batch No">
                         <input
                           value={row.batch_no}
                           onChange={(event) => onBatchChange(index, "batch_no", event.target.value)}
                         />
                       </td>
-                      <td>
+                      <td data-label="Produced Quantity">
                         <input
                           type="number"
                           min="0"
@@ -190,14 +190,14 @@ function ProductionCompletePage() {
                           onChange={(event) => onBatchChange(index, "produced_qty", event.target.value)}
                         />
                       </td>
-                      <td>{tracked.cumulative_produced ?? 0}</td>
-                      <td>{tracked.remaining_qty ?? 0}</td>
-                      <td>
+                      <td data-label="Cumulative Produced">{tracked.cumulative_produced ?? 0}</td>
+                      <td data-label="Remaining Quantity">{tracked.remaining_qty ?? 0}</td>
+                      <td data-label="Batch Status">
                         <span className={`production-status ${tracked.batch_status === "Overproduction" ? "pending" : tracked.batch_status === "Completed" ? "completed" : "in-progress"}`}>
                           {tracked.batch_status || "In Progress"}
                         </span>
                       </td>
-                      <td>
+                      <td data-label="">
                         <button
                           type="button"
                           className="production-link-btn delete"

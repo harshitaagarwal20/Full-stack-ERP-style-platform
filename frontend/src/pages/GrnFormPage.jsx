@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import api from "../api/axiosClient";
 import { logApiError } from "../utils/apiError";
 import { dispatchUserMessage } from "../utils/errorMessages";
+import SearchableSelect from "../components/common/SearchableSelect";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -150,25 +151,26 @@ function GrnFormPage({ isModal = false, onClose, onSuccess }) {
           <h3 style={{ margin: "0 0 14px", fontSize: 15, color: "#334155" }}>Select Purchase Order</h3>
           <div style={{ maxWidth: 480 }}>
             <label className="label">Purchase Order</label>
-            <select
-              className="input"
+            <SearchableSelect
+              options={poOptions.map((p) => ({
+                value: p.id,
+                label: `${p.poNumber} — ${p.supplier?.name} (${p.status})`
+              }))}
               value={poIdInput}
-              disabled={loadingOptions}
-              onChange={(e) => {
-                const val = e.target.value;
-                setPoIdInput(val);
-                if (val) loadPO(Number(val));
+              onChange={(value) => {
+                setPoIdInput(value);
+                if (value) loadPO(Number(value));
               }}
-            >
-              <option value="">
-                {loadingOptions ? "Loading purchase orders..." : optionsError ? "Failed to load — refresh to retry" : poOptions.length === 0 ? "No purchase orders found" : "— Select a PO —"}
-              </option>
-              {poOptions.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.poNumber} — {p.supplier?.name} ({p.status})
-                </option>
-              ))}
-            </select>
+              placeholder={
+                loadingOptions
+                  ? "Loading purchase orders..."
+                  : optionsError
+                  ? "Failed to load — refresh to retry"
+                  : poOptions.length === 0
+                  ? "No purchase orders found"
+                  : "— Select a PO —"
+              }
+            />
           </div>
         </section>
       )}
@@ -267,6 +269,7 @@ function GrnFormPage({ isModal = false, onClose, onSuccess }) {
                           style={{ minWidth: 80 }}
                           type="number"
                           min="0"
+                          step="0.01"
                           placeholder="0"
                           value={item.quantity_received}
                           onChange={(e) => setItemField(index, "quantity_received", e.target.value)}
@@ -288,7 +291,7 @@ function GrnFormPage({ isModal = false, onClose, onSuccess }) {
             </div>
           </section>
 
-          <section className="order-card" style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+          <section className="order-card order-form-actions">
             <button type="button" className="order-btn-secondary" onClick={handleClose}>
               Cancel
             </button>

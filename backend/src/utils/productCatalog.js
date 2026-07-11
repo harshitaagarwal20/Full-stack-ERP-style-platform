@@ -33,8 +33,17 @@ export function normalizeProductList(value) {
 
 export async function getProductCatalogSet() {
   const masterData = await getMasterData();
+  // Enquiries sell finished goods, so accept anything from either the
+  // general product list or the dedicated finished-goods catalog (e.g.
+  // "CZ-100", "Sima-100N") — items that only exist in one or the other
+  // would otherwise be silently unselectable on an enquiry.
   const products = Array.isArray(masterData.products) ? masterData.products : [];
-  return new Set(products.map((item) => normalizeProductValue(item.value).toLowerCase()).filter(Boolean));
+  const finishedGoods = Array.isArray(masterData.finishedGoodsCatalog) ? masterData.finishedGoodsCatalog : [];
+  return new Set(
+    [...products, ...finishedGoods]
+      .map((item) => normalizeProductValue(item.value).toLowerCase())
+      .filter(Boolean)
+  );
 }
 
 export async function ensureProductsExist(products, { allowEmpty = false } = {}) {

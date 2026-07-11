@@ -232,8 +232,8 @@ function GrnFormPage({ isModal = false, onClose, onSuccess }) {
             <h3 style={{ margin: "0 0 14px", fontSize: 15, color: "#334155" }}>
               Line Items ({form.items.length})
             </h3>
-            <div className="order-table-wrap">
-              <table className="order-table">
+            <div className="responsive-table-wrap">
+              <table className="order-table responsive-table">
                 <thead>
                   <tr>
                     <th>#</th>
@@ -251,17 +251,17 @@ function GrnFormPage({ isModal = false, onClose, onSuccess }) {
                 <tbody>
                   {form.items.map((item, index) => (
                     <tr key={item.po_item_id}>
-                      <td>{index + 1}</td>
-                      <td style={{ fontWeight: 500 }}>{item.item_id}</td>
-                      <td>{item.category || "-"}</td>
-                      <td>{item.grade || "-"}</td>
-                      <td>{item.uom || "-"}</td>
-                      <td>{item.qty_ordered}</td>
-                      <td>{item.already_received}</td>
-                      <td style={{ fontWeight: 600, color: item.remaining <= 0 ? "#16a34a" : "#0f172a" }}>
+                      <td data-label="">{index + 1}</td>
+                      <td data-label="Item" style={{ fontWeight: 500 }}>{item.item_id}</td>
+                      <td data-label="Category">{item.category || "-"}</td>
+                      <td data-label="Grade">{item.grade || "-"}</td>
+                      <td data-label="UOM">{item.uom || "-"}</td>
+                      <td data-label="Qty Ordered">{item.qty_ordered}</td>
+                      <td data-label="Already Received">{item.already_received}</td>
+                      <td data-label="Remaining" style={{ fontWeight: 600, color: item.remaining <= 0 ? "#16a34a" : "#0f172a" }}>
                         {item.remaining <= 0 ? "✓ Done" : item.remaining}
                       </td>
-                      <td>
+                      <td data-label="Receiving Now *">
                         <input
                           className="input"
                           style={{ minWidth: 80 }}
@@ -272,7 +272,7 @@ function GrnFormPage({ isModal = false, onClose, onSuccess }) {
                           onChange={(e) => setItemField(index, "quantity_received", e.target.value)}
                         />
                       </td>
-                      <td>
+                      <td data-label="Item Remarks">
                         <input
                           className="input"
                           style={{ minWidth: 120 }}

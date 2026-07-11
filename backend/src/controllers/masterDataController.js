@@ -1,4 +1,5 @@
 import { addCustomerMasterRow, addEnquiryMasterRow, addMasterDataValue, addSupplierMasterRow, deleteCustomerMasterRow, deleteSupplierMasterRow, getMasterData, importCustomerMasterRows, importSupplierMasterRows } from "../services/masterDataService.js";
+import { toPositiveIntOrThrow } from "../utils/routeParams.js";
 
 export async function listMasterData(req, res, next) {
   try {
@@ -49,7 +50,7 @@ export async function importCustomerMaster(req, res, next) {
 
 export async function removeCustomerMaster(req, res, next) {
   try {
-    const customerId = Number(req.params.id);
+    const customerId = toPositiveIntOrThrow(req.params.id, "id");
     const item = await deleteCustomerMasterRow(customerId, req.user);
     return res.json(item);
   } catch (error) {
@@ -77,7 +78,7 @@ export async function importSupplierMaster(req, res, next) {
 
 export async function removeSupplierMaster(req, res, next) {
   try {
-    const supplierId = Number(req.params.id);
+    const supplierId = toPositiveIntOrThrow(req.params.id, "id");
     const item = await deleteSupplierMasterRow(supplierId, req.user);
     return res.json(item);
   } catch (error) {

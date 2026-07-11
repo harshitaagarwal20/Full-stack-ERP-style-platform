@@ -109,8 +109,7 @@ function ProductionCompletePage() {
 
   const onSubmit = async (event) => {
     event.preventDefault();
-    event.preventDefault();
-    if (!record || !canManageProduction) return;
+    if (!record || !canManageProduction || saving) return;
     setSaving(true);
     try {
       await api.put(`/production/${record.id}/edit`, {

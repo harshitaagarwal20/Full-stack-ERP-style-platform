@@ -1,4 +1,5 @@
 import { changePassword, createUser, deleteUser, listUsers, updateUser } from "../services/userService.js";
+import { toPositiveIntOrThrow } from "../utils/routeParams.js";
 
 export async function getUsers(req, res, next) {
   try {
@@ -20,7 +21,7 @@ export async function addUser(req, res, next) {
 
 export async function editUser(req, res, next) {
   try {
-    const user = await updateUser(Number(req.params.id), req.validatedBody);
+    const user = await updateUser(toPositiveIntOrThrow(req.params.id, "id"), req.validatedBody);
     return res.json(user);
   } catch (error) {
     return next(error);
@@ -29,7 +30,7 @@ export async function editUser(req, res, next) {
 
 export async function removeUser(req, res, next) {
   try {
-    await deleteUser(Number(req.params.id));
+    await deleteUser(toPositiveIntOrThrow(req.params.id, "id"));
     return res.status(204).end();
   } catch (error) {
     return next(error);

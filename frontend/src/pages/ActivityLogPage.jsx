@@ -5,6 +5,7 @@ import { ClipboardIcon, SearchIcon } from "../components/erp/ErpIcons";
 import { sanitizeAuditValue } from "../utils/auditLog";
 import { logApiError } from "../utils/apiError";
 import { sortByNewestFirst } from "../utils/recordOrdering";
+import SearchableSelect from "../components/common/SearchableSelect";
 
 const actionLabels = {
   APPROVE_ENQUIRY: "Approve Enquiry",
@@ -51,13 +52,23 @@ function ActivityLogPage() {
   const [actionFilter, setActionFilter] = useState("ALL");
   const [entityFilter, setEntityFilter] = useState("ALL");
   const [selectedLog, setSelectedLog] = useState(null);
+  const [totalLogCount, setTotalLogCount] = useState(0);
   const tableWrapRef = useRef(null);
+
+  // Cap the fetch instead of pulling the entire audit history every load —
+  // this only shows the most recent LOG_FETCH_LIMIT entries, which keeps the
+  // request bounded as the log grows. Search/filter still run client-side
+  // within that window rather than a full server-paginated table, since the
+  // action/entity filter dropdowns are derived from whatever's loaded.
+  const LOG_FETCH_LIMIT = 500;
 
   const fetchLogs = async () => {
     setLoading(true);
     try {
-      const { data } = await api.get("/audit-logs");
-      setLogs(sortByNewestFirst(Array.isArray(data) ? data : []));
+      const { data } = await api.get("/audit-logs", { params: { limit: LOG_FETCH_LIMIT } });
+      const items = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
+      setLogs(sortByNewestFirst(items));
+      setTotalLogCount(Number(data?.pagination?.total ?? items.length));
     } catch (error) {
       logApiError(error, "Failed to load activity log");
     } finally {
@@ -118,16 +129,18 @@ function ActivityLogPage() {
           </div>
 
           <div className="activity-filter-grid">
-            <select value={actionFilter} onChange={(event) => setActionFilter(event.target.value)}>
-              {actionOptions.map((option) => (
-                <option key={option} value={option}>{option === "ALL" ? "All Actions" : actionLabels[option] || option}</option>
-              ))}
-            </select>
-            <select value={entityFilter} onChange={(event) => setEntityFilter(event.target.value)}>
-              {entityOptions.map((option) => (
-                <option key={option} value={option}>{option === "ALL" ? "All Modules" : option}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              options={actionOptions.map((option) => ({ value: option, label: option === "ALL" ? "All Actions" : actionLabels[option] || option }))}
+              value={actionFilter}
+              onChange={(value) => setActionFilter(value)}
+              placeholder="All Actions"
+            />
+            <SearchableSelect
+              options={entityOptions.map((option) => ({ value: option, label: option === "ALL" ? "All Modules" : option }))}
+              value={entityFilter}
+              onChange={(value) => setEntityFilter(value)}
+              placeholder="All Modules"
+            />
           </div>
         </div>
 
@@ -137,6 +150,7 @@ function ActivityLogPage() {
           <div className="activity-table-wrap" ref={tableWrapRef}>
             <div className="activity-table-meta">
               Showing {filteredLogs.length} activity record{filteredLogs.length === 1 ? "" : "s"}
+              {totalLogCount > logs.length ? ` (most recent ${logs.length} of ${totalLogCount} total)` : ""}
             </div>
             <table className="activity-table">
               <thead>

@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/axiosClient";
 import VirtualizedTableBody from "../components/common/VirtualizedTableBody";
+import MobileListCard from "../components/common/MobileListCard";
 import { useAuth } from "../context/AuthContext";
 import useMasterData from "../hooks/useMasterData";
+import { useIsMobile } from "../hooks/useIsMobile";
 import { logApiError } from "../utils/apiError";
 import { findCustomerProfile } from "../utils/customerLookup";
 import { formatPriceValue } from "../utils/commerce";
@@ -40,6 +42,7 @@ function PendingExportDatePage() {
   const [dispatchDateOrders, setDispatchDateOrders] = useState([]);
   const [selectedDispatchOrder, setSelectedDispatchOrder] = useState(null);
   const [dispatchDateValue, setDispatchDateValue] = useState("");
+  const isMobile = useIsMobile();
   const tableWrapRef = useRef(null);
   const customerMasterRows = Array.isArray(masterData.customerMaster) ? masterData.customerMaster : [];
 
@@ -132,7 +135,8 @@ function PendingExportDatePage() {
             {[1, 2, 3].map((item) => <div key={item} className="dispatch-skeleton-row" />)}
           </div>
         ) : dispatchDateOrders.length ? (
-          <div className="dispatch-table-wrap" ref={tableWrapRef}>
+          <>
+          {!isMobile && <div className="dispatch-table-wrap" ref={tableWrapRef}>
             <table className="dispatch-table">
               <thead>
                 <tr>
@@ -184,7 +188,29 @@ function PendingExportDatePage() {
                 )}
               />
             </table>
-          </div>
+          </div>}
+
+          {isMobile && <div className="order-mobile-list">
+            {dispatchDateOrders.map((order) => (
+              <MobileListCard
+                key={order.id}
+                title={getDisplaySalesNumber(order) || "-"}
+                subtitle={order.clientName || "-"}
+                badge={order.source === "MANUAL_REQUEST" ? "Manual Request" : "Enquiry"}
+                badgeColor="default"
+                fields={[
+                  { label: "Product", value: order.product || "-" },
+                  { label: "Quantity", value: `${order.quantity || 0} ${order.unit || ""}` },
+                  { label: "Price", value: formatPriceValue(order.price) },
+                  { label: "Expected Delivery", value: formatDate(order.deliveryDate) }
+                ]}
+                onClick={() => canEditDispatchDate && openDispatchDateModal(order)}
+                onActionClick={() => canEditDispatchDate && openDispatchDateModal(order)}
+                actionLabel="Set Dispatch Date"
+              />
+            ))}
+          </div>}
+          </>
         ) : (
           <div className="dispatch-empty-state compact">
             <p>No approved enquiries or manual orders are waiting for dispatch date.</p>

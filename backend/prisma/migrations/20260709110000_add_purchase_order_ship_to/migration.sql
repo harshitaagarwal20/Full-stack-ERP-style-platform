@@ -1,0 +1,2 @@
+ALTER TABLE `PurchaseOrder`
+ADD COLUMN `shipTo` VARCHAR(191) NULL;

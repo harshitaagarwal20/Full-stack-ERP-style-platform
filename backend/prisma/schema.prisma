@@ -40,6 +40,7 @@ enum ManualOrderRequestStatus {
 enum ProductionStatus {
   PENDING
   IN_PROGRESS
+  PARTIALLY_PRODUCED
   HOLD
   COMPLETED
 }
@@ -71,6 +72,18 @@ enum GrnStatus {
   CONFIRMED
 }
 
+enum QcResult {
+  PENDING
+  PASS
+  FAIL
+}
+
+enum FgQcResult {
+  PENDING
+  PASS
+  FAIL
+}
+
 model User {
   id                 Int       @id @default(autoincrement())
   name               String
@@ -78,6 +91,7 @@ model User {
   password           String
   role               Role
   createdAt          DateTime  @default(now())
+  passwordChangedAt  DateTime?
   enquiriesCreated   Enquiry[] @relation("EnquiryCreator")
   enquiriesApproved  Enquiry[] @relation("EnquiryApprover")
   ordersCreated      Order[]
@@ -85,6 +99,7 @@ model User {
   manualOrderRequestsApproved ManualOrderRequest[] @relation("ManualOrderRequestApprover")
   auditLogs          AuditLog[]
   purchaseOrders     PurchaseOrder[] @relation("POCreator")
+  batchSubstitutions BatchSubstitution[]
 
   @@index([createdAt, id])
   @@index([role, createdAt])
@@ -116,12 +131,19 @@ model Enquiry {
   companyName      String
   product          String
   products         Json?
-  quantity         Int
+  // Allow fractional enquiry quantities (e.g., 2.5 kg)
+  quantity         Float
   price            Float?
   currency         String?
   unitOfMeasurement String?
   enquiryDate      DateTime?
   modeOfEnquiry    String?
+  customerType     String?
+  enquiryType      String?
+  incoTerm         String?
+  country          String?
+  port             String?
+  lastTransaction  String?
   expectedTimeline DateTime?
   assignedPerson   String
   notesForProduction String?
@@ -134,6 +156,34 @@ model Enquiry {
   createdBy        User          @relation("EnquiryCreator", fields: [createdById], references: [id], onDelete: Restrict)
   approvedBy       User?         @relation("EnquiryApprover", fields: [approvedById], references: [id], onDelete: SetNull)
   order            Order?
+}
+
+model BillOfMaterial {
+  id        Int      @id @default(autoincrement())
+  product   String
+  grade     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items BillOfMaterialItem[]
+
+  @@unique([product, grade])
+  @@index([product])
+}
+
+model BillOfMaterialItem {
+  id         Int     @id @default(autoincrement())
+  bomId      Int
+  category   String
+  name       String
+  vendor     String?
+  grade      String?
+  qtyPerUnit Float
+  remark     String?
+
+  bom BillOfMaterial @relation(fields: [bomId], references: [id], onDelete: Cascade)
+
+  @@index([bomId])
 }
 
 model Order {
@@ -166,8 +216,9 @@ model Order {
   createdById      Int
   enquiry          Enquiry?    @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
   createdBy        User        @relation(fields: [createdById], references: [id], onDelete: Restrict)
-  production       Production?
+  productions      Production[]
   dispatches       Dispatch[]
+  packingRecords   PackingRecord[]
   manualOrderRequest ManualOrderRequest? @relation("ManualOrderRequestToOrder")
 }
 
@@ -204,7 +255,7 @@ model ManualOrderRequest {
 
 model Production {
   id                       Int              @id @default(autoincrement())
-  orderId                  Int              @unique
+  orderId                  Int
   status                   ProductionStatus @default(PENDING)
   statusChangeCount        Int              @default(0)
   state                    String?
@@ -219,10 +270,88 @@ model Production {
   blowerRpm                Int
   rawMaterials             String?          @db.LongText
   remarks                  String?          @db.LongText
+  productionStartedDate    DateTime?
   productionCompletionDate DateTime?
+  producedQuantity         Int              @default(0)
   createdAt                DateTime         @default(now())
   updatedAt                DateTime         @updatedAt
   order                    Order            @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  finishedGoodsTestSheet   FinishedGoodsTestSheet?
+  inProcessTestSheet       InProcessTestSheet?
+  batchSubstitutions       BatchSubstitution[]
+
+  @@index([orderId])
+}
+
+model InProcessTestSheet {
+  id           Int      @id @default(autoincrement())
+  productionId Int      @unique
+  productName  String?
+  grade        String?
+  batchNo      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  production Production                @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  items      InProcessTestSheetItem[]
+}
+
+model InProcessTestSheetItem {
+  id                   Int       @id @default(autoincrement())
+  inProcessTestSheetId Int
+  analysisDate         DateTime?
+  shift                String?
+  lotNo                String?
+  reactorNo            String?
+  samplingBy           String?
+  samplingTime         String?
+  freeFattyAcid        String?
+  ash                  String?
+  moisture             String?
+  appearance           String?
+  meltingPoint         String?
+  analysisBy           String?
+  ffaInformTime        String?
+  remarks              String?
+
+  inProcessTestSheet InProcessTestSheet @relation(fields: [inProcessTestSheetId], references: [id], onDelete: Cascade)
+
+  @@index([inProcessTestSheetId])
+}
+
+model FinishedGoodsTestSheet {
+  id            Int        @id @default(autoincrement())
+  productionId  Int        @unique
+  productName   String?
+  grade         String?
+  batchNo       String?
+  overallResult FgQcResult @default(PENDING)
+  approvedBy    String?
+  approvedAt    DateTime?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  production Production                   @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  items      FinishedGoodsTestSheetItem[]
+}
+
+model FinishedGoodsTestSheetItem {
+  id            Int       @id @default(autoincrement())
+  sheetId       Int
+  srNo          Int?
+  sampleDate    DateTime?
+  shift         String?
+  samplingBy    String?
+  samplingTime  String?
+  blackParticle String?
+  bulkDensity   String?
+  sieveResidue  String?
+  analysisBy    String?
+  remarks       String?
+
+  sheet FinishedGoodsTestSheet @relation(fields: [sheetId], references: [id], onDelete: Cascade)
+
+  @@index([sheetId])
 }
 
 model Dispatch {
@@ -235,6 +364,25 @@ model Dispatch {
   remarks        String?
   createdAt      DateTime       @default(now())
   order          Order          @relation(fields: [orderId], references: [id], onDelete: Restrict)
+}
+
+// Records finished goods being packed for an order, consuming packing
+// material (bags/cartons/etc.) from inventory. Dispatch quantity is capped
+// by (total packed - already dispatched) for the order, so "packed" is an
+// enforced fact rather than a free checkbox.
+model PackingRecord {
+  id                    Int      @id @default(autoincrement())
+  orderId               Int
+  packedQuantity        Float
+  packingMaterialItemId String
+  packingMaterialQty    Float
+  packedBy              String?
+  remarks               String?
+  createdAt             DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
 }
 
 model Supplier {
@@ -262,6 +410,7 @@ model PurchaseOrder {
   poNumberWithCategory String?
   category             String?
   billTo               String?
+  shipTo               String?
   supplierId           Int
   orderDate            DateTime            @default(now())
   expectedDeliveryDate DateTime?
@@ -298,8 +447,8 @@ model PurchaseOrderItem {
   unitPrice   Float    @default(0)
   taxPercent  Float    @default(0)
   expDaysDelivery String?
-  qty         Int
-  receivedQty Int      @default(0)
+  qty         Float
+  receivedQty Float    @default(0)
   outwardKey  String?
   batchNo     String?
   createdAt   DateTime @default(now())
@@ -328,6 +477,7 @@ model GoodsReceiptNote {
   purchaseOrder          PurchaseOrder          @relation(fields: [poId], references: [id], onDelete: Restrict)
   items                  GrnItem[]
   inventoryTransactions  InventoryTransaction[]
+  qcTestSheet            QcTestSheet?
 
   @@index([poId])
   @@index([status])
@@ -345,8 +495,8 @@ model GrnItem {
   unitPrice        Float?
   taxPercent       Float?
   batchNo          String?
-  quantityOrdered  Int
-  quantityReceived Int              @default(0)
+  quantityOrdered  Float
+  quantityReceived Float            @default(0)
   remarks          String?
 
   grn    GoodsReceiptNote  @relation(fields: [grnId], references: [id], onDelete: Cascade)
@@ -356,20 +506,92 @@ model GrnItem {
   @@index([poItemId])
 }
 
+model QcTestSheet {
+  id            Int       @id @default(autoincrement())
+  grnId         Int       @unique
+  sheetNumber   String?
+  overallResult QcResult  @default(PENDING)
+  approvedBy    String?
+  approvedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  grn   GoodsReceiptNote  @relation(fields: [grnId], references: [id], onDelete: Cascade)
+  items QcTestSheetItem[]
+}
+
+model QcTestSheetItem {
+  id            Int       @id @default(autoincrement())
+  qcTestSheetId Int
+  srNo          Int?
+  samplingDate  DateTime?
+  productName   String
+  batchNo       String?
+  mfgDate       DateTime?
+  expiryDate    DateTime?
+  supplier      String?
+  sampleQty     Float?
+  testParameter String?
+  result        String?
+  analysisBy    String?
+  analysisDate  DateTime?
+  remarks       String?
+
+  qcTestSheet QcTestSheet @relation(fields: [qcTestSheetId], references: [id], onDelete: Cascade)
+
+  @@index([qcTestSheetId])
+}
+
 model InventoryTransaction {
   id                Int               @id @default(autoincrement())
   type              String
   itemId            String
-  quantity          Int
+  quantity          Float
   warehouseLocation String?
   reference         String?
   grnId             Int?
   grnItemId         Int?
   remarks           String?
+  category          String?
+  uom               String?
+  grade             String?
+  batchNo           String?
+  shift             String?
+  importBatch       String?
   createdAt         DateTime          @default(now())
 
   grn GoodsReceiptNote? @relation(fields: [grnId], references: [id], onDelete: SetNull)
+  substitutionReversalOf    BatchSubstitution? @relation("SubstitutionReversal")
+  substitutionConsumptionOf BatchSubstitution? @relation("SubstitutionConsumption")
 
   @@index([itemId])
+  @@index([itemId, batchNo])
   @@index([grnId])
+}
+
+model BatchSubstitution {
+  id                        Int      @id @default(autoincrement())
+  productionId              Int
+  section                   String
+  originalItemId            String
+  originalBatchNo           String
+  originalVendor            String?
+  originalGrade             String?
+  quantity                  Int
+  substituteItemId          String
+  substituteBatchNo         String
+  substituteVendor          String?
+  substituteGrade           String?
+  reason                    String?
+  reversalTransactionId     Int      @unique
+  consumptionTransactionId  Int      @unique
+  createdById                Int
+  createdAt                  DateTime @default(now())
+
+  production             Production           @relation(fields: [productionId], references: [id], onDelete: Cascade)
+  reversalTransaction    InventoryTransaction @relation("SubstitutionReversal", fields: [reversalTransactionId], references: [id])
+  consumptionTransaction InventoryTransaction @relation("SubstitutionConsumption", fields: [consumptionTransactionId], references: [id])
+  createdBy              User                 @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([productionId])
 }

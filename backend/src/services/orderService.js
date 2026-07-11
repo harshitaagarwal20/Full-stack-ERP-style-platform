@@ -132,7 +132,6 @@ export async function createOrder(payload, createdByUser) {
         quantity: true,
         price: true,
         currency: true,
-        grade: true,
         order: {
           select: {
             id: true
@@ -307,12 +306,7 @@ export async function moveOrderToProduction(orderId, actorUser, client = prisma)
       grade: true,
       packingType: true,
       deliveryDate: true,
-      salesOrderNumber: true,
-      production: {
-        select: {
-          id: true
-        }
-      }
+      salesOrderNumber: true
     }
   });
 
@@ -322,13 +316,7 @@ export async function moveOrderToProduction(orderId, actorUser, client = prisma)
     throw error;
   }
 
-  if (order.production) {
-    const error = new Error("Production already exists for this order.");
-    error.statusCode = 409;
-    throw error;
-  }
-
-  if (isDispatchLifecycleStatus(order.status) || order.status === "IN_PRODUCTION") {
+  if (isDispatchLifecycleStatus(order.status)) {
     const error = new Error("Only active orders can move to production.");
     error.statusCode = 400;
     throw error;
@@ -370,7 +358,7 @@ export async function updateOrder(orderId, payload, actorUser) {
       id: true,
       price: true,
       currency: true,
-      production: {
+      productions: {
         select: {
           id: true
         }
@@ -389,7 +377,7 @@ export async function updateOrder(orderId, payload, actorUser) {
     throw error;
   }
 
-  if (order.production || (order.dispatches && order.dispatches.length > 0)) {
+  if ((order.productions && order.productions.length > 0) || (order.dispatches && order.dispatches.length > 0)) {
     const error = new Error("Cannot edit order after production/dispatch starts.");
     error.statusCode = 400;
     throw error;
@@ -427,7 +415,7 @@ export async function deleteOrder(orderId, actorUser) {
     where: { id: orderId },
     select: {
       id: true,
-      production: {
+      productions: {
         select: {
           id: true
         }
@@ -446,7 +434,7 @@ export async function deleteOrder(orderId, actorUser) {
     throw error;
   }
 
-  if (order.production || (order.dispatches && order.dispatches.length > 0)) {
+  if ((order.productions && order.productions.length > 0) || (order.dispatches && order.dispatches.length > 0)) {
     const error = new Error("Cannot delete order with production/dispatch records.");
     error.statusCode = 400;
     throw error;

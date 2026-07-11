@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import api from "../api/axiosClient";
 import { logApiError } from "../utils/apiError";
+import { getShipToLocation } from "../config/shipToLocations";
 
 const BILL_TO = {
   companyName: "NIMBASIA STABILIZERS",
@@ -29,7 +30,7 @@ function formatPoDate(val) {
 }
 
 function calcRowTotal(item) {
-  return (item.qty || 0) * (item.unitPrice || 0);
+  return Number(item.receivedQty || 0) * Number(item.unitPrice || 0);
 }
 
 function calcAmountAfterTax(item) {
@@ -175,6 +176,7 @@ function PurchaseOrderPrintPage() {
   if (!po) return <div style={{ padding: 40, textAlign: "center" }}>Purchase order not found.</div>;
 
   const grossAmount = (po.items || []).reduce((s, i) => s + calcAmountAfterTax(i), 0);
+  const shipToLocation = getShipToLocation(po.shipTo);
 
   return (
     <>
@@ -227,11 +229,11 @@ function PurchaseOrderPrintPage() {
           </table>
         </div>
 
-        {/* Vendor Details */}
+        {/* Supplier Details */}
         <table style={{ ...styles.sectionTable, marginBottom: 14 }}>
           <tbody>
             <tr>
-              <td style={styles.labelCell}>Vendor Name</td>
+              <td style={styles.labelCell}>Supplier Name</td>
               <td style={styles.valueCell}>{po.supplier?.name || "-"}</td>
             </tr>
             <tr>
@@ -271,18 +273,19 @@ function PurchaseOrderPrintPage() {
           </thead>
           <tbody>
             {[
-              ["Company Name", BILL_TO.companyName],
-              ["Address", BILL_TO.address],
-              ["Pincode", BILL_TO.pincode],
-              ["Mobile", BILL_TO.mobile],
-              ["District", BILL_TO.district],
-              ["State", BILL_TO.state]
-            ].map(([label, val]) => (
+              ["Company Name", BILL_TO.companyName, shipToLocation.companyName],
+              ["Address", BILL_TO.address, shipToLocation.addressLines.join(", ")],
+              ["Pincode", BILL_TO.pincode, shipToLocation.pincode],
+              ["Mobile", BILL_TO.mobile, shipToLocation.mobile],
+              ["District", BILL_TO.district, shipToLocation.district],
+              ["State", BILL_TO.state, shipToLocation.stateCodeLabel || shipToLocation.state],
+              ["GSTIN", "", shipToLocation.gstin]
+            ].map(([label, billVal, shipVal]) => (
               <tr key={label}>
                 <td style={{ ...styles.labelCell, width: "15%" }}>{label}</td>
-                <td style={{ ...styles.valueCell, width: "35%" }}>{val}</td>
+                <td style={{ ...styles.valueCell, width: "35%" }}>{billVal}</td>
                 <td style={{ ...styles.labelCell, width: "15%" }}>{label}</td>
-                <td style={{ ...styles.valueCell, width: "35%" }}>{val}</td>
+                <td style={{ ...styles.valueCell, width: "35%" }}>{shipVal}</td>
               </tr>
             ))}
           </tbody>
@@ -294,7 +297,7 @@ function PurchaseOrderPrintPage() {
             <tr>
               <th style={styles.itemsTh}>S.No</th>
               <th style={styles.itemsTh}>Item ID</th>
-              <th style={styles.itemsTh}>QTY</th>
+              <th style={styles.itemsTh}>Received QTY</th>
               <th style={styles.itemsTh}>UoM</th>
               <th style={styles.itemsTh}>Grade</th>
               <th style={styles.itemsTh}>Currency</th>
@@ -309,7 +312,7 @@ function PurchaseOrderPrintPage() {
               <tr key={item.id} style={{ background: idx % 2 === 0 ? "#fff" : LIGHT_ROW }}>
                 <td style={styles.itemsTd}>{idx + 1}</td>
                 <td style={styles.itemsTdLeft}>{item.itemId || "-"}</td>
-                <td style={styles.itemsTd}>{item.qty}</td>
+                <td style={styles.itemsTd}>{item.receivedQty || 0}</td>
                 <td style={styles.itemsTd}>{item.uom || "-"}</td>
                 <td style={styles.itemsTd}>{item.grade || ""}</td>
                 <td style={styles.itemsTd}>{item.currency || "INR"}</td>

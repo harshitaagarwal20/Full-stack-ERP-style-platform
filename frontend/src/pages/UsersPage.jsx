@@ -8,6 +8,7 @@ import { exportRowsToExcel } from "../utils/exportExcel";
 import { sortByNewestFirst } from "../utils/recordOrdering";
 import { getValidationFieldErrors, getUserFacingErrorMessage } from "../utils/errorMessages";
 import { validateUserForm } from "../utils/userValidation";
+import SearchableSelect from "../components/common/SearchableSelect";
 
 function getInitials(name) {
   return (name || "")
@@ -246,11 +247,12 @@ function UsersPage() {
 
         <div className="users-filter-row">
           <label htmlFor="roleFilter">Filter by Role</label>
-          <select id="roleFilter" value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)}>
-            {roleOptions.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
+          <SearchableSelect
+            options={roleOptions}
+            value={roleFilter}
+            onChange={(value) => setRoleFilter(value)}
+            placeholder="All Roles"
+          />
         </div>
       </section>
 
@@ -428,16 +430,12 @@ function UsersPage() {
               </div>
               <div>
                 <label className="users-field-label">Role</label>
-                <select
-                  className={`users-input ${formErrors.role ? "input-error" : ""}`}
+                <SearchableSelect
+                  options={masterData.roles}
                   value={form.role}
-                  onChange={(e) => updateFormField("role", e.target.value)}
-                  aria-invalid={Boolean(formErrors.role)}
-                >
-                  {masterData.roles.map((role) => (
-                    <option key={role.value} value={role.value}>{role.label}</option>
-                  ))}
-                </select>
+                  onChange={(value) => updateFormField("role", value)}
+                  placeholder="Select role"
+                />
                 {formErrors.role ? <small className="field-error">{formErrors.role[0]}</small> : null}
               </div>
               <div className="users-form-actions">

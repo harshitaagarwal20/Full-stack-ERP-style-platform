@@ -17,7 +17,7 @@ export async function authMiddleware(req, res, next) {
     const payload = verifyToken(token);
     const user = await prisma.user.findUnique({
       where: { id: payload.id },
-      select: USER_PUBLIC_SELECT
+      select: { ...USER_PUBLIC_SELECT, passwordChangedAt: true }
     });
 
     if (!user) {
@@ -26,7 +26,15 @@ export async function authMiddleware(req, res, next) {
       return next(error);
     }
 
-    req.user = user;
+    const currentPwc = user.passwordChangedAt ? user.passwordChangedAt.getTime() : 0;
+    if (currentPwc !== Number(payload.pwc || 0)) {
+      const error = new Error("Your password has changed. Please sign in again.");
+      error.statusCode = 401;
+      return next(error);
+    }
+
+    const { passwordChangedAt, ...publicUser } = user;
+    req.user = publicUser;
     return next();
   } catch (error) {
     const authError = new Error("Invalid or expired token.");

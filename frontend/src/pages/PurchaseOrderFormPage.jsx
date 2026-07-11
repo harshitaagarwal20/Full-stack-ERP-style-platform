@@ -2,10 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../api/axiosClient";
 import { TrashIcon } from "../components/erp/ErpIcons";
+import { useAuth } from "../context/AuthContext";
 import { logApiError } from "../utils/apiError";
 import { dispatchUserMessage } from "../utils/errorMessages";
 import useMasterData from "../hooks/useMasterData";
 import SearchableSelect from "../components/common/SearchableSelect";
+import { CURRENCY_OPTIONS } from "../utils/commerce";
+import { SHIP_TO_OPTIONS } from "../config/shipToLocations";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -32,6 +35,7 @@ function createEmptyForm() {
     supplier_code:            "",
     supplier_address:         "",
     supplier_pincode:         "",
+    ship_to:                  SHIP_TO_OPTIONS[0]?.value || "",
     order_date:               today(),
     expected_delivery_date:   "",
     category:                 "",
@@ -58,17 +62,26 @@ function formatCurrency(val) {
   return new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 }).format(val);
 }
 
-const CATEGORY_OPTIONS = ["LM", "RM", "PM", "OM"];
+const CATEGORY_OPTIONS = [
+  { value: "FINISHED_GOODS", label: "Finished Goods" },
+  { value: "RAW_MATERIAL", label: "Raw Materials" },
+  { value: "PACKING_MATERIAL", label: "Packing Material" }
+];
+
+const CATALOG_KEY_BY_CATEGORY = {
+  FINISHED_GOODS: "finishedGoodsCatalog",
+  RAW_MATERIAL: "rawMaterialsCatalog",
+  PACKING_MATERIAL: "packingMaterialsCatalog"
+};
 
 function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
   const { id } = useParams();
   const isEdit = Boolean(id);
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const canEditPricing = user?.role === "admin";
 
   const masterData = useMasterData();
-  const productOptions = useMemo(() => {
-    return Array.isArray(masterData.products) ? masterData.products : [];
-  }, [masterData.products]);
   const supplierMaster = useMemo(() => {
     return Array.isArray(masterData.supplierMaster) ? masterData.supplierMaster : [];
   }, [masterData.supplierMaster]);
@@ -85,6 +98,40 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
   const [form, setForm] = useState(createEmptyForm());
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
+  const [categoryItems, setCategoryItems] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .get("/inventory/raw-materials", { params: form.category ? { category: form.category } : {} })
+      .then(({ data }) => {
+        if (!cancelled) setCategoryItems(Array.isArray(data.items) ? data.items : []);
+      })
+      .catch(() => {
+        if (!cancelled) setCategoryItems([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [form.category]);
+
+  const productOptions = useMemo(() => {
+    const catalogKey = CATALOG_KEY_BY_CATEGORY[form.category];
+    const catalogOptions = catalogKey && Array.isArray(masterData[catalogKey])
+      ? masterData[catalogKey]
+      : (Array.isArray(masterData.products) ? masterData.products : []);
+
+    const known = new Set(catalogOptions.map((option) => option.value));
+    const fromInventory = categoryItems
+      .filter((item) => item.itemId && !known.has(item.itemId))
+      .map((item) => ({
+        value: item.itemId,
+        label: item.itemId,
+        searchText: [item.itemId, item.category, item.grade].filter(Boolean).join(" ")
+      }));
+
+    return [...catalogOptions, ...fromInventory];
+  }, [categoryItems, form.category, masterData]);
 
   useEffect(() => {
     if (!isEdit) return;
@@ -102,6 +149,7 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
           supplier_code:           data.supplier?.supplierCode   || "",
           supplier_address:        data.supplier?.address        || "",
           supplier_pincode:        data.supplier?.pincode        || "",
+          ship_to: data.shipTo || SHIP_TO_OPTIONS[0]?.value || "",
           order_date: data.orderDate ? data.orderDate.slice(0, 10) : today(),
           expected_delivery_date: data.expectedDeliveryDate ? data.expectedDeliveryDate.slice(0, 10) : "",
           category: data.category || data.department || "",
@@ -191,6 +239,7 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
         supplier_code:            form.supplier_code            || null,
         supplier_address:         form.supplier_address         || null,
         supplier_pincode:         form.supplier_pincode         || null,
+        ship_to:                  form.ship_to                  || null,
         order_date: form.order_date || null,
         expected_delivery_date: form.expected_delivery_date || null,
         category: form.category || null,
@@ -199,14 +248,16 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
         items: validItems.map((item) => ({
           item_description: item.item_description.trim(),
           quantity_ordered: Number(item.quantity_ordered) || 1,
-          unit_price: Number(item.unit_price) || 0,
           grade: item.grade || null,
-          currency: item.currency || "INR",
-          tax_percent: Number(item.tax_percent) || 0,
-          category: item.category || null,
+          category: item.category || form.category || null,
           uom: item.uom || null,
           batch_no: item.batch_no || null,
-          outward_key: item.outward_key || null
+          outward_key: item.outward_key || null,
+          ...(canEditPricing ? {
+            unit_price: Number(item.unit_price) || 0,
+            currency: item.currency || "INR",
+            tax_percent: Number(item.tax_percent) || 0
+          } : {})
         }))
       };
 
@@ -246,16 +297,21 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
           </div>
           <div>
             <label className="label">Category</label>
-            <select
-              className="input"
+            <SearchableSelect
+              options={CATEGORY_OPTIONS}
               value={form.category}
-              onChange={(e) => setField("category", e.target.value)}
-            >
-              <option value="">Select category</option>
-              {CATEGORY_OPTIONS.map((option) => (
-                <option key={option} value={option}>{option}</option>
-              ))}
-            </select>
+              onChange={(value) => setField("category", value)}
+              placeholder="Select category"
+            />
+          </div>
+          <div>
+            <label className="label">Ship To</label>
+            <SearchableSelect
+              options={SHIP_TO_OPTIONS}
+              value={form.ship_to}
+              onChange={(value) => setField("ship_to", value)}
+              placeholder="Select ship to address"
+            />
           </div>
           <div>
             <label className="label">Expected Delivery Date</label>
@@ -267,11 +323,11 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
             />
           </div>
           <div className="full-row">
-            <label className="label">Notes</label>
+            <label className="label">Remarks</label>
             <textarea
               className="input"
               rows={2}
-              placeholder="Optional notes..."
+              placeholder="Optional remarks..."
               value={form.notes}
               onChange={(e) => setField("notes", e.target.value)}
               style={{ resize: "vertical" }}
@@ -281,15 +337,15 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
       </section>
 
       <section className="order-card">
-        <h3 style={{ margin: "0 0 14px", fontSize: 15, color: "#334155" }}>Vendor Details</h3>
+        <h3 style={{ margin: "0 0 14px", fontSize: 15, color: "#334155" }}>Supplier Details</h3>
         <div className="order-form-grid">
           <div>
-            <label className="label">Vendor Name *</label>
+            <label className="label">Supplier Name *</label>
             <SearchableSelect
               options={supplierOptions}
               value={form.supplier_name}
               onChange={handleSupplierSelect}
-              placeholder="Search and select vendor..."
+              placeholder="Search and select supplier..."
             />
           </div>
           <div>
@@ -323,12 +379,17 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
       </section>
 
       <section className="order-card">
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-          <h3 style={{ margin: 0, fontSize: 15, color: "#334155" }}>Line Items</h3>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+          <h3 style={{ margin: 0, fontSize: 15, color: "#334155" }}>Line Items — What to Order</h3>
           <button type="button" className="order-btn-primary ghost" onClick={addItem}>
             + Add Item
           </button>
         </div>
+        {!canEditPricing && (
+          <p style={{ margin: "0 0 14px", fontSize: 12.5, color: "#94a3b8" }}>
+            Pricing is filled in by an admin before this PO is sent to the supplier.
+          </p>
+        )}
 
         <div className="order-table-wrap">
           <table className="order-table">
@@ -338,12 +399,12 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
                 <th>Item *</th>
                 <th>UoM</th>
                 <th>Grade</th>
-                <th>Currency</th>
+                {canEditPricing && <th>Currency</th>}
                 <th>Qty *</th>
-                <th>Price/Unit</th>
-                <th>Total</th>
-                <th>Tax %</th>
-                <th>Amt After Tax</th>
+                {canEditPricing && <th>Price/Unit</th>}
+                {canEditPricing && <th>Total</th>}
+                {canEditPricing && <th>Tax %</th>}
+                {canEditPricing && <th>Amt After Tax</th>}
                 <th></th>
               </tr>
             </thead>
@@ -352,27 +413,30 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
                 <tr key={index}>
                   <td>{index + 1}</td>
                   <td>
-                    <select
-                      className="input"
-                      style={{ minWidth: 160 }}
-                      value={item.item_description}
-                      onChange={(e) => setItem(index, "item_description", e.target.value)}
-                      required
-                    >
-                      <option value="">Select product</option>
-                      {productOptions.map((opt) => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
+                    <div style={{ minWidth: 160 }}>
+                      <SearchableSelect
+                        options={productOptions}
+                        value={item.item_description}
+                        onChange={(value) => setItem(index, "item_description", value)}
+                        placeholder={
+                          form.category
+                            ? `Select ${CATEGORY_OPTIONS.find((option) => option.value === form.category)?.label || "product"} item`
+                            : "Select product"
+                        }
+                        allowCustom
+                      />
+                    </div>
                   </td>
                   <td>
-                    <input
-                      className="input"
-                      style={{ minWidth: 70 }}
-                      placeholder="KG / MT"
-                      value={item.uom}
-                      onChange={(e) => setItem(index, "uom", e.target.value)}
-                    />
+                    <div style={{ minWidth: 90 }}>
+                      <SearchableSelect
+                        options={(masterData.units || []).map((u) => ({ value: u.value, label: u.label }))}
+                        value={item.uom}
+                        onChange={(value) => setItem(index, "uom", value)}
+                        placeholder="UoM"
+                        allowCustom
+                      />
+                    </div>
                   </td>
                   <td>
                     <input
@@ -383,58 +447,70 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
                       onChange={(e) => setItem(index, "grade", e.target.value)}
                     />
                   </td>
-                  <td>
-                    <input
-                      className="input"
-                      style={{ minWidth: 70 }}
-                      placeholder="INR"
-                      value={item.currency}
-                      onChange={(e) => setItem(index, "currency", e.target.value)}
-                    />
-                  </td>
+                  {canEditPricing && (
+                    <td>
+                      <div style={{ minWidth: 90 }}>
+                        <SearchableSelect
+                          options={CURRENCY_OPTIONS}
+                          value={item.currency}
+                          onChange={(value) => setItem(index, "currency", value)}
+                          placeholder="Currency"
+                        />
+                      </div>
+                    </td>
+                  )}
                   <td>
                     <input
                       className="input"
                       style={{ minWidth: 80 }}
                       type="number"
-                      min="1"
+                      min="0.01"
+                      step="0.01"
                       placeholder="0"
                       value={item.quantity_ordered}
                       onChange={(e) => setItem(index, "quantity_ordered", e.target.value)}
                       required
                     />
                   </td>
-                  <td>
-                    <input
-                      className="input"
-                      style={{ minWidth: 100 }}
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      placeholder="0.00"
-                      value={item.unit_price}
-                      onChange={(e) => setItem(index, "unit_price", e.target.value)}
-                    />
-                  </td>
-                  <td style={{ fontWeight: 600, whiteSpace: "nowrap" }}>
-                    {calcRowTotal(item) > 0 ? formatCurrency(calcRowTotal(item)) : "-"}
-                  </td>
-                  <td>
-                    <input
-                      className="input"
-                      style={{ minWidth: 70 }}
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="0.01"
-                      placeholder="18"
-                      value={item.tax_percent}
-                      onChange={(e) => setItem(index, "tax_percent", e.target.value)}
-                    />
-                  </td>
-                  <td style={{ fontWeight: 600, whiteSpace: "nowrap" }}>
-                    {calcRowAmountAfterTax(item) > 0 ? formatCurrency(calcRowAmountAfterTax(item)) : "-"}
-                  </td>
+                  {canEditPricing && (
+                    <td>
+                      <input
+                        className="input"
+                        style={{ minWidth: 100 }}
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={item.unit_price}
+                        onChange={(e) => setItem(index, "unit_price", e.target.value)}
+                      />
+                    </td>
+                  )}
+                  {canEditPricing && (
+                    <td style={{ fontWeight: 600, whiteSpace: "nowrap" }}>
+                      {calcRowTotal(item) > 0 ? formatCurrency(calcRowTotal(item)) : "-"}
+                    </td>
+                  )}
+                  {canEditPricing && (
+                    <td>
+                      <input
+                        className="input"
+                        style={{ minWidth: 70 }}
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.01"
+                        placeholder="18"
+                        value={item.tax_percent}
+                        onChange={(e) => setItem(index, "tax_percent", e.target.value)}
+                      />
+                    </td>
+                  )}
+                  {canEditPricing && (
+                    <td style={{ fontWeight: 600, whiteSpace: "nowrap" }}>
+                      {calcRowAmountAfterTax(item) > 0 ? formatCurrency(calcRowAmountAfterTax(item)) : "-"}
+                    </td>
+                  )}
                   <td>
                     {form.items.length > 1 && (
                       <button
@@ -450,20 +526,22 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
                 </tr>
               ))}
             </tbody>
-            <tfoot>
-              <tr>
-                <td colSpan={9} style={{ textAlign: "right", fontWeight: 700, paddingRight: 12 }}>
-                  Gross Amount
-                </td>
-                <td style={{ fontWeight: 700 }}>{grandTotal > 0 ? formatCurrency(grandTotal) : "-"}</td>
-                <td />
-              </tr>
-            </tfoot>
+            {canEditPricing && (
+              <tfoot>
+                <tr>
+                  <td colSpan={9} style={{ textAlign: "right", fontWeight: 700, paddingRight: 12 }}>
+                    Gross Amount
+                  </td>
+                  <td style={{ fontWeight: 700 }}>{grandTotal > 0 ? formatCurrency(grandTotal) : "-"}</td>
+                  <td />
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </section>
 
-      <section className="order-card" style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+      <section className="order-card order-form-actions">
         <button type="button" className="order-btn-secondary" onClick={handleClose}>
           Cancel
         </button>

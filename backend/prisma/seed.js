@@ -3,12 +3,12 @@ import bcrypt from "bcryptjs";
 import { LEGACY_SEED_USER_EMAILS } from "./seedConfig.js";
 
 const prisma = new PrismaClient();
-const ADMIN_SEED_USER = {
-  name: "Admin User",
-  email: "admin@gmail.com",
-  password: "123456",
-  role: "admin"
-};
+const SEED_USERS = [
+  { name: "Admin User", email: "admin@gmail.com", password: "123456", role: "admin" },
+  { name: "Sales User", email: "sales@gmail.com", password: "123456", role: "sales" },
+  { name: "Production User", email: "production@gmail.com", password: "123456", role: "production" },
+  { name: "Dispatch User", email: "dispatch@gmail.com", password: "123456", role: "dispatch" }
+];
 
 const AUDIT_TABLE_SQL = `
   CREATE TABLE IF NOT EXISTS \`AuditLog\` (
@@ -48,26 +48,29 @@ async function main() {
     }
   });
 
-  const hashedPassword = await bcrypt.hash(ADMIN_SEED_USER.password, 10);
+  for (const seedUser of SEED_USERS) {
+    const hashedPassword = await bcrypt.hash(seedUser.password, 10);
 
-  await prisma.user.upsert({
-    where: {
-      email: ADMIN_SEED_USER.email
-    },
-    update: {
-      name: ADMIN_SEED_USER.name,
-      password: hashedPassword,
-      role: ADMIN_SEED_USER.role
-    },
-    create: {
-      name: ADMIN_SEED_USER.name,
-      email: ADMIN_SEED_USER.email,
-      password: hashedPassword,
-      role: ADMIN_SEED_USER.role
-    }
-  });
+    await prisma.user.upsert({
+      where: {
+        email: seedUser.email
+      },
+      update: {
+        name: seedUser.name,
+        password: hashedPassword,
+        role: seedUser.role
+      },
+      create: {
+        name: seedUser.name,
+        email: seedUser.email,
+        password: hashedPassword,
+        role: seedUser.role
+      }
+    });
+  }
 
-  console.log("Legacy demo data removed. Bootstrap admin login is available at admin@gmail.com / 123456.");
+  console.log("Legacy demo data removed. Bootstrap logins available (password 123456): " +
+    SEED_USERS.map((u) => u.email).join(", "));
 }
 
 main()

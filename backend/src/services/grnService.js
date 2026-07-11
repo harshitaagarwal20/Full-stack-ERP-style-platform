@@ -4,6 +4,7 @@ import { buildPagination } from "../utils/pagination.js";
 import { buildCacheKey, getOrLoadCached, invalidateCacheByPrefix } from "../utils/responseCache.js";
 import { GRN_LIST_SELECT, GRN_DETAIL_SELECT } from "../utils/selects.js";
 import { formatGRNNumber } from "../utils/businessNumbers.js";
+import { calculateReceivedTotal } from "./poService.js";
 
 const GRN_CACHE_PREFIX = "grns:list";
 const GRN_CACHE_TTL_MS = 12 * 1000;
@@ -169,6 +170,86 @@ export async function getGRN(id) {
   return grn;
 }
 
+export async function saveQcTestSheet(grnId, payload, user) {
+  const grn = await prisma.goodsReceiptNote.findUnique({
+    where: { id: grnId },
+    select: { id: true, status: true }
+  });
+
+  if (!grn) {
+    const error = new Error("GRN not found.");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  if (grn.status !== "DRAFT") {
+    const error = new Error("QC test sheet can only be updated while the GRN is in Draft status.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const overallResult = payload.overall_result || "PENDING";
+  const approvedBy = String(payload.approved_by || "").trim();
+  if (approvedBy) {
+    const makerNames = payload.items
+      .map((item) => String(item.analysis_by || "").trim())
+      .filter(Boolean);
+    if (makerNames.some((name) => name.toLowerCase() === approvedBy.toLowerCase())) {
+      const error = new Error("Approved By must be a different person from the maker (Analysis By) on this test sheet.");
+      error.statusCode = 400;
+      throw error;
+    }
+  }
+
+  const itemsData = payload.items.map((item) => ({
+    srNo:          item.sr_no ?? null,
+    samplingDate:  item.sampling_date ? new Date(item.sampling_date) : null,
+    productName:   item.product_name,
+    batchNo:       item.batch_no || null,
+    mfgDate:       item.mfg_date ? new Date(item.mfg_date) : null,
+    expiryDate:    item.expiry_date ? new Date(item.expiry_date) : null,
+    supplier:      item.supplier || null,
+    sampleQty:     item.sample_qty ?? null,
+    testParameter: item.test_parameter || null,
+    result:        item.result || null,
+    analysisBy:    item.analysis_by || null,
+    analysisDate:  item.analysis_date ? new Date(item.analysis_date) : null,
+    remarks:       item.remarks || null
+  }));
+
+  await prisma.$transaction(async (tx) => {
+    await tx.qcTestSheet.upsert({
+      where:  { grnId },
+      create: {
+        grnId,
+        sheetNumber:   payload.sheet_number || null,
+        overallResult,
+        approvedBy:    payload.approved_by || null,
+        approvedAt:    overallResult !== "PENDING" ? new Date() : null,
+        items: { create: itemsData }
+      },
+      update: {
+        sheetNumber:   payload.sheet_number || null,
+        overallResult,
+        approvedBy:    payload.approved_by || null,
+        approvedAt:    overallResult !== "PENDING" ? new Date() : null,
+        items: { deleteMany: {}, create: itemsData }
+      }
+    });
+  });
+
+  await recordAuditEvent({
+    action:     "SAVE_QC_TEST_SHEET",
+    entityType: "GoodsReceiptNote",
+    entityId:   grnId,
+    user,
+    newValue:   { overallResult }
+  });
+
+  invalidateGRNCaches();
+  return getGRN(grnId);
+}
+
 export async function confirmGRN(id, user) {
   const result = await prisma.$transaction(async (tx) => {
     const grn = await tx.goodsReceiptNote.findUnique({
@@ -179,12 +260,14 @@ export async function confirmGRN(id, user) {
         poId:              true,
         grnNumber:         true,
         warehouseLocation: true,
+        qcTestSheet:       { select: { overallResult: true } },
         items: {
           select: {
             id:               true,
             poItemId:         true,
             itemId:           true,
             quantityReceived: true,
+            batchNo:          true,
             remarks:          true
           }
         }
@@ -200,6 +283,12 @@ export async function confirmGRN(id, user) {
     if (grn.status !== "DRAFT") {
       const error = new Error("GRN is already confirmed.");
       error.statusCode = 400;
+      throw error;
+    }
+
+    if (grn.qcTestSheet?.overallResult !== "PASS") {
+      const error = new Error("QC test sheet must be completed with a Pass result before confirming this GRN.");
+      error.statusCode = 409;
       throw error;
     }
 
@@ -221,6 +310,20 @@ export async function confirmGRN(id, user) {
         error.statusCode = 400;
         throw error;
       }
+
+      // Allow a small over-receipt tolerance (2% of ordered qty) to absorb
+      // normal supplier overshoot, but never let total received run away
+      // unbounded — this is what previously had no ceiling at all.
+      const maxAllowedQty = poItem.qty * 1.02;
+      const totalReceived = poItem.receivedQty + grnItem.quantityReceived;
+      if (totalReceived > maxAllowedQty) {
+        const error = new Error(
+          `Item ${grnItem.itemId}: received quantity (${totalReceived}) exceeds the allowed limit of ${maxAllowedQty.toFixed(2)} ` +
+          `(ordered ${poItem.qty} + 2% tolerance). Already received: ${poItem.receivedQty}.`
+        );
+        error.statusCode = 400;
+        throw error;
+      }
     }
 
     // Increment receivedQty on each PO item
@@ -237,15 +340,16 @@ export async function confirmGRN(id, user) {
     // Determine new PO status by re-reading all items after increments
     const allPoItems = await tx.purchaseOrderItem.findMany({
       where: { poId: grn.poId },
-      select: { qty: true, receivedQty: true }
+      select: { qty: true, receivedQty: true, unitPrice: true }
     });
 
     const allFulfilled = allPoItems.every((item) => item.receivedQty >= item.qty);
     const newPoStatus  = allFulfilled ? "FULLY_RECEIVED" : "PARTIALLY_RECEIVED";
+    const totalAmount = calculateReceivedTotal(allPoItems);
 
     await tx.purchaseOrder.update({
       where: { id: grn.poId },
-      data:  { status: newPoStatus }
+      data:  { status: newPoStatus, totalAmount }
     });
 
     // Create InventoryTransaction for each item
@@ -258,6 +362,7 @@ export async function confirmGRN(id, user) {
         reference:         grn.grnNumber,
         grnId:             grn.id,
         grnItemId:         grnItem.id,
+        batchNo:           grnItem.batchNo || null,
         remarks:           grnItem.remarks || null
       }))
     });

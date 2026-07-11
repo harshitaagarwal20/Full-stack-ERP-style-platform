@@ -2,8 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/axiosClient";
 import VirtualizedTableBody from "../components/common/VirtualizedTableBody";
+import MobileListCard from "../components/common/MobileListCard";
 import { BoxesIcon, SearchIcon } from "../components/erp/ErpIcons";
 import { logApiError } from "../utils/apiError";
+import { useIsMobile } from "../hooks/useIsMobile";
 
 const PAGE_SIZE = 10;
 
@@ -51,6 +53,7 @@ function GrnListPage() {
   const [searchText, setSearchText]     = useState("");
   const [query, setQuery]               = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const isMobile = useIsMobile();
   const [sortConfig, setSortConfig]     = useState({ key: "createdAt", direction: "desc" });
   const [currentPage, setCurrentPage]   = useState(1);
   const [totalPages, setTotalPages]     = useState(1);
@@ -170,7 +173,7 @@ function GrnListPage() {
           </div>
         ) : sortedGrns.length ? (
           <>
-            <div className="order-table-wrap" ref={tableWrapRef}>
+            {!isMobile && <div className="order-table-wrap" ref={tableWrapRef}>
               <table className="order-table">
                 <thead>
                   <tr>
@@ -213,7 +216,7 @@ function GrnListPage() {
                   )}
                 />
               </table>
-            </div>
+            </div>}
             <div className="order-pagination" style={{ borderTop: "1px solid #f1f5f9" }}>
               <div className="order-pagination-info">Page {currentPage} of {totalPages}</div>
               <div className="order-page-controls">
@@ -221,6 +224,34 @@ function GrnListPage() {
                 <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Next</button>
               </div>
             </div>
+
+            {isMobile && <div className="order-mobile-list" style={{ padding: "0 20px 20px" }}>
+              {sortedGrns.map((grn) => (
+                <MobileListCard
+                  key={grn.id}
+                  title={grn.grnNumber}
+                  subtitle={grn.purchaseOrder?.supplier?.name || "-"}
+                  badge={grn.status === "CONFIRMED" ? "Confirmed" : "Draft"}
+                  badgeColor={grn.status === "CONFIRMED" ? "green" : "default"}
+                  fields={[
+                    { label: "PO Number", value: grn.purchaseOrder?.poNumber || "-" },
+                    { label: "Received Date", value: formatDate(grn.receivedDate) },
+                    { label: "Items", value: grn._count?.items ?? "-" },
+                    { label: "Warehouse", value: grn.warehouseLocation || "-" }
+                  ]}
+                  onClick={() => navigate(`/grns/${grn.id}`)}
+                  onActionClick={() => navigate(`/grns/${grn.id}`)}
+                  actionLabel="View Details"
+                />
+              ))}
+              <div className="order-pagination" style={{ borderTop: "none", paddingTop: 16, marginTop: 0 }}>
+                <div className="order-pagination-info">Page {currentPage} of {totalPages}</div>
+                <div className="order-page-controls">
+                  <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1}>Prev</button>
+                  <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Next</button>
+                </div>
+              </div>
+            </div>}
           </>
         ) : (
           <div className="order-empty-state">

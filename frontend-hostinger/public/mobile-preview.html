@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<style>*{margin:0}body{margin:0}</style>
+</head>
+<body>
+<title>Nimbasia Mobile — Data-Entry Redesign</title>
+<style>
+  :root {
+    --ink: #14162b;
+    --ink-2: #43476b;
+    --muted: #6b7091;
+    --line: #e7e8f2;
+    --bg: #f4f5fb;
+    --surface: #ffffff;
+    --surface-2: #f9fafe;
+    --brand: #2563eb;
+    --brand-2: #1e3a8a;
+    --brand-ink: #ffffff;
+    --grad: linear-gradient(135deg, #2563eb 0%, #1e3a8a 100%);
+    --grad-soft: linear-gradient(135deg, rgba(37,99,235,0.12), rgba(30,58,138,0.12));
+    --ok: #10b981;
+    --ok-bg: #e7f8f1;
+    --warn: #f59e0b;
+    --warn-bg: #fdf2dc;
+    --info: #3b82f6;
+    --info-bg: #e8f1ff;
+    --danger: #ef4444;
+    --shadow: 0 18px 40px rgba(31, 27, 90, 0.16);
+    --shadow-sm: 0 4px 14px rgba(31, 27, 90, 0.08);
+    --radius: 22px;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #f2f3fb; --ink-2: #c4c7e4; --muted: #9297bd; --line: #262a47;
+      --bg: #0b0d1c; --surface: #14172c; --surface-2: #1b1f38;
+      --brand: #60a5fa; --brand-2: #93c5fd; --grad-soft: linear-gradient(135deg, rgba(96,165,250,0.16), rgba(147,197,253,0.16));
+      --ok-bg: #10352a; --warn-bg: #3a2c10; --info-bg: #14243f;
+      --shadow: 0 20px 50px rgba(0,0,0,0.5); --shadow-sm: 0 6px 18px rgba(0,0,0,0.4);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ink: #f2f3fb; --ink-2: #c4c7e4; --muted: #9297bd; --line: #262a47;
+    --bg: #0b0d1c; --surface: #14172c; --surface-2: #1b1f38;
+    --brand: #60a5fa; --brand-2: #93c5fd; --grad-soft: linear-gradient(135deg, rgba(96,165,250,0.16), rgba(147,197,253,0.16));
+    --ok-bg: #10352a; --warn-bg: #3a2c10; --info-bg: #14243f;
+    --shadow: 0 20px 50px rgba(0,0,0,0.5); --shadow-sm: 0 6px 18px rgba(0,0,0,0.4);
+  }
+  :root[data-theme="light"] {
+    --ink: #14162b; --ink-2: #43476b; --muted: #6b7091; --line: #e7e8f2;
+    --bg: #f4f5fb; --surface: #ffffff; --surface-2: #f9fafe;
+    --brand: #2563eb; --brand-2: #1e3a8a; --grad-soft: linear-gradient(135deg, rgba(37,99,235,0.12), rgba(30,58,138,0.12));
+    --ok-bg: #e7f8f1; --warn-bg: #fdf2dc; --info-bg: #e8f1ff;
+    --shadow: 0 18px 40px rgba(31, 27, 90, 0.16); --shadow-sm: 0 4px 14px rgba(31, 27, 90, 0.08);
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  .wrap {
+    font-family: var(--sans);
+    color: var(--ink);
+    background:
+      radial-gradient(1200px 600px at 90% -10%, var(--grad-soft), transparent 60%),
+      radial-gradient(900px 500px at -10% 10%, var(--grad-soft), transparent 55%),
+      var(--bg);
+    min-height: 100vh;
+    padding: 28px 20px 80px;
+  }
+  .container { max-width: 1120px; margin: 0 auto; }
+
+  /* ---------- Hero ---------- */
+  .hero { text-align: center; padding: 22px 0 8px; position: relative; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--brand); background: var(--grad-soft);
+    padding: 7px 14px; border-radius: 999px;
+  }
+  .hero h1 {
+    font-size: clamp(30px, 6vw, 52px); line-height: 1.03; margin: 18px auto 12px;
+    letter-spacing: -0.03em; font-weight: 800; text-wrap: balance; max-width: 14ch;
+  }
+  .hero h1 .g {
+    background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero p { max-width: 56ch; margin: 0 auto; color: var(--ink-2); font-size: 17px; line-height: 1.55; }
+  .split {
+    display: inline-flex; gap: 10px; margin-top: 22px; flex-wrap: wrap; justify-content: center;
+  }
+  .chip {
+    font-size: 13px; font-weight: 600; color: var(--ink-2);
+    background: var(--surface); border: 1px solid var(--line); border-radius: 999px;
+    padding: 8px 14px; box-shadow: var(--shadow-sm);
+  }
+  .chip b { color: var(--brand); }
+
+  .theme-toggle {
+    position: fixed; top: 16px; right: 16px; z-index: 50;
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: 13px; font-weight: 600; color: var(--ink);
+    background: var(--surface); border: 1px solid var(--line);
+    padding: 9px 13px; border-radius: 999px; cursor: pointer; box-shadow: var(--shadow-sm);
+  }
+
+  /* ---------- Stage ---------- */
+  .stage { display: grid; grid-template-columns: 1fr; gap: 40px; margin-top: 44px; align-items: start; }
+  @media (min-width: 900px) { .stage { grid-template-columns: 380px 1fr; gap: 56px; } }
+
+  .phone-col { display: flex; flex-direction: column; align-items: center; gap: 18px; position: sticky; top: 24px; }
+
+  .segmented {
+    display: inline-flex; background: var(--surface-2); border: 1px solid var(--line);
+    border-radius: 999px; padding: 5px; gap: 3px; box-shadow: var(--shadow-sm); flex-wrap: wrap; justify-content: center;
+  }
+  .segmented button {
+    border: 0; background: transparent; color: var(--ink-2); cursor: pointer;
+    font-family: inherit; font-size: 12.5px; font-weight: 700; padding: 8px 13px; border-radius: 999px;
+    transition: all .18s ease;
+  }
+  .segmented button.on { background: var(--grad); color: #fff; box-shadow: 0 6px 16px rgba(37,99,235,0.4); }
+
+  /* Phone frame */
+  .phone {
+    width: 340px; max-width: 92vw; aspect-ratio: 340 / 720;
+    background: #0a0b17; border-radius: 44px; padding: 11px;
+    box-shadow: var(--shadow), 0 0 0 2px rgba(255,255,255,0.04) inset;
+    position: relative;
+  }
+  .screen {
+    position: absolute; inset: 11px; border-radius: 34px; overflow: hidden;
+    background: var(--surface); display: flex; flex-direction: column;
+  }
+  .notch {
+    position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    width: 120px; height: 26px; background: #0a0b17; border-radius: 0 0 16px 16px; z-index: 6;
+  }
+
+  /* status bar */
+  .sb { display: flex; justify-content: space-between; align-items: center; padding: 11px 20px 4px; font-size: 12px; font-weight: 700; color: var(--ink); }
+  .sb .dots { display: inline-flex; gap: 4px; align-items: center; }
+  .sb .dots span { width: 5px; height: 5px; border-radius: 50%; background: var(--ink); opacity: .55; }
+
+  /* app top bar */
+  .app-top { padding: 6px 18px 12px; display: flex; align-items: center; justify-content: space-between; }
+  .app-top .hi { font-size: 13px; color: var(--muted); font-weight: 600; }
+  .app-top .who { font-size: 19px; font-weight: 800; letter-spacing: -0.02em; margin-top: 2px; }
+  .avatar { width: 38px; height: 38px; border-radius: 50%; background: var(--grad); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 14px; }
+
+  .scroll { flex: 1; overflow: hidden; padding: 0 16px 14px; }
+
+  /* generic mobile card */
+  .m-card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 14px; box-shadow: var(--shadow-sm); }
+  .sec-label { font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin: 16px 4px 9px; }
+
+  /* quick action tiles */
+  .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
+  .tile {
+    border-radius: 18px; padding: 14px; color: #fff; position: relative; overflow: hidden;
+    min-height: 92px; display: flex; flex-direction: column; justify-content: space-between;
+    box-shadow: 0 10px 22px rgba(37,99,235,0.28);
+  }
+  .tile.v1 { background: linear-gradient(150deg, #2563eb, #1e40af); }
+  .tile.v2 { background: linear-gradient(150deg, #0e7490, #155e75); box-shadow: 0 10px 22px rgba(14,116,144,0.26); }
+  .tile.v3 { background: linear-gradient(150deg, #b45309, #92400e); box-shadow: 0 10px 22px rgba(180,83,9,0.24); }
+  .tile.v4 { background: linear-gradient(150deg, #047857, #065f46); box-shadow: 0 10px 22px rgba(4,120,87,0.24); }
+  .tile .ic { width: 30px; height: 30px; border-radius: 10px; background: rgba(255,255,255,0.22); display: grid; place-items: center; font-size: 16px; }
+  .tile .t { font-size: 14px; font-weight: 800; letter-spacing: -0.01em; }
+  .tile .s { font-size: 11px; opacity: .85; font-weight: 600; }
+
+  /* task row */
+  .task { display: flex; align-items: center; gap: 11px; padding: 11px 4px; border-bottom: 1px solid var(--line); }
+  .task:last-child { border-bottom: 0; }
+  .task .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .task .body { flex: 1; min-width: 0; }
+  .task .ti { font-size: 13.5px; font-weight: 700; color: var(--ink); }
+  .task .su { font-size: 11.5px; color: var(--muted); font-weight: 500; margin-top: 1px; }
+  .pill { font-size: 10.5px; font-weight: 800; padding: 4px 9px; border-radius: 999px; white-space: nowrap; letter-spacing: .02em; }
+  .pill.ok { color: var(--ok); background: var(--ok-bg); }
+  .pill.warn { color: var(--warn); background: var(--warn-bg); }
+  .pill.info { color: var(--info); background: var(--info-bg); }
+
+  /* form (data entry) */
+  .sheet-grab { width: 40px; height: 5px; background: var(--line); border-radius: 3px; margin: 8px auto 4px; }
+  .form-title { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; padding: 4px 4px 2px; }
+  .form-step { font-size: 12px; color: var(--brand); font-weight: 700; padding: 0 4px 12px; }
+  .field { margin-bottom: 13px; }
+  .field > label { display: block; font-size: 12px; font-weight: 700; color: var(--ink-2); margin: 0 2px 6px; }
+  .ctrl {
+    width: 100%; height: 46px; border-radius: 13px; border: 1.5px solid var(--line);
+    background: var(--surface-2); padding: 0 13px; font-family: inherit; font-size: 15px; color: var(--ink);
+    display: flex; align-items: center;
+  }
+  .ctrl.focus { border-color: var(--brand); background: var(--surface); box-shadow: 0 0 0 4px rgba(37,99,235,0.14); }
+  .ctrl .ph { color: var(--muted); }
+  .ctrl.sel::after { content: "▾"; margin-left: auto; color: var(--muted); }
+  .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .row-3 { display: grid; grid-template-columns: 1.4fr 1fr 0.9fr; gap: 8px; }
+  .seg-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .opt { height: 44px; border-radius: 13px; border: 1.5px solid var(--line); display: grid; place-items: center; font-size: 13.5px; font-weight: 700; color: var(--ink-2); }
+  .opt.on { border-color: var(--brand); color: var(--brand); background: var(--grad-soft); }
+  .product-line { border: 1.5px dashed var(--line); border-radius: 15px; padding: 11px; background: var(--surface-2); }
+  .add-line { display: flex; align-items: center; justify-content: center; gap: 7px; color: var(--brand); font-weight: 800; font-size: 13px; padding: 11px; border: 1.5px solid var(--brand); border-radius: 13px; background: var(--grad-soft); margin-top: 2px; }
+
+  .save-bar {
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--line); background: var(--surface);
+    display: flex; gap: 10px;
+  }
+  .btn-primary { flex: 1; height: 50px; border-radius: 15px; border: 0; background: var(--grad); color: #fff; font-family: inherit; font-weight: 800; font-size: 15px; box-shadow: 0 10px 22px rgba(37,99,235,0.4); }
+  .btn-ghost { width: 50px; height: 50px; border-radius: 15px; border: 1.5px solid var(--line); background: var(--surface-2); color: var(--ink-2); font-size: 20px; }
+
+  /* production job card */
+  .job { border-radius: 18px; border: 1px solid var(--line); background: var(--surface); padding: 14px; box-shadow: var(--shadow-sm); margin-bottom: 11px; }
+  .job .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+  .job .code { font-size: 12px; font-weight: 800; color: var(--brand); letter-spacing: .02em; }
+  .job .prod { font-size: 15px; font-weight: 800; letter-spacing: -0.01em; margin-top: 2px; }
+  .job .meta { font-size: 12px; color: var(--muted); font-weight: 600; margin-top: 3px; }
+  .prog { height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; margin: 12px 0 6px; }
+  .prog i { display: block; height: 100%; border-radius: 999px; background: var(--grad); }
+  .job .qty { font-size: 11.5px; color: var(--muted); font-weight: 600; }
+  .actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 7px; margin-top: 12px; }
+  .act { height: 40px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--surface-2); font-family: inherit; font-weight: 800; font-size: 12.5px; color: var(--ink-2); display: grid; place-items: center; }
+  .act.start { border-color: var(--info); color: var(--info); }
+  .act.hold { border-color: var(--warn); color: var(--warn); }
+  .act.done { border-color: var(--ok); color: #fff; background: var(--ok); border-color: var(--ok); }
+
+  /* bottom nav */
+  .bnav { display: flex; border-top: 1px solid var(--line); background: var(--surface); padding: 8px 6px calc(8px + env(safe-area-inset-bottom,0px)); position: relative; }
+  .bnav a { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10px; font-weight: 700; color: var(--muted); text-decoration: none; }
+  .bnav a.on { color: var(--brand); }
+  .bnav .glyph { font-size: 18px; }
+  .fab {
+    position: absolute; top: -26px; left: 50%; transform: translateX(-50%);
+    width: 56px; height: 56px; border-radius: 20px; background: var(--grad); color: #fff;
+    display: grid; place-items: center; font-size: 28px; font-weight: 300;
+    box-shadow: 0 12px 26px rgba(37,99,235,0.5); border: 4px solid var(--surface);
+  }
+
+  /* toast */
+  .toast { position: absolute; left: 16px; right: 16px; bottom: 78px; background: #0f1424; color: #fff; border-radius: 14px; padding: 12px 14px; display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 600; box-shadow: var(--shadow); }
+  .toast .tick { width: 22px; height: 22px; border-radius: 50%; background: var(--ok); display: grid; place-items: center; font-size: 13px; }
+
+  /* Annotation column */
+  .notes { display: flex; flex-direction: column; gap: 16px; }
+  .note-h { font-size: 13px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+  .ncard { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; box-shadow: var(--shadow-sm); }
+  .ncard h3 { margin: 0 0 6px; font-size: 19px; letter-spacing: -0.02em; }
+  .ncard p { margin: 0; color: var(--ink-2); font-size: 14.5px; line-height: 1.6; }
+  .feat { display: grid; gap: 14px; }
+  @media (min-width: 560px) { .feat { grid-template-columns: 1fr 1fr; } }
+  .feat .f { display: flex; gap: 12px; }
+  .feat .fi { width: 40px; height: 40px; border-radius: 12px; flex: none; display: grid; place-items: center; font-size: 19px; background: var(--grad-soft); }
+  .feat .ft { font-size: 14.5px; font-weight: 800; }
+  .feat .fp { font-size: 13px; color: var(--muted); line-height: 1.5; margin-top: 2px; }
+  .principle { display: flex; align-items: center; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .principle:last-child { border-bottom: 0; }
+  .principle .k { font-size: 14px; font-weight: 700; }
+  .principle .v { font-size: 13px; color: var(--muted); margin-left: auto; text-align: right; }
+  .swatches { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+  .sw { display: flex; flex-direction: column; gap: 6px; align-items: center; font-size: 10.5px; color: var(--muted); font-weight: 600; }
+  .sw i { width: 42px; height: 42px; border-radius: 12px; box-shadow: var(--shadow-sm); }
+
+  .footer { text-align: center; color: var(--muted); font-size: 13px; margin-top: 46px; line-height: 1.7; }
+  @media (prefers-reduced-motion: no-preference) { .screen-anim { animation: pop .4s cubic-bezier(.2,.9,.3,1.2); } }
+  @keyframes pop { from { opacity: 0; transform: translateY(8px) scale(.99); } to { opacity: 1; transform: none; } }
+</style>
+
+<button class="theme-toggle" id="tt">◐ Theme</button>
+
+<div class="wrap">
+  <div class="container">
+
+    <header class="hero">
+      <span class="eyebrow">◆ Mobile Redesign · Direction Pitch</span>
+      <h1>Built for <span class="g">entering data</span> in the field, not reading it.</h1>
+      <p>A clean, professional, app-first mobile experience for Nimbasia. The phone is optimized for the three things your team actually does on the move — <b>logging enquiries, raising orders, and updating production</b>. Reporting and deep tables stay on desktop.</p>
+      <div class="split">
+        <span class="chip"><b>3</b> priority flows</span>
+        <span class="chip">One-thumb <b>reach</b></span>
+        <span class="chip"><b>44px</b> touch targets</span>
+        <span class="chip">Live <b>status</b> updates</span>
+      </div>
+    </header>
+
+    <div class="stage">
+      <!-- PHONE -->
+      <div class="phone-col">
+        <div class="segmented" id="seg">
+          <button class="on" data-s="home">Today</button>
+          <button data-s="enq">New Enquiry</button>
+          <button data-s="ord">New Order</button>
+          <button data-s="prod">Production</button>
+        </div>
+
+        <div class="phone">
+          <div class="notch"></div>
+          <div class="screen" id="screen"></div>
+        </div>
+      </div>
+
+      <!-- NOTES -->
+      <div class="notes">
+        <div>
+          <div class="note-h">Why this works</div>
+          <div class="feat" style="margin-top:14px">
+            <div class="f"><div class="fi">⚡</div><div><div class="ft">Action-first home</div><div class="fp">The first screen is a launchpad of big, colour-coded entry tiles — not a table. Posting data is one tap away.</div></div></div>
+            <div class="f"><div class="fi">📝</div><div><div class="ft">Single-column forms</div><div class="fp">Every field is full-width and thumb-height. Related fields (qty · unit) sit on one row only when they're short.</div></div></div>
+            <div class="f"><div class="fi">🎚️</div><div><div class="ft">Tap-to-update status</div><div class="fp">Production jobs change state — Start · Hold · Complete — right from the card. No drilling into menus.</div></div></div>
+            <div class="f"><div class="fi">📌</div><div><div class="ft">Sticky save bar</div><div class="fp">The primary action floats at the bottom, always in thumb range, with a confirming toast after every save.</div></div></div>
+          </div>
+        </div>
+
+        <div class="ncard">
+          <h3>The visual language</h3>
+          <p>Clean and professional — a confident corporate-blue gradient for primary actions, restrained deep tones on the entry tiles, and clear semantic colours so state reads at a glance.</p>
+          <div class="swatches">
+            <div class="sw"><i style="background:linear-gradient(135deg,#2563eb,#1e3a8a)"></i>Brand</div>
+            <div class="sw"><i style="background:#3b82f6"></i>In progress</div>
+            <div class="sw"><i style="background:#f59e0b"></i>Hold</div>
+            <div class="sw"><i style="background:#10b981"></i>Complete</div>
+            <div class="sw"><i style="background:#ef4444"></i>Urgent</div>
+          </div>
+        </div>
+
+        <div class="ncard">
+          <h3>What changes vs. today</h3>
+          <div class="principle"><span class="k">Home screen</span><span class="v">Table → action tiles</span></div>
+          <div class="principle"><span class="k">Create action</span><span class="v">Buried button → floating tile + FAB</span></div>
+          <div class="principle"><span class="k">Forms</span><span class="v">Dense grid → single column, big controls</span></div>
+          <div class="principle"><span class="k">Production</span><span class="v">Open detail → update from the card</span></div>
+          <div class="principle"><span class="k">Desktop</span><span class="v">Unchanged — full tables & reports</span></div>
+        </div>
+
+        <div class="ncard">
+          <h3>Scope of this pitch</h3>
+          <p>These four screens set the direction. Once you approve the look, I roll the same patterns across Enquiries, Orders and Production first — then apply the shared components (tiles, forms, status cards, save bar, toast) to the remaining mobile pages.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      Tap the tabs above the phone to walk through each flow · Toggle light / dark top-right<br>
+      Design reference only — real data, real fields, not yet wired to the app.
+    </div>
+  </div>
+</div>
+
+<script>
+  // Theme toggle
+  var tt = document.getElementById('tt');
+  tt.addEventListener('click', function () {
+    var cur = document.documentElement.getAttribute('data-theme');
+    var next = cur === 'dark' ? 'light' : cur === 'light' ? 'dark'
+      : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'light' : 'dark');
+    document.documentElement.setAttribute('data-theme', next);
+  });
+
+  var statusbar = '<div class="sb"><span>9:41</span><span class="dots"><span></span><span></span><span></span> ▪ 100%</span></div>';
+
+  var bnav = function (active) {
+    var items = [['🏠','Today','home'],['📥','Enquiries','enq'],['','',''],['🏭','Production','prod'],['⋯','More','']];
+    var html = '<div class="bnav"><div class="fab">+</div>';
+    items.forEach(function (it) {
+      if (!it[0]) { html += '<a style="visibility:hidden">.</a>'; return; }
+      html += '<a class="' + (it[2] === active ? 'on' : '') + '"><span class="glyph">' + it[0] + '</span>' + it[1] + '</a>';
+    });
+    return html + '</div>';
+  };
+
+  var screens = {
+    home: statusbar +
+      '<div class="app-top"><div><div class="hi">Wednesday, 11 Jul</div><div class="who">Hi, Aomittal 👋</div></div><div class="avatar">AO</div></div>' +
+      '<div class="scroll">' +
+        '<div class="sec-label">Post something</div>' +
+        '<div class="tiles">' +
+          '<div class="tile v1"><div class="ic">📥</div><div><div class="t">New Enquiry</div><div class="s">Log a lead</div></div></div>' +
+          '<div class="tile v2"><div class="ic">🧾</div><div><div class="t">New Order</div><div class="s">Raise sales order</div></div></div>' +
+          '<div class="tile v3"><div class="ic">🏭</div><div><div class="t">Update Production</div><div class="s">4 jobs running</div></div></div>' +
+          '<div class="tile v4"><div class="ic">✅</div><div><div class="t">Complete Batch</div><div class="s">Record output</div></div></div>' +
+        '</div>' +
+        '<div class="sec-label">Needs your input</div>' +
+        '<div class="m-card">' +
+          '<div class="task"><span class="dot" style="background:#f59e0b"></span><div class="body"><div class="ti">Kancothi Polymers</div><div class="su">Enquiry · awaiting quote</div></div><span class="pill warn">Hold</span></div>' +
+          '<div class="task"><span class="dot" style="background:#3b82f6"></span><div class="body"><div class="ti">SO-2041 · CPW Stabilizer</div><div class="su">Production · lot 2 of 3</div></div><span class="pill info">Running</span></div>' +
+          '<div class="task"><span class="dot" style="background:#10b981"></span><div class="body"><div class="ti">SO-2038 · One Pack</div><div class="su">Ready to dispatch</div></div><span class="pill ok">Done</span></div>' +
+        '</div>' +
+      '</div>' + bnav('home'),
+
+    enq: statusbar +
+      '<div class="sheet-grab"></div>' +
+      '<div class="scroll">' +
+        '<div class="form-title">New Enquiry</div>' +
+        '<div class="form-step">Step 1 of 2 · Customer</div>' +
+        '<div class="field"><label>Company name *</label><div class="ctrl sel focus"><span>Kanchi Polymers Pvt Ltd</span></div></div>' +
+        '<div class="field"><label>Enquiry type *</label><div class="seg-choice"><div class="opt on">Domestic</div><div class="opt">Export</div></div></div>' +
+        '<div class="field"><label>Mode of enquiry</label><div class="ctrl sel"><span class="ph">Phone · WhatsApp · Email…</span></div></div>' +
+        '<div class="sec-label" style="margin-left:2px">Product enquired *</div>' +
+        '<div class="product-line">' +
+          '<div class="field" style="margin-bottom:10px"><label>Product</label><div class="ctrl sel"><span class="ph">Select product</span></div></div>' +
+          '<div class="row-3">' +
+            '<div class="field" style="margin:0"><label>Grade</label><div class="ctrl"><span class="ph">—</span></div></div>' +
+            '<div class="field" style="margin:0"><label>Qty</label><div class="ctrl"><span class="ph">0</span></div></div>' +
+            '<div class="field" style="margin:0"><label>Unit</label><div class="ctrl sel"><span>KG</span></div></div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="add-line" style="margin-top:11px">＋ Add another product</div>' +
+        '<div class="row-2" style="margin-top:13px">' +
+          '<div class="field" style="margin:0"><label>Expected timeline *</label><div class="ctrl"><span class="ph">📅 Pick date</span></div></div>' +
+          '<div class="field" style="margin:0"><label>Assign to</label><div class="ctrl sel"><span class="ph">Me</span></div></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="save-bar"><button class="btn-ghost">⌫</button><button class="btn-primary">Save enquiry</button></div>',
+
+    ord: statusbar +
+      '<div class="sheet-grab"></div>' +
+      '<div class="scroll">' +
+        '<div class="form-title">New Order</div>' +
+        '<div class="form-step">Sales order · draft</div>' +
+        '<div class="field"><label>Client name</label><div class="ctrl sel focus"><span>Shakti Industries</span></div></div>' +
+        '<div class="field"><label>Customer code</label><div class="ctrl"><span class="ph">Auto · SHK-0192</span></div></div>' +
+        '<div class="sec-label" style="margin-left:2px">Products requested *</div>' +
+        '<div class="product-line">' +
+          '<div class="field" style="margin-bottom:10px"><label>Product</label><div class="ctrl sel"><span>CPW One Pack Stabilizer</span></div></div>' +
+          '<div class="row-3">' +
+            '<div class="field" style="margin:0"><label>Grade</label><div class="ctrl"><span>A-12</span></div></div>' +
+            '<div class="field" style="margin:0"><label>Qty</label><div class="ctrl"><span>500</span></div></div>' +
+            '<div class="field" style="margin:0"><label>Unit</label><div class="ctrl sel"><span>KG</span></div></div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="add-line" style="margin-top:11px">＋ Add product</div>' +
+        '<div class="row-2" style="margin-top:13px">' +
+          '<div class="field" style="margin:0"><label>Dispatch date</label><div class="ctrl"><span class="ph">📅 Pick</span></div></div>' +
+          '<div class="field" style="margin:0"><label>City</label><div class="ctrl"><span class="ph">Vapi</span></div></div>' +
+        '</div>' +
+        '<div class="field"><label>Remarks</label><div class="ctrl" style="height:64px; align-items:flex-start; padding-top:11px"><span class="ph">Delivery notes…</span></div></div>' +
+      '</div>' +
+      '<div class="save-bar"><button class="btn-ghost">⌫</button><button class="btn-primary">Create order</button></div>',
+
+    prod: statusbar +
+      '<div class="app-top"><div><div class="hi">Production floor</div><div class="who">Live jobs</div></div><div class="avatar" style="background:linear-gradient(150deg,#f59e0b,#ea580c)">PR</div></div>' +
+      '<div class="scroll">' +
+        '<div class="job">' +
+          '<div class="top"><div><div class="code">SO-2041</div><div class="prod">CPW Stabilizer</div><div class="meta">Kanchi Polymers · 1,500 KG</div></div><span class="pill info">Running</span></div>' +
+          '<div class="prog"><i style="width:62%"></i></div>' +
+          '<div class="qty">930 / 1,500 KG produced · lot 2 of 3</div>' +
+          '<div class="actions"><button class="act start">▶ Start</button><button class="act hold">⏸ Hold</button><button class="act done">✓ Complete</button></div>' +
+        '</div>' +
+        '<div class="job">' +
+          '<div class="top"><div><div class="code">SO-2044</div><div class="prod">One Pack · A-12</div><div class="meta">Shakti Industries · 500 KG</div></div><span class="pill warn">Hold</span></div>' +
+          '<div class="prog"><i style="width:20%; background:linear-gradient(135deg,#f59e0b,#ea580c)"></i></div>' +
+          '<div class="qty">100 / 500 KG · paused — awaiting raw material</div>' +
+          '<div class="actions"><button class="act start">▶ Resume</button><button class="act hold">⏸ Hold</button><button class="act done">✓ Complete</button></div>' +
+        '</div>' +
+        '<div class="job">' +
+          '<div class="top"><div><div class="code">SO-2038</div><div class="prod">Lubricant Blend</div><div class="meta">Metro Pipes · 800 KG</div></div><span class="pill ok">Done</span></div>' +
+          '<div class="prog"><i style="width:100%; background:linear-gradient(135deg,#10b981,#059669)"></i></div>' +
+          '<div class="qty">800 / 800 KG produced · ready to dispatch</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="toast"><span class="tick">✓</span>Lot 2 marked complete · stock updated</div>' +
+      bnav('prod')
+  };
+
+  var seg = document.getElementById('seg');
+  var screenEl = document.getElementById('screen');
+  function render(key) {
+    screenEl.innerHTML = screens[key];
+    screenEl.classList.remove('screen-anim'); void screenEl.offsetWidth; screenEl.classList.add('screen-anim');
+  }
+  seg.addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    seg.querySelectorAll('button').forEach(function (x) { x.classList.remove('on'); });
+    b.classList.add('on');
+    render(b.getAttribute('data-s'));
+  });
+  render('home');
+</script>
+</body>
+</html>

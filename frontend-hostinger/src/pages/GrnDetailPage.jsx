@@ -182,8 +182,8 @@ function GrnDetailPage() {
         <h3 style={{ margin: "0 0 14px", fontSize: 14, fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: "0.05em" }}>
           Line Items ({grn.items?.length || 0})
         </h3>
-        <div className="order-table-wrap">
-          <table className="order-table">
+        <div className="responsive-table-wrap">
+          <table className="order-table responsive-table">
             <thead>
               <tr>
                 <th>#</th>
@@ -203,14 +203,14 @@ function GrnDetailPage() {
                 const done = item.quantityReceived >= item.quantityOrdered;
                 return (
                   <tr key={item.id}>
-                    <td style={{ color: "#94a3b8", fontSize: 12 }}>{index + 1}</td>
-                    <td style={{ fontWeight: 600 }}>{item.itemId || "-"}</td>
-                    <td>{item.category || "-"}</td>
-                    <td>{item.grade || "-"}</td>
-                    <td>{item.uom || "-"}</td>
-                    <td>{item.batchNo || "-"}</td>
-                    <td>{item.quantityOrdered}</td>
-                    <td>
+                    <td data-label="" style={{ color: "#94a3b8", fontSize: 12 }}>{index + 1}</td>
+                    <td data-label="Item" style={{ fontWeight: 600 }}>{item.itemId || "-"}</td>
+                    <td data-label="Category">{item.category || "-"}</td>
+                    <td data-label="Grade">{item.grade || "-"}</td>
+                    <td data-label="UOM">{item.uom || "-"}</td>
+                    <td data-label="Batch No">{item.batchNo || "-"}</td>
+                    <td data-label="Qty Ordered">{item.quantityOrdered}</td>
+                    <td data-label="Qty Received">
                       <span style={{
                         fontWeight: 700,
                         color: over ? "#d97706" : done ? "#16a34a" : "#0f172a"
@@ -219,7 +219,7 @@ function GrnDetailPage() {
                         {over && <span style={{ fontSize: 11, marginLeft: 4, opacity: 0.7 }}>(+{item.quantityReceived - item.quantityOrdered})</span>}
                       </span>
                     </td>
-                    <td style={{ color: "#64748b" }}>{item.remarks || "-"}</td>
+                    <td data-label="Remarks" style={{ color: "#64748b" }}>{item.remarks || "-"}</td>
                   </tr>
                 );
               })}

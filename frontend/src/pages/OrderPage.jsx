@@ -12,6 +12,19 @@ import { exportRowsToExcel } from "../utils/exportExcel";
 import { CURRENCY_OPTIONS, formatPriceValue } from "../utils/commerce";
 import { getDisplaySalesGroupNumber } from "../utils/businessNumbers";
 import { formatEnquiryProducts } from "../utils/enquiryProducts";
+import SearchableSelect from "../components/common/SearchableSelect";
+import Toolbar from "../components/common/Toolbar";
+import StatusBadge from "../components/common/StatusBadge";
+
+const ORDER_STATUS_CONFIG = {
+  CREATED:              { label: "Created",               background: "#e2e8f0", color: "#475569" },
+  APPROVED:             { label: "Approved",               background: "#dbeafe", color: "#1d4ed8" },
+  IN_PRODUCTION:        { label: "In Production",          background: "#ffedd5", color: "#c2410c" },
+  READY_FOR_DISPATCH:   { label: "Ready for Dispatch",     background: "#ede9fe", color: "#6d28d9" },
+  PARTIALLY_DISPATCHED: { label: "Partially Dispatched",   background: "#dbeafe", color: "#1d4ed8" },
+  COMPLETED:            { label: "Completed",              background: "#dcfce7", color: "#15803d" },
+  DISPATCHED:           { label: "Completed",              background: "#dcfce7", color: "#15803d" }
+};
 
 function formatDate(dateValue) {
   if (!dateValue) return "-";
@@ -37,31 +50,36 @@ function getClientCode(clientName, orderId) {
   return `${prefix}${suffix}`;
 }
 
-function getOrderStatusClass(status) {
-  if (status === "IN_PRODUCTION") return "in-production";
-  if (status === "READY_FOR_DISPATCH") return "ready";
-  if (status === "PARTIALLY_DISPATCHED") return "partial";
-  if (status === "COMPLETED" || status === "DISPATCHED") return "dispatched";
-  if (status === "APPROVED") return "approved";
-  return "created";
-}
-
 function getOrderStatusLabel(status) {
-  if (status === "IN_PRODUCTION") return "In Production";
-  if (status === "READY_FOR_DISPATCH") return "Ready for Dispatch";
-  if (status === "PARTIALLY_DISPATCHED") return "Partially Dispatched";
-  if (status === "DISPATCHED") return "Completed";
-  if (status === "COMPLETED") return "Completed";
-  if (status === "APPROVED") return "Approved";
-  return "Created";
+  return ORDER_STATUS_CONFIG[status]?.label || "Created";
 }
 
+// An order can have multiple production batches (e.g. a partial run
+// followed by a top-up batch). Aggregate across all of them rather than
+// only looking at the single most-recently-created one, otherwise a
+// well-progressed order can misleadingly show "Not Started" just because
+// its newest batch hasn't begun yet.
 function getProductionStatusLabel(order) {
-  if (order.production?.status === "COMPLETED") return "Completed";
-  if (order.production?.status === "IN_PROGRESS") return "Started";
+  const productions = order.productions || [];
+  if (productions.length > 0) {
+    if (productions.every((p) => p.status === "COMPLETED")) return "Completed";
+    if (productions.some((p) => ["IN_PROGRESS", "PARTIALLY_PRODUCED", "COMPLETED"].includes(p.status))) return "In Progress";
+  }
   if (order.status === "READY_FOR_DISPATCH" || order.status === "PARTIALLY_DISPATCHED" || order.status === "DISPATCHED" || order.status === "COMPLETED") return "Completed";
-  if (order.status === "IN_PRODUCTION") return "Started";
+  if (order.status === "IN_PRODUCTION") return "In Progress";
   return "Not Started";
+}
+
+// Latest completion date among batches that have actually finished — not
+// just the newest batch, which may still be in progress or not started.
+function getLatestProductionCompletionDate(order) {
+  const dates = (order.productions || [])
+    .map((p) => p.productionCompletionDate)
+    .filter(Boolean)
+    .map((d) => new Date(d))
+    .filter((d) => !Number.isNaN(d.getTime()));
+  if (!dates.length) return null;
+  return new Date(Math.max(...dates.map((d) => d.getTime())));
 }
 
 function getLatestDispatchDate(order) {
@@ -290,9 +308,9 @@ function OrderPage() {
           return;
         }
 
-        const invalidRow = productRows.find((row) => !row.quantity || !row.unit_of_measurement);
+        const invalidRow = productRows.find((row) => !row.grade || !row.quantity || !row.unit_of_measurement);
         if (invalidRow) {
-          window.alert("Fill product, quantity, and unit of measurement for each requested row.");
+          window.alert("Fill product, grade, quantity, and unit of measurement for each requested row.");
           setCreating(false);
           return;
         }
@@ -394,7 +412,7 @@ function OrderPage() {
         clientCode: getClientCode(order.clientName, order.id),
         address: order.address || "-",
         prodStatus: getProductionStatusLabel(order),
-        prodCompDate: formatDate(order.production?.productionCompletionDate),
+        prodCompDate: formatDate(getLatestProductionCompletionDate(order)),
         dispatchDate: formatDate(getOrderDispatchDate(order)),
         status: getOrderStatusLabel(order.status)
       }))
@@ -509,10 +527,10 @@ function OrderPage() {
 
   return (
     <div className="order-page">
-      <section className="order-card order-header-card">
-        <h2>Order </h2>
-        <div className="order-header-right">
-          <div className="order-header-search">
+      <Toolbar
+        title="Orders"
+        search={
+          <div className="ui-toolbar-search">
             <SearchIcon />
             <input
               placeholder="Search sales order, client, product"
@@ -523,7 +541,9 @@ function OrderPage() {
               }}
             />
           </div>
-          {canCreate && (
+        }
+        actions={
+          canCreate && (
             <button
               className="order-btn-primary"
               onClick={() => {
@@ -534,19 +554,16 @@ function OrderPage() {
             >
               Create Manual Request
             </button>
-          )}
-         
-        </div>
-      </section>
-
-      <section className="order-card">
-        <div className="order-toolbar">
-          <div className="order-filter-grid">
-            <select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setCurrentPage(1); }}>
-              {statusFilterOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
+          )
+        }
+        filters={
+          <>
+            <SearchableSelect
+              options={statusFilterOptions}
+              value={statusFilter}
+              onChange={(value) => { setStatusFilter(value); setCurrentPage(1); }}
+              placeholder="All Status"
+            />
             <input
               type="text"
               placeholder="Filter by client"
@@ -554,13 +571,13 @@ function OrderPage() {
               onChange={(event) => { setClientFilter(event.target.value); setCurrentPage(1); }}
             />
             {!isMobile && <input type="date" value={dateFilter} onChange={(event) => { setDateFilter(event.target.value); setCurrentPage(1); }} />}
-          </div>
-          <div className="order-toolbar-actions">
             <button className="order-btn-primary ghost" onClick={onSearchSubmit}>Search</button>
             <button className="order-btn-secondary" onClick={exportOrders}>Export to Excel</button>
-          </div>
-        </div>
+          </>
+        }
+      />
 
+      <section className="order-card">
         {loading ? (
           <div className="order-skeleton-list">
             {[1, 2, 3].map((item) => <div key={item} className="order-skeleton-row" />)}
@@ -628,19 +645,19 @@ function OrderPage() {
                         <td>{location.state || "-"}</td>
                         <td>{location.countryCode || "-"}</td>
                         <td>{getProductionStatusLabel(order)}</td>
-                        <td>{formatDate(order.production?.productionCompletionDate)}</td>
+                        <td>{formatDate(getLatestProductionCompletionDate(order))}</td>
                         <td>{formatDate(getOrderDispatchDate(order))}</td>
                         <td>
-                          <span className={`order-status ${getOrderStatusClass(order.status)}`}>{getOrderStatusLabel(order.status)}</span>
+                          <StatusBadge status={order.status} config={ORDER_STATUS_CONFIG} />
                         </td>
                         <td>
                           <div className="order-row-actions">
                             <button className="icon-btn" aria-label="View order" onClick={() => setSelectedOrder(order)}><EyeIcon /></button>
                             {canCreate && <button className="icon-btn" aria-label="Edit order" onClick={() => onEdit(order)}><EditIcon /></button>}
                             {canCreate && <button className="icon-btn danger" aria-label="Delete order" onClick={() => onDelete(order.id)}><TrashIcon /></button>}
-                            {canCreate && order.status === "CREATED" && (
+                            {canCreate && (order.status === "CREATED" || order.status === "IN_PRODUCTION") && (
                               <button className="order-move-btn" onClick={() => moveToProduction(order)}>
-                                Start Production
+                                {order.status === "IN_PRODUCTION" ? "Start New Batch" : "Start Production"}
                               </button>
                             )}
                           </div>
@@ -709,7 +726,7 @@ function OrderPage() {
               <p><span>Address:</span> {selectedOrder.address || "-"}</p>
               <p><span>Country Code:</span> {selectedOrderLocation?.countryCode || "-"}</p>
               <p><span>Prod Status:</span> {getProductionStatusLabel(selectedOrder)}</p>
-              <p><span>Prod Comp Date:</span> {formatDate(selectedOrder.production?.productionCompletionDate)}</p>
+              <p><span>Prod Comp Date:</span> {formatDate(getLatestProductionCompletionDate(selectedOrder))}</p>
               <p><span>Dispatch Date:</span> {formatDate(getOrderDispatchDate(selectedOrder))}</p>
               <p><span>Status:</span> {getOrderStatusLabel(selectedOrder.status)}</p>
               <p><span>Remarks:</span> {selectedOrder.remarks || "-"}</p>
@@ -756,17 +773,17 @@ function OrderPage() {
             <form onSubmit={submitOrder} className="order-form-grid">
               <div>
                 <label>Client Name</label>
-                <input
-                  list="customer-name-options"
+                <SearchableSelect
+                  options={customerMasterRows.map((row) => ({
+                    value: row.customerName,
+                    label: row.customerName,
+                    searchText: row.customerCode
+                  }))}
                   value={form.client_name}
-                  onChange={(e) => onCustomerChange(e.target.value)}
-                  required
+                  onChange={onCustomerChange}
+                  placeholder="Search or select client"
+                  allowCustom
                 />
-                <datalist id="customer-name-options">
-                  {customerMasterRows.map((row) => (
-                    <option key={row.customerCode || row.customerName} value={row.customerName} />
-                  ))}
-                </datalist>
               </div>
               <div>
                 <label>Customer Code</label>
@@ -781,26 +798,22 @@ function OrderPage() {
                       <div key={index} className="enquiry-product-row">
                         <div>
                           <label>Product</label>
-                          <select
+                          <SearchableSelect
+                            options={requestProductOptions}
                             value={row.product}
-                            onChange={(event) =>
+                            onChange={(value) =>
                               setForm((prev) => ({
                                 ...prev,
                                 products: prev.products.map((item, rowIndex) =>
-                                  rowIndex === index ? { ...item, product: event.target.value } : item
+                                  rowIndex === index ? { ...item, product: value } : item
                                 )
                               }))
                             }
-                            required
-                          >
-                            <option value="">Select product</option>
-                            {requestProductOptions.map((option) => (
-                              <option key={option.value} value={option.value}>{option.label}</option>
-                            ))}
-                          </select>
+                            placeholder="Select product"
+                          />
                         </div>
                         <div>
-                          <label>Grade</label>
+                          <label>Grade *</label>
                           <input
                             type="text"
                             value={row.grade}
@@ -813,6 +826,7 @@ function OrderPage() {
                               }))
                             }
                             placeholder="Enter grade"
+                            required
                           />
                         </div>
                         <div>
@@ -834,22 +848,19 @@ function OrderPage() {
                         </div>
                         <div>
                           <label>Unit of Measurement</label>
-                          <select
+                          <SearchableSelect
+                            options={UNIT_OPTIONS.map((unit) => ({ value: unit, label: unit }))}
                             value={row.unit_of_measurement}
-                            onChange={(event) =>
+                            onChange={(value) =>
                               setForm((prev) => ({
                                 ...prev,
                                 products: prev.products.map((item, rowIndex) =>
-                                  rowIndex === index ? { ...item, unit_of_measurement: event.target.value } : item
+                                  rowIndex === index ? { ...item, unit_of_measurement: value } : item
                                 )
                               }))
                             }
-                          >
-                            <option value="">Select unit</option>
-                            {UNIT_OPTIONS.map((unit) => (
-                              <option key={unit} value={unit}>{unit}</option>
-                            ))}
-                          </select>
+                            placeholder="Select unit"
+                          />
                         </div>
                         <div className="enquiry-product-row-actions">
                           <button
@@ -893,12 +904,12 @@ function OrderPage() {
                 <>
                   <div>
                     <label>Product</label>
-                    <select value={form.product} onChange={(e) => setForm((p) => ({ ...p, product: e.target.value }))} required>
-                      <option value="">Select product</option>
-                      {productOptions.map((option) => (
-                        <option key={option.value} value={option.value}>{option.label}</option>
-                      ))}
-                    </select>
+                    <SearchableSelect
+                      options={productOptions}
+                      value={form.product}
+                      onChange={(value) => setForm((p) => ({ ...p, product: value }))}
+                      placeholder="Select product"
+                    />
                   </div>
                   <div>
                     <label>Grade</label>
@@ -921,22 +932,21 @@ function OrderPage() {
                   </div>
                   <div>
                     <label>Currency</label>
-                    <select value={form.currency} onChange={(e) => setForm((p) => ({ ...p, currency: e.target.value }))}>
-                      <option value="">Select currency</option>
-                      {CURRENCY_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
+                    <SearchableSelect
+                      options={CURRENCY_OPTIONS}
+                      value={form.currency}
+                      onChange={(value) => setForm((p) => ({ ...p, currency: value }))}
+                      placeholder="Select currency"
+                    />
                   </div>
                   <div>
                     <label>Unit</label>
-                    <select value={form.unit} onChange={(e) => setForm((p) => ({ ...p, unit: e.target.value }))}>
-                      {orderUnitOptions.map((unit) => (
-                        <option key={unit} value={unit}>{unit}</option>
-                      ))}
-                    </select>
+                    <SearchableSelect
+                      options={orderUnitOptions.map((unit) => ({ value: unit, label: unit }))}
+                      value={form.unit}
+                      onChange={(value) => setForm((p) => ({ ...p, unit: value }))}
+                      placeholder="Select unit"
+                    />
                   </div>
                   <div>
                     <label>Dispatch Date</label>
@@ -962,11 +972,12 @@ function OrderPage() {
               </div>
               <div>
                 <label>Country Code</label>
-                <select value={form.country_code} onChange={(e) => setForm((p) => ({ ...p, country_code: e.target.value }))} required>
-                  {masterData.countryCodes.map((item) => (
-                    <option key={item.value} value={item.value}>{item.label}</option>
-                  ))}
-                </select>
+                <SearchableSelect
+                  options={masterData.countryCodes}
+                  value={form.country_code}
+                  onChange={(value) => setForm((p) => ({ ...p, country_code: value }))}
+                  placeholder="Select country code"
+                />
               </div>
               <div className="full-row">
                 <label>Remarks</label>

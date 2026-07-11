@@ -20,7 +20,9 @@ export default function SearchableSelect({ options = [], value, onChange, placeh
 
   const filtered = useMemo(() => {
     const query = normalizeText(search);
+    const selectedQuery = normalizeText(selected?.label);
     if (!query) return options;
+    if (open && !allowCustom && query === selectedQuery) return options;
 
     return options.filter((option) => {
       const searchableText = [option.label, option.value, option.searchText]
@@ -28,7 +30,7 @@ export default function SearchableSelect({ options = [], value, onChange, placeh
         .join(" ");
       return searchableText.includes(query);
     });
-  }, [options, search]);
+  }, [allowCustom, open, options, search, selected?.label]);
 
   useEffect(() => {
     if (!open) return;

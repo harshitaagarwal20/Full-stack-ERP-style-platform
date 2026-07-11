@@ -7,6 +7,7 @@ import { formatEnquiryProducts, normalizeEnquiryProductRows } from "../utils/enq
 import { ensureProductsExist } from "../utils/productCatalog.js";
 import { formatEnquiryNumber } from "../utils/businessNumbers.js";
 import { normalizeCurrencyInput, normalizePriceInput } from "../utils/commerce.js";
+import { createOrderFromEnquiry } from "./dispatchService.js";
 
 const ENQUIRY_CACHE_PREFIX = "enquiries:list";
 const ENQUIRY_CACHE_TTL_MS = 12 * 1000;
@@ -17,6 +18,11 @@ const ENQUIRY_TRANSACTION_OPTIONS = {
 
 function invalidateEnquiryReadCaches() {
   invalidateCacheByPrefix("enquiries:");
+  // Accepting an enquiry creates a new Order (see updateEnquiryStatus below),
+  // so the orders/production caches can go stale too if they aren't cleared
+  // alongside the enquiry cache here.
+  invalidateCacheByPrefix("orders:");
+  invalidateCacheByPrefix("production:");
   invalidateCacheByPrefix("dispatch:");
   invalidateCacheByPrefix("dashboard:");
 }
@@ -81,7 +87,9 @@ export function buildEnquiryRowData({
   };
 }
 
-export async function createEnquiry(payload, userId) {
+export async function createEnquiry(payload, user) {
+  const userId = user.id;
+  const assignedPerson = user.name || payload.assigned_person;
   const productRows = normalizeEnquiryProductRows(payload.products ?? payload.product);
   const products = await ensureProductsExist(productRows);
   const price = normalizePriceInput(payload.price);
@@ -111,7 +119,7 @@ export async function createEnquiry(payload, userId) {
           currency,
           unitOfMeasurement: row.unit_of_measurement || deriveUnitOfMeasurement([row], payload.unit_of_measurement || null),
           expectedTimeline: parseDateInput(payload.expected_timeline),
-          assignedPerson: payload.assigned_person,
+          assignedPerson: assignedPerson,
           notesForProduction: payload.notes_for_production || null,
           remarks: null,
           createdById: userId
@@ -224,8 +232,12 @@ export async function updateEnquiryStatus(enquiryId, status, approvedByUser) {
       status: true,
       expectedTimeline: true,
       product: true,
+      products: true,
       quantity: true,
       companyName: true,
+      unitOfMeasurement: true,
+      price: true,
+      currency: true,
       approvedById: true,
       order: {
         select: {
@@ -256,6 +268,12 @@ export async function updateEnquiryStatus(enquiryId, status, approvedByUser) {
       }
     });
 
+    let createdOrder = null;
+    if (status === "ACCEPTED") {
+      const dispatchDate = enquiry.expectedTimeline || new Date();
+      createdOrder = await createOrderFromEnquiry(enquiry, dispatchDate, approvedByUser, tx);
+    }
+
     await recordAuditEvent({
       tx,
       action: status === "ACCEPTED" ? "APPROVE_ENQUIRY" : "REJECT_ENQUIRY",
@@ -269,9 +287,10 @@ export async function updateEnquiryStatus(enquiryId, status, approvedByUser) {
       newValue: {
         status,
         approvedById: approvedByUser.id,
-        orderCreated: false
+        orderCreated: Boolean(createdOrder),
+        orderId: createdOrder?.id ?? null
       },
-      note: `${status === "ACCEPTED" ? "Approved" : "Rejected"} enquiry #${enquiryId}`
+      note: `${status === "ACCEPTED" ? "Approved" : "Rejected"} enquiry #${enquiryId}${createdOrder ? ` and created order #${createdOrder.id}` : ""}`
     });
 
     return tx.enquiry.findUnique({

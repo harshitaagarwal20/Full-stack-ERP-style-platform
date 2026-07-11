@@ -1,8 +1,8 @@
 export const RAW_MASTER_DATA = {
   roles: ["admin", "sales", "production", "dispatch"],
   enquiryStatuses: ["PENDING", "ACCEPTED", "HOLD", "REJECTED"],
-  orderStatuses: ["CREATED", "IN_PRODUCTION", "READY_FOR_DISPATCH", "PARTIALLY_DISPATCHED", "COMPLETED"],
-  productionStatuses: ["PENDING", "IN_PROGRESS", "HOLD", "COMPLETED"],
+  orderStatuses: ["CREATED", "IN_PRODUCTION", "READY_FOR_DISPATCH", "PARTIALLY_DISPATCHED", "COMPLETED", "DISPATCHED"],
+  productionStatuses: ["PENDING", "IN_PROGRESS", "PARTIALLY_PRODUCED", "HOLD", "COMPLETED"],
   shipmentStatuses: ["PACKING", "SHIPPED", "DELIVERED"],
   units: ["KG", "MT", "LTR"],
   modeOfEnquiry: ["Phone", "Whatsapp", "Website", "We Reached Out", "Walk-in", "Other"],
@@ -12,6 +12,15 @@ export const RAW_MASTER_DATA = {
     "Ravishu Mittal",
     "Ankesh Jain",
     "Shrinivas Potukuchi"
+  ],
+  supervisors: [
+    "Vaibhav Mishra",
+    "Amarjeet",
+    "Ankit",
+    "Sonu Mahur",
+    "Omprakash",
+    "Satish Singh",
+    "Mandeep Singh"
   ],
   companyNames: [],
   products: [
@@ -62,7 +71,87 @@ export const RAW_MASTER_DATA = {
     "Zinc Stearate",
     "ABC"
   ],
-  countryCodes: ["IN"]
+  countryCodes: ["IN"],
+  finishedGoodsCatalog: [
+    "Zinc Stearate",
+    "Zinc Stearate (Paper)",
+    "Calcium Stearate",
+    "Calcium Stearate (Paper)",
+    "Magnesium Stearate",
+    "Magnesium Stearate (Paper)",
+    "Manganese Stearate",
+    "CZ-100",
+    "CZ-100 (Paper)",
+    "PE-Wax",
+    "Calcium Stearate LD",
+    "Sima-100N",
+    "Nimlub-T",
+    "Aluminium Stearate",
+    "GMS"
+  ],
+  rawMaterialsCatalog: [
+    "Stearic Acid",
+    "Zinc Oxide",
+    "Calcium Hydroxide",
+    "Magnesium Oxide",
+    "Magnesium Hydroxide",
+    "PE-Wax",
+    "Calcium Carbonate Coated",
+    "Calcium Carbonate Uncoated",
+    "Soapstone",
+    "M-Acid",
+    "Liquid Additive",
+    "Acetic Acid",
+    "Magacler",
+    "KINOX-1010",
+    "Radios Tab",
+    "Holtac",
+    "Titanium di-oxide",
+    "Zeolite",
+    "Caustic Soda Flakes",
+    "EBS"
+  ],
+  packingMaterialsCatalog: [
+    "Zinc Stearate Trans. Bag",
+    "Calcium Stearate Trans. Bag",
+    "Magnesium Stearate Trans. Bag",
+    "Magnesium Stearate 12HSA Trans. Bag",
+    "CZ-100-83 Trans. Bag",
+    "CZ-100-85 Trans. Bag",
+    "ZN. Haldia Trans. Bag",
+    "Cal. Haldia Trans. Bag",
+    "Aluminium Stearate Trans. Bag",
+    "Zinc Stearate (PPT) Bags",
+    "PE-Wax Trans. Bag",
+    "White Plain Bag",
+    "CS-1001 Trans. Bag",
+    "Product Code Trans. Bag",
+    "Ultra-8000 Trans. Bag",
+    "GMS Trans. Bag",
+    "Zinc Oxide Trans. Bag",
+    "Jumbo Bag (Flat)",
+    "Jumbo Bag (Open mouth)",
+    "Liner (Bundle) Primary Packing",
+    "Zinc Stearate Paper Bag",
+    "Calcium Stearate Paper Bag",
+    "Magnesium Stearate Paper Bag",
+    "CZ-100 Paper Bag",
+    "Unprinted Paper Bag",
+    "Printed Paper Bag",
+    "Sima-100N Paper Bag",
+    "Magnesium Stearate 12HSA Paper Bag",
+    "Zinc Oxide Paper Bag",
+    "PE-Wax Paper Bag",
+    "White Paper Bag",
+    "Brown Paper Bag",
+    "Wood Pallets (43x43)",
+    "Wood Pallets (37x37)",
+    "Cartoon",
+    "Cartoon Small",
+    "IBC Tank",
+    "Empty Drum 200ltr",
+    "Empty Can 50ltr"
+  ]
 };
 
 function toOptions(values) {
@@ -71,7 +160,8 @@ function toOptions(values) {
 
 const PRODUCTION_STATUS_OPTIONS = [
   { value: "PENDING", label: "Not Started" },
-  { value: "IN_PROGRESS", label: "Started" },
+  { value: "IN_PROGRESS", label: "In Progress" },
+  { value: "PARTIALLY_PRODUCED", label: "Partially Produced" },
   { value: "HOLD", label: "Hold" },
   { value: "COMPLETED", label: "Completed" }
 ];
@@ -91,9 +181,13 @@ export const MASTER_DATA = {
   units: toOptions(RAW_MASTER_DATA.units),
   modeOfEnquiry: toOptions(RAW_MASTER_DATA.modeOfEnquiry),
   assignedPersons: toOptions(RAW_MASTER_DATA.assignedPersons),
+  supervisors: toOptions(RAW_MASTER_DATA.supervisors),
   companyNames: toOptions(RAW_MASTER_DATA.companyNames),
   products: toOptions(RAW_MASTER_DATA.products),
-  countryCodes: toOptions(RAW_MASTER_DATA.countryCodes)
+  countryCodes: toOptions(RAW_MASTER_DATA.countryCodes),
+  finishedGoodsCatalog: toOptions(RAW_MASTER_DATA.finishedGoodsCatalog),
+  rawMaterialsCatalog: toOptions(RAW_MASTER_DATA.rawMaterialsCatalog),
+  packingMaterialsCatalog: toOptions(RAW_MASTER_DATA.packingMaterialsCatalog)
 };
 
 export default MASTER_DATA;

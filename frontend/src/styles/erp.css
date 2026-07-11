@@ -72,6 +72,141 @@ body {
   font-weight: 500;
 }
 
+/* Shared UI primitives (Card, Toolbar, Badge, Alert) — reused across list/detail pages */
+
+.ui-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  padding: 14px 20px;
+}
+
+.ui-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ui-toolbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ui-toolbar-row h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+  letter-spacing: 0.01em;
+}
+
+.ui-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ui-toolbar-search {
+  position: relative;
+  width: min(100%, 320px);
+}
+
+.ui-toolbar-search svg {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  color: #64748b;
+}
+
+.ui-toolbar-search input {
+  width: 100%;
+  height: 40px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+  padding: 0 12px 0 36px;
+}
+
+.ui-toolbar-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 12px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.ui-toolbar-filters > * {
+  flex: 1 1 160px;
+  min-width: 140px;
+}
+
+.ui-toolbar-filters select,
+.ui-toolbar-filters input {
+  height: 40px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  padding: 0 12px;
+  width: 100%;
+}
+
+.ui-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.ui-alert {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 12px 16px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ui-alert-error {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.ui-alert-success {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #065f46;
+}
+
+.ui-alert-warning {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #92400e;
+}
+
+.ui-alert-info {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
 :root {
   --erp-bg: #f8fafc;
   --erp-surface: #ffffff;
@@ -983,6 +1118,46 @@ body {
   white-space: nowrap;
 }
 
+.erp-nav-group-toggle {
+  width: 100%;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.erp-nav-chevron {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  transition: transform 0.15s ease;
+}
+
+.erp-nav-chevron svg {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+.erp-nav-group.is-expanded .erp-nav-chevron {
+  transform: rotate(180deg);
+}
+
+.erp-nav-subgroup {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 2px 0 4px;
+}
+
+.erp-nav-subitem {
+  padding-left: 34px;
+  min-height: 30px;
+  font-size: 12.5px;
+  font-weight: 400;
+  opacity: 0.92;
+}
+
 .erp-main-panel {
   margin-left: var(--erp-sidebar-width);
   min-height: 100vh;
@@ -1229,6 +1404,11 @@ body {
 
 .erp-sidebar.is-collapsed .erp-collapse-btn {
   margin-left: 0;
+}
+
+.erp-sidebar.is-collapsed .erp-nav-subgroup,
+.erp-sidebar.is-collapsed .erp-nav-chevron {
+  display: none;
 }
 
 .erp-sidebar.is-collapsed .erp-nav-item {
@@ -3507,17 +3687,13 @@ body {
 }
 
 .enquiry-company-select-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  right: 0;
   max-height: 220px;
   overflow-y: auto;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
   background: #ffffff;
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.14);
-  z-index: 50;
+  z-index: 1100;
 }
 
 .enquiry-company-select-item {
@@ -6425,6 +6601,25 @@ th.rm-th-right { text-align: right; }
 
   .mfg-btn-cancel,
   .mfg-btn-submit {
+    width: 100%;
+    text-align: center;
+  }
+
+  .masterdata-form-actions,
+  .dispatch-form-actions,
+  .production-form-actions,
+  .enquiry-form-actions,
+  .order-form-actions,
+  .mapp-form-actions {
+    flex-direction: column-reverse;
+  }
+
+  .masterdata-form-actions button,
+  .dispatch-form-actions button,
+  .production-form-actions button,
+  .enquiry-form-actions button,
+  .order-form-actions button,
+  .mapp-form-actions button {
     width: 100%;
     text-align: center;
   }

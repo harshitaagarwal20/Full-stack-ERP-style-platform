@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
-import { getNavItemsByRole } from "../../config/navigation";
+import { getFlatNavItemsByRole, getNavItemsByRole } from "../../config/navigation";
 import { useAuth } from "../../context/AuthContext";
 import api from "../../api/axiosClient";
 import ErpNavbar from "../erp/ErpNavbar";
@@ -33,14 +33,23 @@ function AdminLayout() {
   const [changePwSubmitting, setChangePwSubmitting] = useState(false);
 
   const items = useMemo(
-    () => getNavItemsByRole(user?.role).map((item) => ({ ...item, icon: iconMap[item.icon] })),
+    () => getNavItemsByRole(user?.role).map((item) => ({
+      ...item,
+      icon: iconMap[item.icon],
+      children: item.children?.map((child) => ({ ...child, icon: iconMap[child.icon] }))
+    })),
+    [user?.role]
+  );
+
+  const flatItems = useMemo(
+    () => getFlatNavItemsByRole(user?.role).map((item) => ({ ...item, icon: iconMap[item.icon] })),
     [user?.role]
   );
 
   const currentPageTitle = useMemo(() => {
-    const matched = items.find((item) => item.to === location.pathname);
+    const matched = flatItems.find((item) => item.to === location.pathname);
     return matched?.label || "Nimbasia";
-  }, [items, location.pathname]);
+  }, [flatItems, location.pathname]);
 
   useEffect(() => {
     // Always close drawer after navigation on compact screens.
@@ -149,7 +158,7 @@ function AdminLayout() {
           <Outlet />
         </main>
       </div>
-      <ErpBottomNav items={items} onOpenMore={() => setOpen(true)} />
+      <ErpBottomNav items={flatItems} onOpenMore={() => setOpen(true)} />
 
       {changePwOpen && (
         <div className="users-modal-overlay">

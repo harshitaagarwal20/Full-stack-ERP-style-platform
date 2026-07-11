@@ -1,10 +1,21 @@
 import bcrypt from "bcryptjs";
+import { createHash, timingSafeEqual } from "node:crypto";
 import prisma from "../config/prisma.js";
 import { signToken } from "../utils/jwt.js";
 import { USER_PUBLIC_SELECT } from "../utils/selects.js";
 
 function isBcryptHash(value) {
   return typeof value === "string" && /^\$2[aby]\$\d{2}\$/.test(value);
+}
+
+// Legacy (pre-bcrypt) accounts only. Hash both sides to a fixed-length
+// digest before comparing so this is constant-time regardless of password
+// length — a plain `===` comparison leaks timing information character by
+// character.
+function legacyPasswordsMatch(stored, candidate) {
+  const storedDigest = createHash("sha256").update(String(stored || "")).digest();
+  const candidateDigest = createHash("sha256").update(String(candidate || "")).digest();
+  return timingSafeEqual(storedDigest, candidateDigest);
 }
 
 async function updateLegacyPasswordIfNeeded(client, user, password, bcryptLib) {
@@ -28,7 +39,8 @@ export async function loginUser(email, password, { prismaClient = prisma, bcrypt
     where: { email },
     select: {
       ...USER_PUBLIC_SELECT,
-      password: true
+      password: true,
+      passwordChangedAt: true
     }
   });
 
@@ -48,7 +60,7 @@ export async function loginUser(email, password, { prismaClient = prisma, bcrypt
       isValid = false;
     }
   } else {
-    isValid = storedPassword === String(password || "");
+    isValid = legacyPasswordsMatch(storedPassword, password);
   }
 
   if (!isValid) {
@@ -59,7 +71,16 @@ export async function loginUser(email, password, { prismaClient = prisma, bcrypt
 
   await updateLegacyPasswordIfNeeded(prismaClient, user, password, bcryptLib);
 
-  const token = signToken({ id: user.id, email: user.email, role: user.role, name: user.name });
+  const token = signToken({
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    name: user.name,
+    // Embeds the password-change timestamp at issue time so authMiddleware
+    // can reject this token if the password is changed after it was minted,
+    // instead of it staying valid for the rest of its 30-day life.
+    pwc: user.passwordChangedAt ? user.passwordChangedAt.getTime() : 0
+  });
 
   return {
     token,

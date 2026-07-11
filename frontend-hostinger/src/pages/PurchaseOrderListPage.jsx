@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/axiosClient";
 import VirtualizedTableBody from "../components/common/VirtualizedTableBody";
+import MobileListCard from "../components/common/MobileListCard";
 import { BoxesIcon, SearchIcon } from "../components/erp/ErpIcons";
 import { logApiError } from "../utils/apiError";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -267,7 +268,7 @@ function PurchaseOrderListPage() {
           </div>
         ) : sortedPos.length ? (
           <>
-            <div className="order-table-wrap" ref={tableWrapRef}>
+            {!isMobile && <div className="order-table-wrap" ref={tableWrapRef}>
               <table className="order-table">
                 <thead>
                   <tr>
@@ -308,7 +309,7 @@ function PurchaseOrderListPage() {
                   )}
                 />
               </table>
-            </div>
+            </div>}
             <div className="order-pagination" style={{ borderTop: "1px solid #f1f5f9" }}>
               <div className="order-pagination-info">
                 Page {currentPage} of {totalPages}
@@ -318,6 +319,36 @@ function PurchaseOrderListPage() {
                 <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Next</button>
               </div>
             </div>
+
+            {isMobile && <div className="order-mobile-list" style={{ padding: "0 20px 20px" }}>
+              {sortedPos.map((po) => (
+                <MobileListCard
+                  key={po.id}
+                  title={po.poNumber}
+                  subtitle={po.supplier?.name || "-"}
+                  badge={STATUS_LABEL[po.status] || po.status}
+                  badgeColor={po.status === "FULLY_RECEIVED" ? "green" : po.status === "SENT_TO_SUPPLIER" ? "blue" : po.status === "PARTIALLY_RECEIVED" ? "orange" : "default"}
+                  fields={[
+                    { label: "Order Date", value: formatDate(po.orderDate) },
+                    { label: "Exp. Delivery", value: formatDate(po.expectedDeliveryDate) },
+                    { label: "Items", value: po._count?.items ?? "-" },
+                    { label: "Amount", value: formatAmount(po.totalAmount) }
+                  ]}
+                  onClick={() => navigate(`/purchase-orders/${po.id}`)}
+                  onActionClick={() => navigate(`/purchase-orders/${po.id}`)}
+                  actionLabel="View Details"
+                />
+              ))}
+              <div className="order-pagination" style={{ borderTop: "none", paddingTop: 16, marginTop: 0 }}>
+                <div className="order-pagination-info">
+                  Page {currentPage} of {totalPages}
+                </div>
+                <div className="order-page-controls">
+                  <button onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1}>Prev</button>
+                  <button onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Next</button>
+                </div>
+              </div>
+            </div>}
           </>
         ) : (
           <div className="order-empty-state">

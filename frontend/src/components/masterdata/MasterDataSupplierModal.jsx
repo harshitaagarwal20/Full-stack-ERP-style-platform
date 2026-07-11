@@ -1,3 +1,5 @@
+import SearchableSelect from "../common/SearchableSelect";
+
 function MasterDataSupplierModal({
   isOpen,
   saving,
@@ -40,7 +42,18 @@ function MasterDataSupplierModal({
           <section className="masterdata-form-section">
             <h4>Basic Information</h4>
             <div className="masterdata-form-grid-two">
-              <div className="full-row">
+              <div>
+                <label className="label">Supplier Code</label>
+                <input
+                  className={getInputClassName("supplier_code")}
+                  placeholder="Auto-generated"
+                  value={supplierForm.supplier_code}
+                  disabled
+                  style={{ backgroundColor: "#f3f4f6", color: "#6b7280" }}
+                />
+                {!supplierForm.supplier_code && !editingSupplierCode && <small style={{ color: "#6b7280" }}>Will be auto-generated</small>}
+              </div>
+              <div>
                 <label className="label">Supplier Name <span className="req">*</span></label>
                 <input
                   className={getInputClassName("supplier_name")}
@@ -51,6 +64,35 @@ function MasterDataSupplierModal({
                 />
                 {formErrors.supplier_name ? <small style={{ color: "#dc2626" }}>{formErrors.supplier_name}</small> : null}
               </div>
+              <div>
+                <label className="label">Contact Person</label>
+                <input
+                  className={getInputClassName("contact_person")}
+                  placeholder="Enter contact person"
+                  value={supplierForm.contact_person}
+                  onChange={(e) => onFieldChange("contact_person", e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="label">Phone Number</label>
+                <input
+                  className={getInputClassName("contact_person_number")}
+                  placeholder="Enter phone number"
+                  value={supplierForm.contact_person_number}
+                  onChange={(e) => onFieldChange("contact_person_number", e.target.value)}
+                />
+              </div>
+              <div className="full-row">
+                <label className="label">Company Email</label>
+                <input
+                  className={getInputClassName("company_email")}
+                  type="email"
+                  placeholder="name@company.com"
+                  value={supplierForm.company_email}
+                  onChange={(e) => onFieldChange("company_email", e.target.value)}
+                />
+                {formErrors.company_email ? <small style={{ color: "#dc2626" }}>{formErrors.company_email}</small> : null}
+              </div>
             </div>
           </section>
 
@@ -59,34 +101,34 @@ function MasterDataSupplierModal({
             <div className="masterdata-form-grid-two">
               <div>
                 <label className="label">Country</label>
-                <select
-                  className={getInputClassName("country")}
+                <SearchableSelect
+                  options={countryOptions.map((option) => ({ value: option.value, label: option.value }))}
                   value={supplierForm.country}
-                  onChange={(e) => {
-                    const selectedCountry = e.target.value;
-                    onFieldChange("country", selectedCountry);
-                    const matching = countryOptions.find((item) => item.value === selectedCountry);
+                  onChange={(value) => {
+                    onFieldChange("country", value);
+                    const matching = countryOptions.find((item) => item.value === value);
                     if (matching) onFieldChange("country_code", matching.code);
                   }}
-                >
-                  <option value="">Select country</option>
-                  {countryOptions.map((option) => (
-                    <option key={option.value} value={option.value}>{option.value}</option>
-                  ))}
-                </select>
+                  placeholder="Select country"
+                />
+              </div>
+              <div>
+                <label className="label">Country Code</label>
+                <input
+                  className={getInputClassName("country_code")}
+                  placeholder="IN"
+                  value={supplierForm.country_code}
+                  onChange={(e) => onFieldChange("country_code", e.target.value)}
+                />
               </div>
               <div>
                 <label className="label">State</label>
-                <select
-                  className={getInputClassName("state")}
+                <SearchableSelect
+                  options={stateOptions.map((state) => ({ value: state, label: state }))}
                   value={supplierForm.state}
-                  onChange={(e) => onFieldChange("state", e.target.value)}
-                >
-                  <option value="">Select state</option>
-                  {stateOptions.map((state) => (
-                    <option key={state} value={state}>{state}</option>
-                  ))}
-                </select>
+                  onChange={(value) => onFieldChange("state", value)}
+                  placeholder="Select state"
+                />
               </div>
               <div>
                 <label className="label">City</label>

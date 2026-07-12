@@ -662,3 +662,53 @@ model BatchSubstitution {
 
   @@index([productionId])
 }
+
+// Legacy master data tables - kept for backward compatibility
+model CustomerMaster {
+  id          Int       @id @default(autoincrement())
+  customerName String?
+  address     String?
+  city        String?
+  pincode     String?
+  state       String?
+  country     String?
+  createdAt   DateTime? @default(now())
+  updatedAt   DateTime? @updatedAt
+
+  @@map("customermaster")
+}
+
+model EnquiryMaster {
+  id         Int       @id @default(autoincrement())
+  companyName String?
+  address    String?
+  createdAt  DateTime? @default(now())
+  updatedAt  DateTime? @updatedAt
+
+  @@map("enquirymaster")
+}
+
+model MasterDataItem {
+  id        Int       @id @default(autoincrement())
+  category  String?
+  value     String?
+  label     String?
+  createdAt DateTime? @default(now())
+  updatedAt DateTime? @updatedAt
+
+  @@map("masterdataitem")
+}
+
+model SupplierMaster {
+  id        Int       @id @default(autoincrement())
+  name      String?
+  address   String?
+  city      String?
+  pincode   String?
+  state     String?
+  country   String?
+  createdAt DateTime? @default(now())
+  updatedAt DateTime? @updatedAt
+
+  @@map("suppliermaster")
+}

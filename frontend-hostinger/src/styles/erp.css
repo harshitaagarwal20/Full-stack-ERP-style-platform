@@ -169,6 +169,55 @@ body {
   padding: 16px;
 }
 
+/* Batch picker modal (standalone list pages → "+ Add Entry") */
+.batch-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.batch-picker-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  background: #ffffff;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s ease;
+}
+
+.batch-picker-row:hover {
+  border-color: var(--ui-primary);
+  background: var(--ui-primary-light);
+}
+
+.batch-picker-code {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--ui-primary);
+}
+
+.batch-picker-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ui-text-primary);
+}
+
+.batch-picker-meta {
+  font-size: 12px;
+  color: var(--ui-text-secondary);
+}
+
 /* Tab strip (Packing: Queue / New Packing) */
 .order-tabs-card {
   padding: 0 16px;

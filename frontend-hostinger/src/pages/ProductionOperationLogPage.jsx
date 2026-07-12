@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { useLocation, useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import api from "../api/axiosClient";
 import useProductionRecord from "../hooks/useProductionRecord";
@@ -10,6 +10,7 @@ import { buildSectionPatchPayload, cloneOperationLogRow, emptyOperationLogRow, e
 
 function ProductionOperationLogPage() {
   const { id } = useParams();
+  const { state } = useLocation();
   const { user } = useAuth();
   const canManageProduction = ["admin", "production"].includes(user?.role);
   const { record, loading, reload } = useProductionRecord(id);
@@ -17,10 +18,20 @@ function ProductionOperationLogPage() {
   const [saving, setSaving] = useState(false);
   const materialNames = getOperationMaterialNames(record?.rawMaterials);
 
+  // Arriving from the list page's "+ Add Entry" picker: start on a fresh blank
+  // row. Only on the first load — a reload after saving must not re-append.
+  const pendingAddRow = useRef(Boolean(state?.addRow));
+
   useEffect(() => {
     if (!record) return;
     const mfg = parseMfgData(record.rawMaterials);
-    setRows(ensureRows(mfg.batchLogs.map(cloneOperationLogRow), emptyOperationLogRow));
+    const saved = ensureRows(mfg.batchLogs.map(cloneOperationLogRow), emptyOperationLogRow);
+    if (pendingAddRow.current) {
+      pendingAddRow.current = false;
+      setRows([...saved, emptyOperationLogRow()]);
+      return;
+    }
+    setRows(saved);
   }, [record]);
 
   const setRowField = (index, key, value) => {

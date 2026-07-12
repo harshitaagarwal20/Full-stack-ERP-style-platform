@@ -6,6 +6,7 @@ import { logApiError } from "../utils/apiError";
 import { formatDate, getStatusClass, getStatusLabel } from "../utils/productionMfg";
 import Toolbar from "../components/common/Toolbar";
 import SearchableSelect from "../components/common/SearchableSelect";
+import ProductionBatchPicker from "../components/production/ProductionBatchPicker";
 import useMasterData from "../hooks/useMasterData";
 import { exportRowsToExcel } from "../utils/exportExcel";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -27,6 +28,7 @@ function InProcessTestingListPage() {
   const [searchText, setSearchText] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -115,6 +117,7 @@ function InProcessTestingListPage() {
           <>
             <button className="order-btn-secondary" onClick={exportToExcel}>Export to Excel</button>
             <button className="order-btn-primary ghost" onClick={onSearchSubmit}>Search</button>
+            <button className="order-btn-primary" onClick={() => setPickerOpen(true)}>+ Add Entry</button>
           </>
         }
         filters={
@@ -133,6 +136,17 @@ function InProcessTestingListPage() {
           </>
         }
       />
+
+      {pickerOpen && (
+        <ProductionBatchPicker
+          records={records}
+          title="New In-Process Test Entry"
+          onClose={() => setPickerOpen(false)}
+          onPick={(record) =>
+            navigate(`/production/${record.id}/in-process-testing`, { state: { addRow: true } })
+          }
+        />
+      )}
 
       <section className="order-card" style={{ padding: 0, overflow: "hidden" }}>
         {loading ? (

@@ -5,6 +5,7 @@ import { BoxesIcon, SearchIcon } from "../components/erp/ErpIcons";
 import { logApiError } from "../utils/apiError";
 import { formatDate, getStatusClass, getStatusLabel, parseMfgData } from "../utils/productionMfg";
 import SearchableSelect from "../components/common/SearchableSelect";
+import ProductionBatchPicker from "../components/production/ProductionBatchPicker";
 import useMasterData from "../hooks/useMasterData";
 import { exportRowsToExcel } from "../utils/exportExcel";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -27,6 +28,7 @@ function OperationLogListPage() {
   const [searchText, setSearchText] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -102,8 +104,24 @@ function OperationLogListPage() {
           <div className="order-header-left">
             <h2>Operation Log</h2>
           </div>
+          <div className="order-header-right">
+            <button className="order-btn-primary" onClick={() => setPickerOpen(true)}>
+              + Add Entry
+            </button>
+          </div>
         </div>
       </section>
+
+      {pickerOpen && (
+        <ProductionBatchPicker
+          records={records}
+          title="New Operation Log Entry"
+          onClose={() => setPickerOpen(false)}
+          onPick={(record) =>
+            navigate(`/production/${record.id}/operation-log`, { state: { addRow: true } })
+          }
+        />
+      )}
 
       {/* SEARCH + FILTERS + ACTIONS */}
       <section className="order-card">

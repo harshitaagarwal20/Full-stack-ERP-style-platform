@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { useLocation, useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import api from "../api/axiosClient";
 import useProductionRecord from "../hooks/useProductionRecord";
@@ -17,6 +17,7 @@ function emptyInProcessRow() {
 
 function ProductionInProcessTestPage() {
   const { id } = useParams();
+  const { state } = useLocation();
   const { user } = useAuth();
   const canManageProduction = ["admin", "production"].includes(user?.role);
   const { record, loading, reload } = useProductionRecord(id);
@@ -26,6 +27,10 @@ function ProductionInProcessTestPage() {
   const [grade, setGrade] = useState("");
   const [batchNo, setBatchNo] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // Arriving from the list page's "+ Add Entry" picker: start on a fresh blank
+  // row. Only on the first load — a reload after saving must not re-append.
+  const pendingAddRow = useRef(Boolean(state?.addRow));
 
   useEffect(() => {
     if (!record) return;
@@ -55,6 +60,11 @@ function ProductionInProcessTestPage() {
     } else {
       setProductName(record.productSpecs || "");
       setBatchNo(record.batchNo || "");
+    }
+
+    if (pendingAddRow.current) {
+      pendingAddRow.current = false;
+      setRows((prev) => [...prev, emptyInProcessRow()]);
     }
   }, [record]);
 

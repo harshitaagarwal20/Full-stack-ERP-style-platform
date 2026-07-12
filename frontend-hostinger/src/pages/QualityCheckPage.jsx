@@ -5,6 +5,7 @@ import { BoxesIcon, SearchIcon } from "../components/erp/ErpIcons";
 import { logApiError } from "../utils/apiError";
 import Toolbar from "../components/common/Toolbar";
 import SearchableSelect from "../components/common/SearchableSelect";
+import ProductionBatchPicker from "../components/production/ProductionBatchPicker";
 import { exportRowsToExcel } from "../utils/exportExcel";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { pickMobileRecent } from "../utils/mobileRecent";
@@ -56,6 +57,7 @@ function QualityCheckPage() {
   const [searchText, setSearchText] = useState("");
   const [search, setSearch] = useState("");
   const [qcFilter, setQcFilter] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -148,6 +150,7 @@ function QualityCheckPage() {
           <>
             <button className="order-btn-secondary" onClick={exportToExcel}>Export to Excel</button>
             <button className="order-btn-primary ghost" onClick={onSearchSubmit}>Search</button>
+            <button className="order-btn-primary" onClick={() => setPickerOpen(true)}>+ Add Entry</button>
           </>
         }
         filters={
@@ -166,6 +169,17 @@ function QualityCheckPage() {
           </>
         }
       />
+
+      {pickerOpen && (
+        <ProductionBatchPicker
+          records={records}
+          title="New QC Test Sheet Entry"
+          onClose={() => setPickerOpen(false)}
+          onPick={(record) =>
+            navigate(`/production/${record.id}/qc-test-sheet`, { state: { addRow: true } })
+          }
+        />
+      )}
 
       <section className="order-card" style={{ padding: 0, overflow: "hidden" }}>
         {loading ? (

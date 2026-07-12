@@ -253,8 +253,8 @@ function ProductionMaterialStepPage({ section, stepKey, label, colLabel }) {
           )}
         </div>
 
-        <div className="order-table-wrap">
-          <table className="order-table">
+        <div className="responsive-table-wrap">
+          <table className="order-table responsive-table">
             <thead>
               <tr>
                 <th>#</th>
@@ -271,10 +271,10 @@ function ProductionMaterialStepPage({ section, stepKey, label, colLabel }) {
             <tbody>
               {rows.map((row, index) => (
                 <tr key={index}>
-                  <td style={{ color: "#94a3b8", fontSize: 12 }}>{index + 1}</td>
+                  <td data-label="#" style={{ color: "#94a3b8", fontSize: 12 }}>{index + 1}</td>
                   {canManageProduction ? (
                     <>
-                      <td>
+                      <td data-label={colLabel}>
                         <SearchableSelect
                           options={materialOptions}
                           value={row.name}
@@ -283,7 +283,7 @@ function ProductionMaterialStepPage({ section, stepKey, label, colLabel }) {
                           allowCustom
                         />
                       </td>
-                      <td>
+                      <td data-label="Supplier">
                         <SearchableSelect
                           options={supplierOptions}
                           value={row.vendor}
@@ -292,8 +292,8 @@ function ProductionMaterialStepPage({ section, stepKey, label, colLabel }) {
                           allowCustom
                         />
                       </td>
-                      <td><input className="mfg-cell-input" value={row.grade} placeholder="Grade" onChange={(e) => setRowField(index, "grade", e.target.value)} /></td>
-                      <td>
+                      <td data-label="Grade"><input className="mfg-cell-input" value={row.grade} placeholder="Grade" onChange={(e) => setRowField(index, "grade", e.target.value)} /></td>
+                      <td data-label="Batch No.">
                         <SearchableSelect
                           options={(batchOptionsByItem[row.name] || []).map((b) => ({
                             value: b.batchNo,
@@ -306,8 +306,8 @@ function ProductionMaterialStepPage({ section, stepKey, label, colLabel }) {
                           allowCustom
                         />
                       </td>
-                      <td><input className="mfg-cell-input mfg-cell-qty" type="number" min="0" step="0.1" value={row.qty} placeholder="0" onChange={(e) => setRowField(index, "qty", e.target.value)} /></td>
-                      <td>
+                      <td data-label="Qty (kg)"><input className="mfg-cell-input mfg-cell-qty" type="number" min="0" step="0.1" value={row.qty} placeholder="0" onChange={(e) => setRowField(index, "qty", e.target.value)} /></td>
+                      <td data-label="Shift">
                         <SearchableSelect
                           options={[{ value: "A", label: "A-Shift" }, { value: "B", label: "B-Shift" }, { value: "C", label: "C-Shift" }]}
                           value={row.shift}
@@ -315,8 +315,8 @@ function ProductionMaterialStepPage({ section, stepKey, label, colLabel }) {
                           placeholder="Shift"
                         />
                       </td>
-                      <td><input className="mfg-cell-input" value={row.remark} placeholder="Remark" onChange={(e) => setRowField(index, "remark", e.target.value)} /></td>
-                      <td style={{ display: "flex", gap: 6 }}>
+                      <td data-label="Remark"><input className="mfg-cell-input" value={row.remark} placeholder="Remark" onChange={(e) => setRowField(index, "remark", e.target.value)} /></td>
+                      <td data-label="" style={{ display: "flex", gap: 6 }}>
                         {row.name && row.batch_no && Number(row.qty) > 0 && (
                           <button type="button" className="order-btn-secondary" style={{ padding: "2px 8px", whiteSpace: "nowrap" }} onClick={() => openSubstitute(index)}>
                             Substitute Batch
@@ -329,13 +329,13 @@ function ProductionMaterialStepPage({ section, stepKey, label, colLabel }) {
                     </>
                   ) : (
                     <>
-                      <td>{row.name || "-"}</td>
-                      <td>{row.vendor || "-"}</td>
-                      <td>{row.grade || "-"}</td>
-                      <td>{row.batch_no || "-"}</td>
-                      <td>{row.qty || "-"}</td>
-                      <td>{row.shift ? `${row.shift}-Shift` : "-"}</td>
-                      <td>{row.remark || "-"}</td>
+                      <td data-label={colLabel}>{row.name || "-"}</td>
+                      <td data-label="Supplier">{row.vendor || "-"}</td>
+                      <td data-label="Grade">{row.grade || "-"}</td>
+                      <td data-label="Batch No.">{row.batch_no || "-"}</td>
+                      <td data-label="Qty (kg)">{row.qty || "-"}</td>
+                      <td data-label="Shift">{row.shift ? `${row.shift}-Shift` : "-"}</td>
+                      <td data-label="Remark">{row.remark || "-"}</td>
                     </>
                   )}
                 </tr>

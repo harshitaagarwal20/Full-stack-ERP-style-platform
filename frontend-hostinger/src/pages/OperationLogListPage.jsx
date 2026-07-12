@@ -4,7 +4,6 @@ import api from "../api/axiosClient";
 import { BoxesIcon, SearchIcon } from "../components/erp/ErpIcons";
 import { logApiError } from "../utils/apiError";
 import { formatDate, getStatusClass, getStatusLabel, parseMfgData } from "../utils/productionMfg";
-import Toolbar from "../components/common/Toolbar";
 import SearchableSelect from "../components/common/SearchableSelect";
 import useMasterData from "../hooks/useMasterData";
 import { exportRowsToExcel } from "../utils/exportExcel";
@@ -97,43 +96,54 @@ function OperationLogListPage() {
 
   return (
     <div className="order-page">
-      <Toolbar
-        title="Operation Log"
-        search={
-          <div className="ui-toolbar-search">
-            <SearchIcon />
-            <input
-              placeholder="Search batch, client or product..."
-              value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") onSearchSubmit();
-              }}
-            />
+      {/* HEADER */}
+      <section className="order-card">
+        <div className="order-header-card">
+          <div className="order-header-left">
+            <h2>Operation Log</h2>
           </div>
-        }
-        actions={
-          <>
-            <button className="order-btn-secondary" onClick={exportToExcel}>Export to Excel</button>
-            <button className="order-btn-primary ghost" onClick={onSearchSubmit}>Search</button>
-          </>
-        }
-        filters={
-          <>
-            <SearchableSelect
-              options={statusOptions}
-              value={statusFilter}
-              onChange={(value) => setStatusFilter(value)}
-              placeholder="All Statuses"
-            />
-            {activeFilterCount > 0 && (
-              <button className="order-btn-secondary" onClick={clearFilters}>
-                Clear filters
-              </button>
-            )}
-          </>
-        }
-      />
+        </div>
+      </section>
+
+      {/* SEARCH */}
+      <section className="order-card">
+        <div className="unified-search-box">
+          <SearchIcon />
+          <input
+            placeholder="Search batch, client or product..."
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") onSearchSubmit();
+            }}
+          />
+        </div>
+      </section>
+
+      {/* FILTERS */}
+      <section className="order-card">
+        <div className="unified-filter-row">
+          <SearchableSelect
+            options={statusOptions}
+            value={statusFilter}
+            onChange={(value) => setStatusFilter(value)}
+            placeholder="All Statuses"
+          />
+          {activeFilterCount > 0 && (
+            <button className="order-btn-secondary" onClick={clearFilters}>
+              Clear filters
+            </button>
+          )}
+        </div>
+      </section>
+
+      {/* ACTION BUTTONS */}
+      <section className="order-card">
+        <div className="unified-actions">
+          <button className="order-btn-primary" onClick={onSearchSubmit}>Search</button>
+          <button className="order-btn-secondary" onClick={exportToExcel}>Export to Excel</button>
+        </div>
+      </section>
 
       <section className="order-card" style={{ padding: 0, overflow: "hidden" }}>
         {loading ? (

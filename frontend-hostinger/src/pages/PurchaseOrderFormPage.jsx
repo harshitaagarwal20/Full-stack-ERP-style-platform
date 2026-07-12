@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../api/axiosClient";
 import { TrashIcon } from "../components/erp/ErpIcons";
@@ -29,7 +29,8 @@ function createEmptyItem() {
     category: "",
     uom: "",
     batch_no: "",
-    outward_key: ""
+    outward_key: "",
+    remark: ""
   };
 }
 
@@ -169,7 +170,8 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
                 category: item.category || "",
                 uom: item.uom || "",
                 batch_no: item.batchNo || "",
-                outward_key: item.outwardKey || ""
+                outward_key: item.outwardKey || "",
+                remark: item.remark || ""
               }))
             : [createEmptyItem()]
         });
@@ -257,6 +259,7 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
           uom: item.uom || null,
           batch_no: item.batch_no || null,
           outward_key: item.outward_key || null,
+          remark: item.remark || null,
           ...(canEditPricing ? {
             unit_price: Number(item.unit_price) || 0,
             currency: item.currency || "INR",
@@ -405,7 +408,8 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
             </thead>
             <tbody>
               {form.items.map((item, index) => (
-                <tr key={index}>
+                <Fragment key={index}>
+                <tr>
                   <td data-label="">{index + 1}</td>
                   <td data-label="Item">
                     <div style={{ minWidth: 132 }}>
@@ -519,6 +523,18 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
                     )}
                   </td>
                 </tr>
+                <tr className="po-item-remark-row">
+                  <td />
+                  <td colSpan={canEditPricing ? 10 : 5}>
+                    <input
+                      className="input"
+                      placeholder="Remark for this item (optional)"
+                      value={item.remark}
+                      onChange={(e) => setItem(index, "remark", e.target.value)}
+                    />
+                  </td>
+                </tr>
+                </Fragment>
               ))}
             </tbody>
             {canEditPricing && (

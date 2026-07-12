@@ -7,7 +7,6 @@ import { BoxesIcon, SearchIcon } from "../components/erp/ErpIcons";
 import { logApiError } from "../utils/apiError";
 import { useIsMobile } from "../hooks/useIsMobile";
 import SearchableSelect from "../components/common/SearchableSelect";
-import Toolbar from "../components/common/Toolbar";
 import { exportRowsToExcel } from "../utils/exportExcel";
 import StatusBadge from "../components/common/StatusBadge";
 import { GRN_STATUS_CONFIG } from "../config/statusConfig";
@@ -126,51 +125,65 @@ function GrnListPage() {
 
   return (
     <div className="order-page">
-      <Toolbar
-        title="Goods Receipt Notes"
-        search={
-          <div className="ui-toolbar-search">
-            <SearchIcon />
-            <input
-              placeholder="Search GRN or PO number..."
-              value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") onSearchSubmit(); }}
-            />
+      {/* HEADER */}
+      <section className="order-card">
+        <div className="order-header-card">
+          <div className="order-header-left">
+            <h2>Goods Receipt Notes</h2>
           </div>
-        }
-        actions={
-          <>
-            <button className="order-btn-secondary" onClick={exportToExcel}>
-              Export to Excel
-            </button>
+          <div className="order-header-right">
             <button className="order-btn-primary" onClick={() => navigate("/grns/new")}>
               + New GRN
             </button>
-          </>
-        }
-        filters={
-          <>
-            <SearchableSelect
-              options={GRN_STATUS_OPTIONS}
-              value={statusFilter}
-              onChange={(value) => { setStatusFilter(value); setCurrentPage(1); }}
-              placeholder="All Status"
-            />
-            {(query || statusFilter !== "all") && (
-              <button
-                className="order-btn-secondary"
-                onClick={() => { setQuery(""); setSearchText(""); setStatusFilter("all"); setCurrentPage(1); }}
-              >
-                Clear
-              </button>
-            )}
-            <span style={{ marginLeft: "auto", fontSize: 13, color: "#64748b", flex: "0 0 auto" }}>
-              {totalRecords} record{totalRecords !== 1 ? "s" : ""}
-            </span>
-          </>
-        }
-      />
+          </div>
+        </div>
+      </section>
+
+      {/* SEARCH */}
+      <section className="order-card">
+        <div className="unified-search-box">
+          <SearchIcon />
+          <input
+            placeholder="Search GRN or PO number..."
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") onSearchSubmit(); }}
+          />
+        </div>
+      </section>
+
+      {/* FILTERS */}
+      <section className="order-card">
+        <div className="unified-filter-row">
+          <SearchableSelect
+            options={GRN_STATUS_OPTIONS}
+            value={statusFilter}
+            onChange={(value) => { setStatusFilter(value); setCurrentPage(1); }}
+            placeholder="All Status"
+          />
+          {(query || statusFilter !== "all") && (
+            <button
+              className="order-btn-secondary"
+              onClick={() => { setQuery(""); setSearchText(""); setStatusFilter("all"); setCurrentPage(1); }}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      </section>
+
+      {/* ACTION BUTTONS & RECORD COUNT */}
+      <section className="order-card">
+        <div className="unified-actions" style={{ justifyContent: "space-between" }}>
+          <div className="unified-actions">
+            <button className="order-btn-primary" onClick={onSearchSubmit}>Search</button>
+            <button className="order-btn-secondary" onClick={exportToExcel}>Export to Excel</button>
+          </div>
+          <span style={{ fontSize: 13, color: "#64748b" }}>
+            {totalRecords} record{totalRecords !== 1 ? "s" : ""}
+          </span>
+        </div>
+      </section>
 
       {/* Table */}
       <section className="order-card" style={{ padding: 0, overflow: "hidden" }}>

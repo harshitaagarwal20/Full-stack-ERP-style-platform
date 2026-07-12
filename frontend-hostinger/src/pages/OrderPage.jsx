@@ -14,7 +14,6 @@ import { CURRENCY_OPTIONS, formatPriceValue } from "../utils/commerce";
 import { getDisplaySalesGroupNumber } from "../utils/businessNumbers";
 import { formatEnquiryProducts } from "../utils/enquiryProducts";
 import SearchableSelect from "../components/common/SearchableSelect";
-import Toolbar from "../components/common/Toolbar";
 import StatusBadge from "../components/common/StatusBadge";
 
 const ORDER_STATUS_CONFIG = {
@@ -541,55 +540,70 @@ function OrderPage() {
 
   return (
     <div className="order-page">
-      <Toolbar
-        title="Orders"
-        search={
-          <div className="ui-toolbar-search">
-            <SearchIcon />
-            <input
-              placeholder="Search sales order, client, product"
-              value={searchText}
-              onChange={(event) => setSearchText(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") onSearchSubmit();
-              }}
-            />
+      {/* HEADER */}
+      <section className="order-card">
+        <div className="order-header-card">
+          <div className="order-header-left">
+            <h2>Orders</h2>
           </div>
-        }
-        actions={
-          canCreate && (
-            <button
-              className="order-btn-primary"
-              onClick={() => {
-                setEditingOrderId(null);
-                setForm(createCreateForm());
-                setIsCreateModalOpen(true);
-              }}
-            >
-              Create Manual Request
-            </button>
-          )
-        }
-        filters={
-          <>
-            <SearchableSelect
-              options={statusFilterOptions}
-              value={statusFilter}
-              onChange={(value) => { setStatusFilter(value); setCurrentPage(1); }}
-              placeholder="All Status"
-            />
-            <input
-              type="text"
-              placeholder="Filter by client"
-              value={clientFilter}
-              onChange={(event) => { setClientFilter(event.target.value); setCurrentPage(1); }}
-            />
-            {!isMobile && <input type="date" value={dateFilter} onChange={(event) => { setDateFilter(event.target.value); setCurrentPage(1); }} />}
-            <button className="order-btn-primary ghost" onClick={onSearchSubmit}>Search</button>
-            <button className="order-btn-secondary" onClick={exportOrders}>Export to Excel</button>
-          </>
-        }
-      />
+          {canCreate && (
+            <div className="order-header-right">
+              <button
+                className="order-btn-primary"
+                onClick={() => {
+                  setEditingOrderId(null);
+                  setForm(createCreateForm());
+                  setIsCreateModalOpen(true);
+                }}
+              >
+                Create Manual Request
+              </button>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* SEARCH */}
+      <section className="order-card">
+        <div className="unified-search-box">
+          <SearchIcon />
+          <input
+            placeholder="Search sales order, client, product"
+            value={searchText}
+            onChange={(event) => setSearchText(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") onSearchSubmit();
+            }}
+          />
+        </div>
+      </section>
+
+      {/* FILTERS */}
+      <section className="order-card">
+        <div className="unified-filter-row">
+          <SearchableSelect
+            options={statusFilterOptions}
+            value={statusFilter}
+            onChange={(value) => { setStatusFilter(value); setCurrentPage(1); }}
+            placeholder="All Status"
+          />
+          <input
+            type="text"
+            placeholder="Filter by client"
+            value={clientFilter}
+            onChange={(event) => { setClientFilter(event.target.value); setCurrentPage(1); }}
+          />
+          {!isMobile && <input type="date" value={dateFilter} onChange={(event) => { setDateFilter(event.target.value); setCurrentPage(1); }} />}
+        </div>
+      </section>
+
+      {/* ACTION BUTTONS */}
+      <section className="order-card">
+        <div className="unified-actions">
+          <button className="order-btn-primary" onClick={onSearchSubmit}>Search</button>
+          <button className="order-btn-secondary" onClick={exportOrders}>Export to Excel</button>
+        </div>
+      </section>
 
       <section className="order-card">
         {loading ? (

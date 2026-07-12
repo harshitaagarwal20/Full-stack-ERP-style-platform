@@ -4010,10 +4010,10 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 12px;
+  margin-bottom: 0;
 }
 
-.order-header-card h2 {
+.order-header-left h2 {
   margin: 0;
   font-size: 24px;
   font-weight: 700;
@@ -4304,6 +4304,18 @@ body {
 .order-table.order-table--compact th,
 .order-table.order-table--compact td {
   padding: 9px 8px;
+}
+
+/* Per-item remark row sits directly under its line item, visually attached
+   (no top border, lighter input) so it reads as a sub-field of that item. */
+.order-table .po-item-remark-row td {
+  border-top: none;
+  padding-top: 0;
+  padding-bottom: 12px;
+}
+.order-table .po-item-remark-row .input {
+  background: #f8fafc;
+  font-size: 12.5px;
 }
 
 .order-table th {

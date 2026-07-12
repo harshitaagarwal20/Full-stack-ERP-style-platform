@@ -439,61 +439,73 @@ function DispatchPage() {
 
   return (
     <div className="dispatch-page">
-      <section className="dispatch-card dispatch-header-card">
-        <h2>Dispatch</h2>
-        <div className="dispatch-header-right">
-          <div className="dispatch-header-search">
-            <SearchIcon />
-            <input
-              className="dispatch-search-input"
-              placeholder="Search order ID, client, or product"
-              value={searchText}
-              onChange={(event) => setSearchText(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") onSearchSubmit();
-              }}
-            />
+      {/* HEADER */}
+      <section className="order-card">
+        <div className="order-header-card">
+          <div className="order-header-left">
+            <h2>Dispatch</h2>
           </div>
         </div>
       </section>
 
-      <section className="dispatch-card">
-        <div className="dispatch-toolbar">
-          <div className="dispatch-filter-grid">
-            <SearchableSelect
-              options={statusFilterOptions}
-              value={statusFilter}
-              onChange={(value) => {
-                setStatusFilter(value);
-                setCurrentPage(1);
-              }}
-              placeholder="All Status"
-            />
-            <input
-              type="text"
-              value={clientFilter}
-              onChange={(event) => {
-                setClientFilter(event.target.value);
-                setCurrentPage(1);
-              }}
-              placeholder="Filter by client"
-            />
-            {!isMobile && (
-              <input
-                type="date"
-                value={dateFilter}
-                onChange={(event) => {
-                  setDateFilter(event.target.value);
-                  setCurrentPage(1);
-                }}
-              />
-            )}
-          </div>
-          <div className="dispatch-toolbar-actions">
-            <button className="dispatch-btn-primary ghost" onClick={onSearchSubmit}>Search</button>
-            <button className="dispatch-btn-secondary" onClick={exportDispatches}>Export to Excel</button>
-          </div>
+      {/* SEARCH */}
+      <section className="order-card">
+        <div className="unified-search-box">
+          <SearchIcon />
+          <input
+            placeholder="Search order ID, client, or product"
+            value={searchText}
+            onChange={(event) => setSearchText(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") onSearchSubmit();
+            }}
+          />
         </div>
+      </section>
+
+      {/* FILTERS */}
+      <section className="order-card">
+        <div className="unified-filter-row">
+          <SearchableSelect
+            options={statusFilterOptions}
+            value={statusFilter}
+            onChange={(value) => {
+              setStatusFilter(value);
+              setCurrentPage(1);
+            }}
+            placeholder="All Status"
+          />
+          <input
+            type="text"
+            value={clientFilter}
+            onChange={(event) => {
+              setClientFilter(event.target.value);
+              setCurrentPage(1);
+            }}
+            placeholder="Filter by client"
+          />
+          {!isMobile && (
+            <input
+              type="date"
+              value={dateFilter}
+              onChange={(event) => {
+                setDateFilter(event.target.value);
+                setCurrentPage(1);
+              }}
+            />
+          )}
+        </div>
+      </section>
+
+      {/* ACTION BUTTONS */}
+      <section className="order-card">
+        <div className="unified-actions">
+          <button className="order-btn-primary" onClick={onSearchSubmit}>Search</button>
+          <button className="order-btn-secondary" onClick={exportDispatches}>Export to Excel</button>
+        </div>
+      </section>
+
+      <section className="order-card">
 
         {loading ? (
           <div className="dispatch-skeleton-list">

@@ -119,9 +119,10 @@ model Customer {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  addresses     CustomerAddress[]
-  enquiries     Enquiry[]
-  orders        Order[]
+  addresses           CustomerAddress[]
+  enquiries           Enquiry[]
+  orders              Order[]
+  manualOrderRequests ManualOrderRequest[]
 
   @@unique([name])
   @@index([name])
@@ -168,6 +169,8 @@ model Enquiry {
   id               Int           @id @default(autoincrement())
   enquiryNumber    String?
   companyName      String
+  customerId       Int?
+  customerAddressId Int?
   product          String
   products         Json?
   // Allow fractional enquiry quantities (e.g., 2.5 kg)
@@ -201,9 +204,12 @@ model Enquiry {
   updatedAt        DateTime      @updatedAt
   createdById      Int
   approvedById     Int?
+  customer         Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
   createdBy        User          @relation("EnquiryCreator", fields: [createdById], references: [id], onDelete: Restrict)
   approvedBy       User?         @relation("EnquiryApprover", fields: [approvedById], references: [id], onDelete: SetNull)
   order            Order?
+
+  @@index([customerId])
 }
 
 model BillOfMaterial {
@@ -237,6 +243,8 @@ model BillOfMaterialItem {
 model Order {
   id               Int         @id @default(autoincrement())
   enquiryId        Int?        @unique
+  customerId       Int?
+  customerAddressId Int?
   salesGroupNumber String?
   salesOrderNumber String      @unique
   orderNo          String      @unique
@@ -265,17 +273,22 @@ model Order {
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
   createdById      Int
+  customer         Customer?   @relation(fields: [customerId], references: [id], onDelete: SetNull)
   enquiry          Enquiry?    @relation(fields: [enquiryId], references: [id], onDelete: Restrict)
   createdBy        User        @relation(fields: [createdById], references: [id], onDelete: Restrict)
   productions      Production[]
   dispatches       Dispatch[]
   packingRecords   PackingRecord[]
   manualOrderRequest ManualOrderRequest? @relation("ManualOrderRequestToOrder")
+
+  @@index([customerId])
 }
 
 model ManualOrderRequest {
   id             Int                     @id @default(autoincrement())
   requestNumber  String
+  customerId     Int?
+  customerAddressId Int?
   product        String
   grade          String
   quantity       Int
@@ -296,12 +309,14 @@ model ManualOrderRequest {
   createdById    Int
   approvedById   Int?
   orderId        Int?                    @unique
+  customer       Customer?               @relation(fields: [customerId], references: [id], onDelete: SetNull)
   createdBy      User                    @relation("ManualOrderRequestCreator", fields: [createdById], references: [id], onDelete: Restrict)
   approvedBy     User?                   @relation("ManualOrderRequestApprover", fields: [approvedById], references: [id], onDelete: SetNull)
   order          Order?                  @relation("ManualOrderRequestToOrder", fields: [orderId], references: [id], onDelete: SetNull)
 
   @@index([status, createdAt])
   @@index([requestNumber])
+  @@index([customerId])
 }
 
 model Production {

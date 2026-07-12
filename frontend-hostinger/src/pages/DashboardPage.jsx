@@ -35,6 +35,8 @@ function normalizeDashboardSummary(data) {
       readyForDispatchOrders: Number(counts.readyForDispatchOrders || 0),
       partiallyDispatchedOrders: Number(counts.partiallyDispatchedOrders || 0),
       completedOrders: Number(counts.completedOrders || 0),
+      convertedEnquiries: Number(counts.convertedEnquiries || 0),
+      conversionRate: Number(counts.conversionRate || 0),
     },
     trendData: Array.isArray(data?.trendData) ? data.trendData : [],
     statusMix: Array.isArray(data?.statusMix) ? data.statusMix : []
@@ -94,6 +96,7 @@ function buildSummaryFromLists(enquiries = [], orders = []) {
     completedOrders: 0
   });
 
+  const convertedEnquiries = orders.filter((order) => order.enquiryId != null).length;
   return {
     counts: {
       totalEnquiries: enquiries.length,
@@ -104,6 +107,10 @@ function buildSummaryFromLists(enquiries = [], orders = []) {
       readyForDispatchOrders: orderStatusCounts.readyForDispatchOrders,
       partiallyDispatchedOrders: orderStatusCounts.partiallyDispatchedOrders,
       completedOrders: orderStatusCounts.completedOrders,
+      convertedEnquiries,
+      conversionRate: enquiries.length > 0
+        ? Math.round((convertedEnquiries / enquiries.length) * 1000) / 10
+        : 0,
     },
     trendData: buckets,
     statusMix: [
@@ -175,7 +182,13 @@ function DashboardPage() {
       { label: "Total Enquiries", value: counts.totalEnquiries, accent: "blue", icon: <ClipboardIcon /> },
       { label: "Pending Approvals", value: counts.pendingApprovals, accent: "orange", icon: <HourglassIcon /> },
       { label: "In Production", value: counts.inProductionOrders, accent: "purple", icon: <FactoryIcon /> },
-      { label: "Ready for Dispatch", value: counts.readyForDispatchOrders, accent: "green", icon: <TruckIcon /> }
+      { label: "Ready for Dispatch", value: counts.readyForDispatchOrders, accent: "green", icon: <TruckIcon /> },
+      {
+        label: `Enquiry → Order Conversion (${counts.convertedEnquiries}/${counts.totalEnquiries})`,
+        value: `${counts.conversionRate}%`,
+        accent: "blue",
+        icon: <ClipboardIcon />
+      }
     ];
   }, [summary.counts]);
 

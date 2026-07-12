@@ -169,6 +169,41 @@ body {
   padding: 16px;
 }
 
+/* Tab strip (Packing: Queue / New Packing) */
+.order-tabs-card {
+  padding: 0 16px;
+}
+
+.order-tabs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+}
+
+.order-tab-btn {
+  padding: 12px 14px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ui-text-secondary);
+  white-space: nowrap;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.order-tab-btn:hover {
+  color: var(--ui-text-primary);
+}
+
+.order-tab-btn.active {
+  color: var(--ui-primary);
+  border-bottom-color: var(--ui-primary);
+  font-weight: 600;
+}
+
 .page-card {
   @apply rounded-xl bg-white p-4 shadow-sm sm:p-6;
 }
@@ -6644,21 +6679,25 @@ th.rm-th-right { text-align: right; }
 
 .mfg-cell-input {
   width: 100%;
-  border: 1px solid transparent;
+  border: 1px solid var(--ui-border);
   border-radius: 6px;
-  background: transparent;
-  color: #0f172a;
+  background: #ffffff;
+  color: var(--ui-text-primary);
   padding: 6px 8px;
   font-size: 13px;
   outline: none;
   min-width: 80px;
-  transition: border-color 0.15s, background 0.15s;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.mfg-cell-input:hover:not(:disabled) {
+  border-color: #cbd5e1;
 }
 
 .mfg-cell-input:focus {
-  border-color: #2563eb;
+  border-color: var(--ui-primary);
   background: #ffffff;
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+  box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.1);
 }
 
 .mfg-cell-input::placeholder {

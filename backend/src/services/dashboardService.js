@@ -61,6 +61,7 @@ export async function getDashboardSummary() {
       readyForDispatchOrders,
       partiallyDispatchedOrders,
       completedOrders,
+      convertedEnquiries,
       enquiryTrendRows,
       orderTrendRows
     ] = await Promise.all([
@@ -72,6 +73,9 @@ export async function getDashboardSummary() {
       prisma.order.count({ where: { status: "READY_FOR_DISPATCH" } }),
       prisma.order.count({ where: { status: "PARTIALLY_DISPATCHED" } }),
       prisma.order.count({ where: { status: "COMPLETED" } }),
+      // Orders that originated from an enquiry — the numerator for the
+      // enquiry-to-order conversion ratio.
+      prisma.order.count({ where: { enquiryId: { not: null } } }),
       prisma.$queryRaw`
         SELECT DATE_FORMAT(createdAt, '%Y-%m') AS monthKey, COUNT(*) AS total
         FROM \`Enquiry\`
@@ -91,6 +95,11 @@ export async function getDashboardSummary() {
     applyMonthlyCounts(buckets, enquiryTrendRows, "enquiries");
     applyMonthlyCounts(buckets, orderTrendRows, "orders");
 
+    // Enquiry-to-order conversion ratio (percentage, one decimal place).
+    const conversionRate = totalEnquiries > 0
+      ? Math.round((convertedEnquiries / totalEnquiries) * 1000) / 10
+      : 0;
+
     return {
       counts: {
         totalEnquiries,
@@ -101,6 +110,8 @@ export async function getDashboardSummary() {
         readyForDispatchOrders,
         partiallyDispatchedOrders,
         completedOrders,
+        convertedEnquiries,
+        conversionRate,
       },
       trendData: buckets,
       statusMix: [

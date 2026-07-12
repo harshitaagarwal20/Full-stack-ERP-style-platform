@@ -3,7 +3,6 @@ import api from "../api/axiosClient";
 import { BoxesIcon, SearchIcon } from "../components/erp/ErpIcons";
 import { logApiError } from "../utils/apiError";
 import { dispatchUserMessage } from "../utils/errorMessages";
-import Toolbar from "../components/common/Toolbar";
 import SearchableSelect from "../components/common/SearchableSelect";
 import useMasterData from "../hooks/useMasterData";
 import { exportRowsToExcel } from "../utils/exportExcel";
@@ -137,69 +136,54 @@ function PackingPage() {
 
   return (
     <div className="order-page">
-      <Toolbar
-        title="Packing"
-        search={
-          activeTab === "queue" ? (
-            <div className="ui-toolbar-search">
-              <SearchIcon />
-              <input
-                placeholder="Search order, client or product..."
-                value={searchText}
-                onChange={(e) => setSearchText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") onSearchSubmit();
-                }}
-              />
-            </div>
-          ) : null
-        }
-        actions={
-          <>
-            {activeTab === "queue" && (
-              <>
-                <button className="order-btn-secondary" onClick={exportToExcel}>Export to Excel</button>
-                <button className="order-btn-primary ghost" onClick={onSearchSubmit}>Search</button>
-              </>
-            )}
-          </>
-        }
-      />
+      {/* HEADER */}
+      <section className="order-card">
+        <div className="order-header-card">
+          <div className="order-header-left">
+            <h2>Packing</h2>
+          </div>
+        </div>
+      </section>
 
-      <div className="order-tabs" style={{ display: "flex", gap: 8, padding: "16px", borderBottom: "1px solid #e5e7eb", backgroundColor: "#f9fafb" }}>
-        <button
-          className={`order-tab-btn ${activeTab === "queue" ? "active" : ""}`}
-          onClick={() => setActiveTab("queue")}
-          style={{
-            padding: "8px 16px",
-            border: "none",
-            borderBottom: activeTab === "queue" ? "2px solid #1d4ed8" : "2px solid transparent",
-            background: "transparent",
-            cursor: "pointer",
-            fontSize: 14,
-            fontWeight: activeTab === "queue" ? 600 : 400,
-            color: activeTab === "queue" ? "#1d4ed8" : "#64748b"
-          }}
-        >
-          Queue
-        </button>
-        <button
-          className={`order-tab-btn ${activeTab === "new" ? "active" : ""}`}
-          onClick={() => setActiveTab("new")}
-          style={{
-            padding: "8px 16px",
-            border: "none",
-            borderBottom: activeTab === "new" ? "2px solid #1d4ed8" : "2px solid transparent",
-            background: "transparent",
-            cursor: "pointer",
-            fontSize: 14,
-            fontWeight: activeTab === "new" ? 600 : 400,
-            color: activeTab === "new" ? "#1d4ed8" : "#64748b"
-          }}
-        >
-          New Packing
-        </button>
-      </div>
+      {/* TABS */}
+      <section className="order-card order-tabs-card">
+        <div className="order-tabs">
+          <button
+            className={`order-tab-btn ${activeTab === "queue" ? "active" : ""}`}
+            onClick={() => setActiveTab("queue")}
+          >
+            Queue
+          </button>
+          <button
+            className={`order-tab-btn ${activeTab === "new" ? "active" : ""}`}
+            onClick={() => setActiveTab("new")}
+          >
+            New Packing
+          </button>
+        </div>
+      </section>
+
+      {/* SEARCH + ACTIONS (queue tab only) */}
+      {activeTab === "queue" && (
+        <section className="order-card">
+          <div className="unified-search-box">
+            <SearchIcon />
+            <input
+              placeholder="Search order, client or product..."
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") onSearchSubmit();
+              }}
+            />
+          </div>
+
+          <div className="unified-actions" style={{ marginTop: 10 }}>
+            <button className="order-btn-primary ghost" onClick={onSearchSubmit}>Search</button>
+            <button className="order-btn-secondary" onClick={exportToExcel}>Export to Excel</button>
+          </div>
+        </section>
+      )}
 
       <section className="order-card" style={{ padding: 0, overflow: "hidden" }}>
         {activeTab === "queue" ? (
@@ -286,21 +270,15 @@ function PackingPage() {
             )}
           </>
         ) : (
-          <div style={{ padding: 24 }}>
-            <div style={{ marginBottom: 24 }}>
-              <label className="label">Search Orders <span className="req">*</span></label>
-              <div className="ui-toolbar-search" style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "8px 12px", background: "#fff" }}>
+          <div style={{ padding: 16 }}>
+            <div style={{ marginBottom: 16 }}>
+              <label className="label">Search Orders</label>
+              <div className="unified-search-box">
                 <SearchIcon />
                 <input
                   placeholder="Search order, client or product..."
                   value={newPackSearch}
                   onChange={(e) => setNewPackSearch(e.target.value)}
-                  style={{
-                    border: "none",
-                    outline: "none",
-                    flex: 1,
-                    fontSize: 14
-                  }}
                 />
               </div>
               <small style={{ color: "#64748b", marginTop: 6, display: "block" }}>
@@ -367,7 +345,7 @@ function PackingPage() {
                 <p>{activeOrder.orderNo} — {activeOrder.product} for {activeOrder.clientName}</p>
               </div>
               <button className="masterdata-modal-close-btn" onClick={closePackModal} disabled={saving} type="button">
-                X Close
+                ✕
               </button>
             </div>
 

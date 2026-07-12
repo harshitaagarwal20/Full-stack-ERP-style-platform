@@ -105,7 +105,7 @@ function OperationLogListPage() {
         </div>
       </section>
 
-      {/* SEARCH */}
+      {/* SEARCH + FILTERS + ACTIONS */}
       <section className="order-card">
         <div className="unified-search-box">
           <SearchIcon />
@@ -118,10 +118,7 @@ function OperationLogListPage() {
             }}
           />
         </div>
-      </section>
 
-      {/* FILTERS */}
-      <section className="order-card">
         <div className="unified-filter-row">
           <SearchableSelect
             options={statusOptions}
@@ -135,12 +132,9 @@ function OperationLogListPage() {
             </button>
           )}
         </div>
-      </section>
 
-      {/* ACTION BUTTONS */}
-      <section className="order-card">
         <div className="unified-actions">
-          <button className="order-btn-primary" onClick={onSearchSubmit}>Search</button>
+          <button className="order-btn-primary ghost" onClick={onSearchSubmit}>Search</button>
           <button className="order-btn-secondary" onClick={exportToExcel}>Export to Excel</button>
         </div>
       </section>

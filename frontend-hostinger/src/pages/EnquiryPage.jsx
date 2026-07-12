@@ -138,6 +138,7 @@ function EnquiryPage() {
   const [query, setQuery] = useState("");
   const [searchText, setSearchText] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [stageFilter, setStageFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("");
   const [assignedFilter, setAssignedFilter] = useState("");
   const isMobile = useIsMobile();
@@ -241,6 +242,7 @@ function EnquiryPage() {
         params: {
           q: query || undefined,
           status: statusFilter === "all" ? undefined : statusFilter,
+          stage: stageFilter === "all" ? undefined : stageFilter,
           assigned: assignedFilter || undefined,
           date: dateFilter || undefined,
           page: currentPage,
@@ -261,7 +263,7 @@ function EnquiryPage() {
 
   useEffect(() => {
     fetchEnquiries();
-  }, [query, statusFilter, assignedFilter, dateFilter, currentPage]);
+  }, [query, statusFilter, stageFilter, assignedFilter, dateFilter, currentPage]);
 
   const pendingCount = useMemo(
     () => enquiries.filter((item) => item.status === "PENDING").length,
@@ -562,6 +564,12 @@ function EnquiryPage() {
               value={statusFilter}
               onChange={(value) => { setStatusFilter(value); setCurrentPage(1); }}
               placeholder="All Status"
+            />
+            <SearchableSelect
+              options={[{ value: "all", label: "All Stages" }, ...STAGE_OPTIONS]}
+              value={stageFilter}
+              onChange={(value) => { setStageFilter(value); setCurrentPage(1); }}
+              placeholder="All Stages"
             />
             {!isMobile && <input type="date" value={dateFilter} onChange={(event) => { setDateFilter(event.target.value); setCurrentPage(1); }} />}
             <input

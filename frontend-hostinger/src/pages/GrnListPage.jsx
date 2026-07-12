@@ -139,7 +139,7 @@ function GrnListPage() {
         </div>
       </section>
 
-      {/* SEARCH */}
+      {/* SEARCH + FILTERS + ACTIONS */}
       <section className="order-card">
         <div className="unified-search-box">
           <SearchIcon />
@@ -150,10 +150,7 @@ function GrnListPage() {
             onKeyDown={(e) => { if (e.key === "Enter") onSearchSubmit(); }}
           />
         </div>
-      </section>
 
-      {/* FILTERS */}
-      <section className="order-card">
         <div className="unified-filter-row">
           <SearchableSelect
             options={GRN_STATUS_OPTIONS}
@@ -170,13 +167,10 @@ function GrnListPage() {
             </button>
           )}
         </div>
-      </section>
 
-      {/* ACTION BUTTONS & RECORD COUNT */}
-      <section className="order-card">
         <div className="unified-actions" style={{ justifyContent: "space-between" }}>
           <div className="unified-actions">
-            <button className="order-btn-primary" onClick={onSearchSubmit}>Search</button>
+            <button className="order-btn-primary ghost" onClick={onSearchSubmit}>Search</button>
             <button className="order-btn-secondary" onClick={exportToExcel}>Export to Excel</button>
           </div>
           <span style={{ fontSize: 13, color: "#64748b" }}>

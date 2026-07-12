@@ -113,6 +113,37 @@ model User {
   @@index([role, createdAt])
 }
 
+model Customer {
+  id        Int       @id @default(autoincrement())
+  name      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  addresses     CustomerAddress[]
+  enquiries     Enquiry[]
+  orders        Order[]
+
+  @@unique([name])
+  @@index([name])
+}
+
+model CustomerAddress {
+  id          Int       @id @default(autoincrement())
+  customerId  Int
+  address     String
+  city        String?
+  pincode     String?
+  state       String?
+  countryCode String?
+  isDefault   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  customer    Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+}
+
 model AuditLog {
   id         Int      @id @default(autoincrement())
   action     String

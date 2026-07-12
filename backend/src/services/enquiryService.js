@@ -236,15 +236,19 @@ export async function createEnquiry(payload, user) {
 }
 
 export async function listEnquiries(filters = {}) {
-  const { status, q, assigned, date } = filters;
+  const { status, q, assigned, date, stage } = filters;
   const { page, take, skip } = buildPagination(filters, { defaultLimit: 0, maxLimit: 100 });
   const normalizedAssigned = String(assigned || "").trim();
   const normalizedDate = String(date || "").trim();
+  const normalizedStage = ENQUIRY_STAGES.includes(String(stage || "").trim().toUpperCase())
+    ? String(stage).trim().toUpperCase()
+    : null;
   const dateFrom = normalizedDate ? new Date(`${normalizedDate}T00:00:00.000Z`) : null;
   const dateTo = normalizedDate ? new Date(`${normalizedDate}T23:59:59.999Z`) : null;
 
   const where = {
     ...(status ? { status } : {}),
+    ...(normalizedStage ? { stage: normalizedStage } : {}),
     ...(normalizedAssigned ? { assignedPerson: { contains: normalizedAssigned } } : {}),
     ...(normalizedDate && dateFrom && dateTo ? { expectedTimeline: { gte: dateFrom, lte: dateTo } } : {}),
     ...(q
@@ -267,6 +271,7 @@ export async function listEnquiries(filters = {}) {
 
   const cacheKey = buildCacheKey(ENQUIRY_CACHE_PREFIX, {
     status: status || null,
+    stage: normalizedStage || null,
     q: q || null,
     assigned: normalizedAssigned || null,
     date: normalizedDate || null,

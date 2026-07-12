@@ -80,6 +80,21 @@ body {
   width: 100%;
 }
 
+/* Pages hand Toolbar their search pre-wrapped in .ui-toolbar-search, which is
+   width-capped on its own. Inside the unified box it should span the card. */
+.unified-search-box .ui-toolbar-search {
+  width: 100%;
+  max-width: none;
+}
+
+.unified-search-box + .unified-filter-row {
+  margin-top: 10px;
+}
+
+.unified-filter-row + .unified-actions {
+  margin-top: 10px;
+}
+
 .unified-search-box svg {
   position: absolute;
   left: 12px;

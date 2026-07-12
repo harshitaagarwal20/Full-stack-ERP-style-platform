@@ -563,7 +563,7 @@ function OrderPage() {
         </div>
       </section>
 
-      {/* SEARCH */}
+      {/* SEARCH + FILTERS + ACTIONS */}
       <section className="order-card">
         <div className="unified-search-box">
           <SearchIcon />
@@ -576,10 +576,7 @@ function OrderPage() {
             }}
           />
         </div>
-      </section>
 
-      {/* FILTERS */}
-      <section className="order-card">
         <div className="unified-filter-row">
           <SearchableSelect
             options={statusFilterOptions}
@@ -595,12 +592,9 @@ function OrderPage() {
           />
           {!isMobile && <input type="date" value={dateFilter} onChange={(event) => { setDateFilter(event.target.value); setCurrentPage(1); }} />}
         </div>
-      </section>
 
-      {/* ACTION BUTTONS */}
-      <section className="order-card">
         <div className="unified-actions">
-          <button className="order-btn-primary" onClick={onSearchSubmit}>Search</button>
+          <button className="order-btn-primary ghost" onClick={onSearchSubmit}>Search</button>
           <button className="order-btn-secondary" onClick={exportOrders}>Export to Excel</button>
         </div>
       </section>

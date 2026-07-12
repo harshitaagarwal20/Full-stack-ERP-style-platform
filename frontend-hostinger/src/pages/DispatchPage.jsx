@@ -448,7 +448,7 @@ function DispatchPage() {
         </div>
       </section>
 
-      {/* SEARCH */}
+      {/* SEARCH + FILTERS + ACTIONS */}
       <section className="order-card">
         <div className="unified-search-box">
           <SearchIcon />
@@ -461,10 +461,7 @@ function DispatchPage() {
             }}
           />
         </div>
-      </section>
 
-      {/* FILTERS */}
-      <section className="order-card">
         <div className="unified-filter-row">
           <SearchableSelect
             options={statusFilterOptions}
@@ -495,12 +492,9 @@ function DispatchPage() {
             />
           )}
         </div>
-      </section>
 
-      {/* ACTION BUTTONS */}
-      <section className="order-card">
         <div className="unified-actions">
-          <button className="order-btn-primary" onClick={onSearchSubmit}>Search</button>
+          <button className="order-btn-primary ghost" onClick={onSearchSubmit}>Search</button>
           <button className="order-btn-secondary" onClick={exportDispatches}>Export to Excel</button>
         </div>
       </section>

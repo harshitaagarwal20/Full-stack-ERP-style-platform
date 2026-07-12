@@ -163,6 +163,59 @@ function EnquiryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, canManageEnquiries]);
 
+  // For an "Old" customer, the Last Transaction Details are auto-fetched
+  // (read-only) from that company's most recent prior enquiry. Runs whenever
+  // the customer type / company changes so the field always reflects the
+  // selected company. The currently-edited enquiry is excluded so it doesn't
+  // summarise itself.
+  useEffect(() => {
+    const company = String(form.company_name || "").trim();
+    if (form.customer_type !== "Old" || !company) {
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.get("/enquiries", { params: { q: company, limit: 10 } });
+        const items = Array.isArray(res.data?.items) ? res.data.items : Array.isArray(res.data) ? res.data : [];
+        const prior = items
+          .filter((item) => String(item.companyName || "").trim().toLowerCase() === company.toLowerCase())
+          .filter((item) => item.id !== editingEnquiryId);
+        if (cancelled) return;
+
+        if (!prior.length) {
+          setForm((p) => ({ ...p, last_transaction: "No previous transaction found for this customer." }));
+          return;
+        }
+
+        const latest = prior[0]; // list is returned newest-first
+        const rows = normalizeEnquiryProductRows(latest.products ?? latest.product);
+        const productLines = rows.length
+          ? rows.map((row) => {
+              const parts = [`Product: ${row.product || "-"}`];
+              if (row.grade) parts.push(`Grade: ${row.grade}`);
+              if (row.unit_of_measurement) parts.push(`UOM: ${row.unit_of_measurement}`);
+              if (row.quantity) parts.push(`Qty: ${row.quantity}`);
+              return parts.join(" | ");
+            })
+          : [`Product: ${latest.product || "-"}`];
+        const summary = [
+          `From ${getDisplayEnquiryNumber(latest)} (${formatDate(latest.enquiryDate || latest.createdAt)}):`,
+          ...productLines
+        ].join("\n");
+        setForm((p) => ({ ...p, last_transaction: summary }));
+      } catch {
+        if (!cancelled) {
+          setForm((p) => ({ ...p, last_transaction: "Could not load previous transaction details." }));
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.customer_type, form.company_name, editingEnquiryId]);
+
   // Sampled enquiries that have gone quiet for 12+ days.
   const followUps = useMemo(() => getFollowUpEnquiries(enquiries), [enquiries]);
 
@@ -265,7 +318,9 @@ function EnquiryPage() {
   };
 
   const resetForm = () => {
-    setForm(createEmptyForm());
+    // Default the assignee to whoever is filling the form (the logged-in user),
+    // since that's the common case; it stays editable via the dropdown.
+    setForm({ ...createEmptyForm(), assigned_person: user?.name || "" });
   };
 
   const submit = async (event) => {
@@ -746,9 +801,12 @@ function EnquiryPage() {
                   <textarea
                     rows="4"
                     value={form.last_transaction}
-                    onChange={(e) => setForm((p) => ({ ...p, last_transaction: e.target.value }))}
-                    placeholder="Enter previous transaction details:&#10;Product: [Product Name]&#10;Grade: [Grade]&#10;UOM: [MT/KG]&#10;Packaging: [Packaging Details]"
+                    readOnly
+                    placeholder="Auto-filled from this customer's most recent enquiry."
                   />
+                  <small style={{ color: "#64748b" }}>
+                    Auto-fetched from the customer's most recent enquiry.
+                  </small>
                 </div>
               )}
               {form.enquiry_type === "International" && (
@@ -917,15 +975,6 @@ function EnquiryPage() {
               <div>
                 <label>Expected Timeline*</label>
                 <input type="date" value={form.expected_timeline} onChange={(e) => setForm((p) => ({ ...p, expected_timeline: e.target.value }))} required />
-              </div>
-              <div>
-                <label>Assigned To?</label>
-                <SearchableSelect
-                  options={masterData.assignedPersons}
-                  value={form.assigned_person}
-                  onChange={(value) => setForm((p) => ({ ...p, assigned_person: value }))}
-                  placeholder="Select assignee"
-                />
               </div>
               <div>
                 <label>Status</label>

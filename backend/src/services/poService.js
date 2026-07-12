@@ -104,7 +104,8 @@ function buildItemsCreateData(items, poId, supplierName, poNumber, existingItems
       expDaysDelivery: item.exp_days_delivery || null,
       qty: Number(item.quantity_ordered),
       outwardKey: item.outward_key || null,
-      batchNo: item.batch_no || null
+      batchNo: item.batch_no || null,
+      remark: item.remark || null
     };
   });
 }

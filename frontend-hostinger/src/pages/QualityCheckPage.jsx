@@ -6,6 +6,23 @@ import { logApiError } from "../utils/apiError";
 import Toolbar from "../components/common/Toolbar";
 import SearchableSelect from "../components/common/SearchableSelect";
 import { exportRowsToExcel } from "../utils/exportExcel";
+import { useIsMobile } from "../hooks/useIsMobile";
+import { pickMobileRecent } from "../utils/mobileRecent";
+import MobileListCard from "../components/common/MobileListCard";
+
+function qcBadgeLabel(status) {
+  if (status === "PASS") return "Passed";
+  if (status === "FAIL") return "Failed";
+  if (status === "PENDING") return "In Review";
+  return "Pending QC";
+}
+
+function qcBadgeColor(status) {
+  if (status === "PASS") return "green";
+  if (status === "FAIL") return "orange";
+  if (status === "PENDING") return "blue";
+  return "default";
+}
 
 const QC_FILTER_OPTIONS = [
   { value: "NOT_STARTED", label: "Pending QC" },
@@ -68,6 +85,15 @@ function QualityCheckPage() {
   }, [records, qcFilter]);
 
   const onSearchSubmit = () => setSearch(searchText.trim());
+
+  // Mobile only: default to the 5 most recent, but show all matches while
+  // searching. Desktop returns the full list unchanged.
+  const isMobile = useIsMobile();
+  const displayRecords = useMemo(
+    () => pickMobileRecent(filtered, { isMobile, hasSearch: Boolean(search) }),
+    [filtered, isMobile, search]
+  );
+  const showingRecentOnly = isMobile && !search && filtered.length > displayRecords.length;
 
   const exportToExcel = () => {
     const columns = [
@@ -175,7 +201,7 @@ function QualityCheckPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((record, idx) => (
+                {displayRecords.map((record, idx) => (
                   <tr key={record.id}>
                     <td style={{ color: "#94a3b8", fontSize: 12 }}>{idx + 1}</td>
                     <td style={{ fontWeight: 600, color: "#1d4ed8" }}>{record.batchNo || "-"}</td>
@@ -198,6 +224,33 @@ function QualityCheckPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {isMobile && !loading && filtered.length > 0 && (
+          <div className="order-mobile-list">
+            {displayRecords.map((record) => (
+              <MobileListCard
+                key={record.id}
+                title={record.batchNo || "—"}
+                subtitle={record.order?.product || "-"}
+                badge={qcBadgeLabel(qcStatusOf(record))}
+                badgeColor={qcBadgeColor(qcStatusOf(record))}
+                fields={[
+                  { label: "Client", value: record.order?.clientName || "-" },
+                  { label: "Grade", value: record.order?.grade || "-" },
+                  { label: "Produced Qty", value: Number(record.producedQuantity || 0).toLocaleString() },
+                  { label: "Completed On", value: formatDate(record.productionCompletionDate) }
+                ]}
+                onActionClick={() => navigate(`/production/${record.id}/qc-test-sheet`)}
+                actionLabel="Open QC Test Sheet"
+              />
+            ))}
+            {showingRecentOnly && (
+              <div className="mobile-recent-hint">
+                Showing the 5 most recent. Search to find any batch.
+              </div>
+            )}
           </div>
         )}
       </section>

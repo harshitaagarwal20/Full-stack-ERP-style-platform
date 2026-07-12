@@ -412,6 +412,7 @@ export const PO_ITEM_SELECT = {
   receivedQty: true,
   outwardKey: true,
   batchNo: true,
+  remark: true,
   createdAt: true,
   receivedAt: true
 };

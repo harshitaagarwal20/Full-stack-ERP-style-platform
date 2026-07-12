@@ -7,6 +7,9 @@ import Toolbar from "../components/common/Toolbar";
 import SearchableSelect from "../components/common/SearchableSelect";
 import useMasterData from "../hooks/useMasterData";
 import { exportRowsToExcel } from "../utils/exportExcel";
+import { useIsMobile } from "../hooks/useIsMobile";
+import { pickMobileRecent } from "../utils/mobileRecent";
+import MobileListCard from "../components/common/MobileListCard";
 
 const emptyPackForm = { order_id: null, packed_quantity: "", packing_material_item_id: "", packing_material_qty: "", packed_by: "", remarks: "" };
 
@@ -44,6 +47,15 @@ function PackingPage() {
   }, [search]);
 
   const onSearchSubmit = () => setSearch(searchText.trim());
+
+  // Mobile only: default to the 5 most recent, but show all matches while
+  // searching. Desktop returns the full list unchanged.
+  const isMobile = useIsMobile();
+  const displayOrders = useMemo(
+    () => pickMobileRecent(orders, { isMobile, hasSearch: Boolean(search) }),
+    [orders, isMobile, search]
+  );
+  const showingRecentOnly = isMobile && !search && orders.length > displayOrders.length;
 
   const exportToExcel = () => {
     const columns = [
@@ -161,7 +173,7 @@ function PackingPage() {
                 </tr>
               </thead>
               <tbody>
-                {orders.map((order, idx) => (
+                {displayOrders.map((order, idx) => (
                   <tr key={order.id}>
                     <td style={{ color: "#94a3b8", fontSize: 12 }}>{idx + 1}</td>
                     <td style={{ fontWeight: 600, color: "#1d4ed8" }}>{order.orderNo || "-"}</td>
@@ -180,6 +192,33 @@ function PackingPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {isMobile && !loading && orders.length > 0 && (
+          <div className="order-mobile-list">
+            {displayOrders.map((order) => (
+              <MobileListCard
+                key={order.id}
+                title={order.orderNo || "—"}
+                subtitle={order.product || "-"}
+                badge={`${order.remainingToPack} to pack`}
+                badgeColor={Number(order.remainingToPack) > 0 ? "orange" : "green"}
+                fields={[
+                  { label: "Client", value: order.clientName || "-" },
+                  { label: "Order Qty", value: `${order.quantity} ${order.unit || ""}`.trim() },
+                  { label: "Packed", value: order.packedQuantity },
+                  { label: "Ready to Dispatch", value: order.remainingToDispatch }
+                ]}
+                onActionClick={() => openPackModal(order)}
+                actionLabel="Record Packing"
+              />
+            ))}
+            {showingRecentOnly && (
+              <div className="mobile-recent-hint">
+                Showing the 5 most recent. Search to find any order.
+              </div>
+            )}
           </div>
         )}
       </section>

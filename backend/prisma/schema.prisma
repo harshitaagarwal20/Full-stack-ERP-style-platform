@@ -471,6 +471,7 @@ model PurchaseOrderItem {
   receivedQty Float    @default(0)
   outwardKey  String?
   batchNo     String?
+  remark      String?
   createdAt   DateTime @default(now())
   receivedAt  DateTime?
 

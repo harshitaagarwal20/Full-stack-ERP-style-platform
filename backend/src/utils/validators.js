@@ -339,7 +339,8 @@ const poItemSchema = z.object({
   tax_percent: z.number().nonnegative().max(100).optional().default(0),
   exp_days_delivery: z.string().optional().nullable(),
   batch_no: z.string().optional().nullable(),
-  outward_key: z.string().optional().nullable()
+  outward_key: z.string().optional().nullable(),
+  remark: z.string().max(191).optional().nullable()
 });
 
 const poSupplierFields = {

@@ -8,6 +8,16 @@ import Toolbar from "../components/common/Toolbar";
 import SearchableSelect from "../components/common/SearchableSelect";
 import useMasterData from "../hooks/useMasterData";
 import { exportRowsToExcel } from "../utils/exportExcel";
+import { useIsMobile } from "../hooks/useIsMobile";
+import { pickMobileRecent } from "../utils/mobileRecent";
+import MobileListCard from "../components/common/MobileListCard";
+
+function statusBadgeColor(status) {
+  if (status === "COMPLETED") return "green";
+  if (status === "IN_PROGRESS" || status === "PARTIALLY_PRODUCED") return "blue";
+  if (status === "HOLD") return "orange";
+  return "default";
+}
 
 function InProcessTestingListPage() {
   const navigate = useNavigate();
@@ -39,6 +49,15 @@ function InProcessTestingListPage() {
   }, [search, statusFilter]);
 
   const onSearchSubmit = () => setSearch(searchText.trim());
+
+  // Mobile only: default to the 5 most recent, but show all matches while
+  // searching. Desktop returns the full list unchanged.
+  const isMobile = useIsMobile();
+  const displayRecords = useMemo(
+    () => pickMobileRecent(records, { isMobile, hasSearch: Boolean(search) }),
+    [records, isMobile, search]
+  );
+  const showingRecentOnly = isMobile && !search && records.length > displayRecords.length;
 
   const exportToExcel = () => {
     const columns = [
@@ -147,7 +166,7 @@ function InProcessTestingListPage() {
                 </tr>
               </thead>
               <tbody>
-                {records.map((record, idx) => (
+                {displayRecords.map((record, idx) => (
                   <tr key={record.id}>
                     <td style={{ color: "#94a3b8", fontSize: 12 }}>{idx + 1}</td>
                     <td style={{ fontWeight: 600, color: "#1d4ed8" }}>{record.batchNo || "-"}</td>
@@ -169,6 +188,33 @@ function InProcessTestingListPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {isMobile && !loading && records.length > 0 && (
+          <div className="order-mobile-list">
+            {displayRecords.map((record) => (
+              <MobileListCard
+                key={record.id}
+                title={record.batchNo || "—"}
+                subtitle={record.order?.product || "-"}
+                badge={getStatusLabel(record.status)}
+                badgeColor={statusBadgeColor(record.status)}
+                fields={[
+                  { label: "Client", value: record.order?.clientName || "-" },
+                  { label: "Grade", value: record.order?.grade || "-" },
+                  { label: "Entries Logged", value: record.inProcessTestSheet?._count?.items || 0 },
+                  { label: "Last Updated", value: formatDate(record.inProcessTestSheet?.updatedAt) }
+                ]}
+                onActionClick={() => navigate(`/production/${record.id}/in-process-testing`)}
+                actionLabel="Open In-Process Test Sheet"
+              />
+            ))}
+            {showingRecentOnly && (
+              <div className="mobile-recent-hint">
+                Showing the 5 most recent. Search to find any batch.
+              </div>
+            )}
           </div>
         )}
       </section>

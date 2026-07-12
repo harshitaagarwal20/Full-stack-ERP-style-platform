@@ -10,6 +10,10 @@ import SearchableSelect from "../components/common/SearchableSelect";
 import { CURRENCY_OPTIONS } from "../utils/commerce";
 import { SHIP_TO_OPTIONS } from "../config/shipToLocations";
 
+// The line-items table is dense, so show just the currency code (INR, USD…)
+// instead of the full "INR - Indian Rupee" label to keep the column narrow.
+const CURRENCY_COMPACT_OPTIONS = CURRENCY_OPTIONS.map((option) => ({ value: option.value, label: option.value }));
+
 function today() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -349,15 +353,6 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
             />
           </div>
           <div>
-            <label className="label">Supplier Code</label>
-            <input
-              className="input"
-              placeholder="e.g. SUP-001"
-              value={form.supplier_code}
-              onChange={(e) => setField("supplier_code", e.target.value)}
-            />
-          </div>
-          <div>
             <label className="label">Pincode</label>
             <input
               className="input"
@@ -392,7 +387,7 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
         )}
 
         <div className="responsive-table-wrap">
-          <table className="order-table responsive-table">
+          <table className="order-table responsive-table order-table--compact">
             <thead>
               <tr>
                 <th>#</th>
@@ -413,7 +408,7 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
                 <tr key={index}>
                   <td data-label="">{index + 1}</td>
                   <td data-label="Item">
-                    <div style={{ minWidth: 160 }}>
+                    <div style={{ minWidth: 132 }}>
                       <SearchableSelect
                         options={productOptions}
                         value={item.item_description}
@@ -428,7 +423,7 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
                     </div>
                   </td>
                   <td data-label="UoM">
-                    <div style={{ minWidth: 90 }}>
+                    <div style={{ minWidth: 70 }}>
                       <SearchableSelect
                         options={(masterData.units || []).map((u) => ({ value: u.value, label: u.label }))}
                         value={item.uom}
@@ -441,7 +436,7 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
                   <td data-label="Grade">
                     <input
                       className="input"
-                      style={{ minWidth: 80 }}
+                      style={{ minWidth: 70 }}
                       placeholder="Grade"
                       value={item.grade}
                       onChange={(e) => setItem(index, "grade", e.target.value)}
@@ -449,9 +444,9 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
                   </td>
                   {canEditPricing && (
                     <td data-label="Currency">
-                      <div style={{ minWidth: 90 }}>
+                      <div style={{ minWidth: 72 }}>
                         <SearchableSelect
-                          options={CURRENCY_OPTIONS}
+                          options={CURRENCY_COMPACT_OPTIONS}
                           value={item.currency}
                           onChange={(value) => setItem(index, "currency", value)}
                           placeholder="Currency"
@@ -462,7 +457,7 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
                   <td data-label="Qty">
                     <input
                       className="input"
-                      style={{ minWidth: 80 }}
+                      style={{ minWidth: 72 }}
                       type="number"
                       min="0.01"
                       step="0.01"
@@ -476,7 +471,7 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
                     <td data-label="Price/Unit">
                       <input
                         className="input"
-                        style={{ minWidth: 100 }}
+                        style={{ minWidth: 88 }}
                         type="number"
                         min="0"
                         step="0.01"
@@ -495,7 +490,7 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
                     <td data-label="Tax %">
                       <input
                         className="input"
-                        style={{ minWidth: 70 }}
+                        style={{ minWidth: 58 }}
                         type="number"
                         min="0"
                         max="100"

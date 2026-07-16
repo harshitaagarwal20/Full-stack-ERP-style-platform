@@ -1,10 +1,3 @@
-const PRODUCTION_API_URL = "/api";
-const LEGACY_API_URLS = new Set([
-  "https://full-stack-erp-style-platform-4.onrender.com/api",
-  "https://nimbasia.onrender.com/api",
-  "https://nimbasia-backend.onrender.com/api"
-]);
-
 function getDefaultConfiguredUrl() {
   if (typeof import.meta !== "undefined" && import.meta.env && typeof import.meta.env.VITE_API_URL === "string") {
     return import.meta.env.VITE_API_URL;
@@ -19,13 +12,7 @@ export function resolveApiBaseUrl({
 } = {}) {
   const value = String(configuredUrl || "").trim();
 
-  if (value) {
-    if (LEGACY_API_URLS.has(value)) {
-      return PRODUCTION_API_URL;
-    }
-
-    return value;
-  }
-
-  return "/api";
+  // The backend is served from the same origin as the frontend, so an unset
+  // VITE_API_URL falls back to the relative /api path.
+  return value || "/api";
 }

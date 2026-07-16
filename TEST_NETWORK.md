@@ -6,7 +6,7 @@
 ```
 ✓ PORT: 5000
 ✓ DATABASE_URL: mysql://root:2Harshita2004@localhost:3306/nimbasia
-✓ CLIENT_ORIGIN: http://localhost:5174,http://127.0.0.1:5174,http://192.168.1.188:5174,https://*.vercel.app
+✓ CLIENT_ORIGIN: http://localhost:5174,http://127.0.0.1:5174,http://192.168.1.188:5174,https://app.nimbasia.com
 ✓ Server listens on 0.0.0.0 (all interfaces)
 ```
 

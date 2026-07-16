@@ -15,10 +15,12 @@ Build output:
 
 ## Production API
 
-The frontend is configured to call the Hostinger backend at:
+The frontend calls the backend on the **same origin** (the Hostinger Node app
+serves both the built frontend and the `/api` backend), so `VITE_API_URL` is
+left empty and requests go to the relative `/api`:
 
 ```env
-VITE_API_URL=https://manage.nimbasia.com/api
+VITE_API_URL=
 ```
 
 ## Hostinger Deployment

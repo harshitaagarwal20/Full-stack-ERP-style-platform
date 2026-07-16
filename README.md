@@ -132,7 +132,7 @@ Frontend runs on `http://localhost:5174` and proxies `/api` to `http://localhost
 ## Deployment Notes
 
 - Set the backend `CLIENT_ORIGIN` env var to the exact deployed frontend origin, such as `https://app.nimbasia.com`. Multiple origins can be comma-separated, and `*` wildcards are supported by the backend CORS matcher.
-- Set the frontend `VITE_API_URL` to your backend base URL in production, for example `https://manage.nimbasia.com/api`.
+- Leave the frontend `VITE_API_URL` empty in production so it calls the same-origin `/api` (the backend serves the built frontend); only set it if the API is on a different origin.
 - Set a strong `JWT_SECRET` (32+ chars) and a `CRON_SECRET`; the backend refuses to start in production without a strong `JWT_SECRET`.
 
 ## Bootstrap Login

@@ -174,7 +174,6 @@ Purchase Order -&gt; (Pricing by Accounts) -&gt; Sent to Supplier -&gt; GRN + In
 <pre>
 Nimbasia/
   backend/                  Node.js + Express + Prisma API (MySQL)
-    api/index.js            Vercel serverless entry (re-exports src/app.js)
     prisma/                 schema.prisma, 50+ migrations, seed scripts
     scripts/                One-off data-repair scripts
     src/
@@ -204,8 +203,7 @@ Nimbasia/
 <h2>2.2 Backend Files — purpose, dependencies, status</h2>
 <table>
 <tr><th>File</th><th>Purpose / Execution flow</th><th>Depends on</th><th>Status</th></tr>
-<tr><td>src/server.js</td><td>Process entry for self-hosted runs. Optionally runs a Prisma connectivity check (<code>PRISMA_STARTUP_CHECK</code>), listens on <code>0.0.0.0:PORT</code>, wires SIGINT/SIGTERM graceful shutdown that closes the HTTP server then Prisma.</td><td>app.js, config/env.js, config/prisma.js</td><td>Active</td></tr>
-<tr><td>api/index.js</td><td>3-line Vercel serverless entry: <code>export default app</code>.</td><td>src/app.js</td><td>Active (Vercel only)</td></tr>
+<tr><td>src/server.js</td><td>Process entry. Binds <code>0.0.0.0:PORT</code> first, then warms/seeds the DB fire-and-forget (so DB latency never blocks listen); wires SIGINT/SIGTERM graceful shutdown that closes the HTTP server then Prisma.</td><td>app.js, config/env.js, config/prisma.js</td><td>Active</td></tr>
 <tr><td>src/app.js</td><td>Builds the Express app: CORS with wildcard-origin matcher (denies by omitting headers, never throws), helmet, morgan, 1 MB JSON limit, compression (skippable via <code>x-no-compression</code>), health endpoints (/, /api, /api/health), mounts all 18 routers, 404 + error middleware last.</td><td>all routes, env.js, errorMiddleware</td><td>Active — core</td></tr>
 <tr><td>src/config/env.js</td><td>Loads dotenv; exports port (default 5001), dbUrl, jwtSecret (fails fast in production if &lt;32 chars; dev fallback <code>dev_secret_change_me</code> with a loud warning), jwtExpiresIn (default 7d), clientOrigin default list, prismaStartupCheck flag.</td><td>dotenv</td><td>Active</td></tr>
 <tr><td>src/config/prisma.js</td><td>Creates the PrismaClient through <code>createRetryablePrismaClientProxy</code> (auto-reconnect on recoverable Rust panics); exports prisma, closePrisma, reconnectPrisma.</td><td>@prisma/client, utils/prismaClientProxy.js</td><td>Active</td></tr>
@@ -263,7 +261,7 @@ Nimbasia/
 <tr><td>src/App.jsx</td><td>All routing: lazy-loaded pages, role-guarded route groups, role-based home redirect (production→/production, dispatch→/dispatch, purchase/accounts→/purchase-orders, else Dashboard), print route without Layout, legacy /pending-export-date redirect.</td><td>Active — core</td></tr>
 <tr><td>src/context/AuthContext.jsx</td><td>Login/logout; persists <code>fms_token</code> + <code>fms_user</code> in localStorage; listens for the global <code>fms-auth-expired</code> event to force re-login.</td><td>Active — core</td></tr>
 <tr><td>src/api/axiosClient.js</td><td>Axios instance; request interceptor attaches Bearer token; response interceptor: any non-login 401 clears storage and dispatches <code>fms-auth-expired</code>.</td><td>Active — core</td></tr>
-<tr><td>src/api/apiBaseUrl.js</td><td>Resolves VITE_API_URL; rewrites 3 legacy Render URLs to https://manage.nimbasia.com/api; falls back to relative /api (dev proxy → localhost:5001).</td><td>Active</td></tr>
+<tr><td>src/api/apiBaseUrl.js</td><td>Resolves VITE_API_URL; falls back to the same-origin relative <code>/api</code> (dev proxy → localhost:5001) so the frontend calls the backend it is served from.</td><td>Active</td></tr>
 <tr><td>src/components/ProtectedRoute.jsx</td><td>Redirects unauthenticated to /login; wrong role to /; admin bypasses all role lists.</td><td>Active</td></tr>
 <tr><td>src/components/Layout.jsx + erp/ (ErpNavbar, ErpSidebar, ErpBottomNav, ErpCard, ErpIcons)</td><td>App shell: top navbar (user menu, change password), collapsible role-filtered sidebar, mobile bottom navigation, card grid components, inline SVG icon set.</td><td>Active</td></tr>
 <tr><td>src/components/common/*</td><td>Alert, AppErrorBoundary (catches render crashes), Card, GlobalNotification (window-event toast bus), MobileListCard, SearchableSelect (type-ahead dropdown used everywhere), StatusBadge, Toolbar (unified list-page toolbar), VirtualizedTableBody (windowed rows for big tables), LoadingSpinner.</td><td>Active — reusable</td></tr>
@@ -298,7 +296,7 @@ Nimbasia/
    |  React Router v6 routes -> ProtectedRoute (auth + role guard)
    |  AuthContext (localStorage: fms_token / fms_user)
    v
- Axios client (Bearer JWT; base URL https://manage.nimbasia.com/api or /api dev proxy)
+ Axios client (Bearer JWT; base URL same-origin /api, dev proxy → localhost:5001)
    |
    v
  Express app (backend/src/app.js)
@@ -318,7 +316,7 @@ Nimbasia/
           SupplierMaster, AuditLog raw tables)
 
  External surfaces: none at runtime (no third-party APIs, no object storage,
- no mail/SMS gateways). Cron scheduler (e.g. Vercel cron / external curl)
+ no mail/SMS gateways). Cron scheduler (external curl / scheduled job)
  calls GET /api/cron/audit-retention with CRON_SECRET.
 </pre>
 
@@ -1002,7 +1000,7 @@ Authorization: Bearer eyJ...
 <tr><td>SQL injection</td><td>Prisma parameterized everywhere; raw SQL uses tagged templates ($queryRaw) or parameterized $executeRawUnsafe with ? placeholders. The only string-interpolated SQL is table/column DDL from constants — no user input reaches SQL text. Audit LIKE search parameters are bound (%...% passed as params).</td></tr>
 <tr><td>XSS</td><td>React escaping (no dangerouslySetInnerHTML found); API is JSON-only; helmet sets standard headers. Tokens in localStorage are readable by any successful XSS — acceptable for an internal tool but noted in Improvements.</td></tr>
 <tr><td>CSRF</td><td>Not applicable in the classic sense: auth is a Bearer header (not cookies), so cross-site requests cannot attach credentials.</td></tr>
-<tr><td>CORS</td><td>Explicit allowlist with wildcard support (e.g. https://*.vercel.app); denial by header omission (never a 500); credentials: true.</td></tr>
+<tr><td>CORS</td><td>Explicit allowlist with wildcard support (e.g. http://192.168.1.*:5174); denial by header omission (never a 500); credentials: true.</td></tr>
 <tr><td>Rate limiting</td><td>Login only. Other endpoints unthrottled (internal tool).</td></tr>
 <tr><td>Error hygiene</td><td>5xx messages are generic; raw messages surface only for intentional &lt;500 errors; stack traces never leave the server (console only).</td></tr>
 <tr><td>Secrets</td><td>.env via dotenv (DATABASE_URL, JWT_SECRET, CRON_SECRET). <b>Warning:</b> backend/.env is present in the working tree — ensure it is gitignored and rotated if ever committed.</td></tr>
@@ -1090,7 +1088,7 @@ Authorization: Bearer eyJ...
 <tr><td>AUDIT_LOG_RETENTION_DAYS</td><td>.env</td><td>Default 30</td></tr>
 <tr><td>PRISMA_STARTUP_CHECK</td><td>.env</td><td>"false" skips the boot connectivity check (diagnostics mode)</td></tr>
 <tr><td>NODE_ENV</td><td>env</td><td>production switches morgan format, JWT strictness, error verbosity</td></tr>
-<tr><td>VITE_API_URL</td><td>frontend .env.production</td><td>https://manage.nimbasia.com/api; empty in dev → /api proxy to localhost:5001</td></tr>
+<tr><td>VITE_API_URL</td><td>frontend .env.production</td><td>empty → same-origin /api (frontend is served by the backend); in dev → /api proxy to localhost:5001</td></tr>
 <tr><td>Constants</td><td>code</td><td>SAMPLED_FOLLOW_UP_DAYS=12; MAX_PRODUCTION_STATUS_CHANGES=2; GRN over-receipt 1.02; cache TTLs 10–30s; login limiter 10/15min; JSON limit 1 MB; pagination caps 100/200/500</td></tr>
 <tr><td>Enums</td><td>schema.prisma</td><td>Role(6), EnquiryStatus(4), EnquiryStage(3), OrderStatus(6), ManualOrderRequestStatus(4), ProductionStatus(5), Unit(3), ShipmentStatus(3), PurchaseOrderStatus(7), GrnStatus(2), QcResult/FgQcResult(3)</td></tr>
 <tr><td>Cron / scheduler</td><td>external</td><td>Only /api/cron/audit-retention; no in-process schedulers. Feature flags: none.</td></tr>
@@ -1114,8 +1112,7 @@ npm run dev                 # Vite on 5174, /api proxied to localhost:5001
 </pre>
 <h2>Production</h2>
 <ul>
-<li><b>Backend option A (VPS/PM2):</b> backend/deploy.sh — git pull, npm install, prisma migrate deploy, pm2 restart nimbasia-backend. Set NODE_ENV=production, strong JWT_SECRET, CLIENT_ORIGIN=https://app.nimbasia.com, CRON_SECRET. Served at https://manage.nimbasia.com.</li>
-<li><b>Backend option B (Vercel serverless):</b> api/index.js exports the Express app; configure a Vercel cron hitting /api/cron/audit-retention with the secret.</li>
+<li><b>Backend (Hostinger Node app):</b> single Node.js web app at app.nimbasia.com, startup file <code>server.js</code>, auto-deployed from <code>main</code>. On deploy Hostinger runs <code>npm install</code> (postinstall → <code>prisma generate</code>). Set NODE_ENV=production, strong JWT_SECRET, CLIENT_ORIGIN=https://app.nimbasia.com, CRON_SECRET, and a mysql:// DATABASE_URL. Express serves the built frontend and the <code>/api</code> backend from one origin.</li>
 <li><b>Frontend:</b> <code>npm run build</code> in frontend-hostinger; upload dist/ to Hostinger; public/.htaccess provides the SPA rewrite; VITE_API_URL baked at build time from .env.production.</li>
 <li><b>Fresh shared-hosting DB:</b> run <code>npx prisma migrate deploy</code> — the migrations in prisma/migrations are the single source of truth for the schema. (backend/database.sql only adds the customer tables to an existing DB; the 5 raw tables self-create at runtime.)</li>
 <li><b>No Docker / docker-compose / CI-CD pipelines exist in the repository.</b> Versions: Node 18+ (ESM, node:test), Prisma 6, Express 4, React 18, Vite 5, Tailwind 3, MySQL 8.</li>
@@ -1152,7 +1149,7 @@ npm run dev                 # Vite on 5174, /api proxied to localhost:5001
 <tr><td>9</td><td>Low</td><td><b>seed.js is destructive</b> (deletes all enquiries/orders/productions/dispatches and the audit log) yet is chained into <code>npm run db:deploy</code> — a careless production deploy wipes operational data.</td><td>Split "ensure admin" from "wipe demo data"; guard with NODE_ENV.</td></tr>
 <tr><td>10</td><td>Low</td><td><b>Duplicate/near-duplicate product entries</b> in masterData.js ("ZINC STEARATE" and "Zinc Stearate", test value "ABC") — the case-insensitive catalog check tolerates it, but inventory itemIds are case-sensitive strings, so FG stock can split across two spellings.</td><td>Normalize casing; remove "ABC".</td></tr>
 <tr><td>11</td><td>Low</td><td><b>README is stale:</b> claims PostgreSQL, port 5000, 4 roles — actual: MySQL, 5001, 6 roles.</td><td>Update README.</td></tr>
-<tr><td>12</td><td>Low</td><td><b>In-memory caches (response cache, master-data cache, dispatchDate column probe)</b> are per-process: with &gt;1 instance (e.g. Vercel), writes on one instance leave stale reads up to TTL on others; ensureAuditLogTable/ensureMasterDataInitialized run per cold start.</td><td>Acceptable at current scale; document; consider Redis if scaled out.</td></tr>
+<tr><td>12</td><td>Low</td><td><b>In-memory caches (response cache, master-data cache, dispatchDate column probe)</b> are per-process: with &gt;1 instance, writes on one instance leave stale reads up to TTL on others; ensureAuditLogTable/ensureMasterDataInitialized run per cold start.</td><td>Acceptable at current scale; document; consider Redis if scaled out.</td></tr>
 <tr><td>13</td><td>Low</td><td><b>Audit rows written post-commit</b> in some flows (PO create/update, MOR approve) can be lost on crash; recordAuditEvent swallows failures silently.</td><td>Move inside tx where feasible; add a metric/log counter.</td></tr>
 <tr><td>14</td><td>Low</td><td><b>backend/*.log files and .env tracked in the working tree</b>; frontend/ legacy duplicate invites divergent edits; many unused icon PNGs.</td><td>Gitignore/cleanup.</td></tr>
 <tr><td>15</td><td>Info</td><td><b>No DB-level pairing between Dispatch and inventory itemId:</b> dispatch outward uses order.product as itemId — renaming a product in master data orphans historical stock rows (netting breaks across names).</td><td>Introduce an item master with stable ids (see Improvements).</td></tr>
@@ -1373,12 +1370,12 @@ flowchart LR
 <ul>
 <li>README.md (partially stale — see Bug #11), QUICK_TEST.md, TEST_NETWORK.md, IMPLEMENTATION_SUMMARY.md, Nimbasia_Process_Guide.docx (business process guide).</li>
 <li>Prisma schema: backend/prisma/schema.prisma; migrations history in backend/prisma/migrations/.</li>
-<li>Production URLs: app https://app.nimbasia.com, API https://manage.nimbasia.com/api.</li>
+<li>Production URLs: app https://app.nimbasia.com, API https://app.nimbasia.com/api (same origin).</li>
 </ul>
 <h2>Explicitly undetermined items</h2>
 <ul>
 <li>Exact visual layout/labels of each JSX page were not transcribed element-by-element; screen documentation derives buttons and fields from the routes, hooks, payloads and backend contracts each page calls. Screenshot placeholders are marked in the User Manual.</li>
-<li>Runtime infrastructure details not in the repo (actual PM2/Vercel configuration, DNS, TLS termination, backup policy) cannot be determined from code.</li>
+<li>Runtime infrastructure details not in the repo (actual Hostinger runtime configuration, DNS, TLS termination, backup policy) cannot be determined from code.</li>
 <li>Whether the Customer/CustomerAddress subsystem is already used by any shipped UI could not be confirmed — no frontend page calls /api/customers in the current code; it appears to be in-progress work on this branch.</li>
 </ul>
 

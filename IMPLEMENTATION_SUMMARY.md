@@ -77,7 +77,7 @@ clientOrigin: process.env.CLIENT_ORIGIN || "http://localhost:5174,http://127.0.0
 **Status:** Already correct
 
 - CORS configuration supports multiple origins via `split(",")` and `trim()`
-- Wildcard pattern matching for `https://*.vercel.app`
+- Wildcard pattern matching (e.g. `http://192.168.1.*:5174`)
 - No changes needed
 
 ✅ Verified: Code already handles multiple origins correctly
@@ -95,10 +95,10 @@ PORT=5000
 DATABASE_URL="mysql://root:2Harshita2004@localhost:3306/nimbasia"
 JWT_SECRET="change_this_to_a_strong_secret"
 JWT_EXPIRES_IN="30d"
-CLIENT_ORIGIN="http://localhost:5174,http://127.0.0.1:5174,http://192.168.1.188:5174,https://*.vercel.app"
+CLIENT_ORIGIN="http://localhost:5174,http://127.0.0.1:5174,http://192.168.1.188:5174,https://app.nimbasia.com"
 ```
 
-✅ Contains: localhost, 127.0.0.1, 192.168.1.188, and Vercel production URLs
+✅ Contains: localhost, 127.0.0.1, 192.168.1.188, and the Hostinger production URL
 
 ---
 
@@ -211,14 +211,16 @@ cd frontend && npm run dev
 
 ---
 
-## 🔄 Production Deployment (Vercel)
+## 🔄 Production Deployment (Hostinger)
 
-The configuration already supports Vercel:
+The app deploys to Hostinger as a single Node.js web app at app.nimbasia.com
+(startup file `server.js`); Express serves the built frontend and the `/api`
+backend from one origin.
 ```
-CLIENT_ORIGIN includes: https://*.vercel.app
+CLIENT_ORIGIN includes: https://app.nimbasia.com
 ```
 
-When deploying to Vercel, the backend needs to whitelist Vercel's domain for CORS.
+Set `CLIENT_ORIGIN` to the production domain so the backend whitelists it for CORS.
 
 ---
 
@@ -240,7 +242,7 @@ When deploying to Vercel, the backend needs to whitelist Vercel's domain for COR
 │  ├─ http://localhost:5174 ✓                     │
 │  ├─ http://127.0.0.1:5174 ✓                     │
 │  ├─ http://192.168.1.188:5174 ✓                 │
-│  └─ https://*.vercel.app ✓                      │
+│  └─ https://app.nimbasia.com ✓                  │
 │                                                  │
 └──────────────────────────────────────────────────┘
                      │

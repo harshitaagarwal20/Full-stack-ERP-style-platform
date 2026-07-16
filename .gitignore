@@ -15,3 +15,5 @@ backend/public
 *.sql
 !backend/prisma/hostinger-init.sql
 !backend/prisma/hostinger-additive-migration.sql
+# Data-free repair script (schema-driven UPDATEs only, no dump content)
+!backend/prisma/hostinger-fix-zero-dates.sql

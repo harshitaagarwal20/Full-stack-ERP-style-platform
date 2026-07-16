@@ -27,6 +27,12 @@ import productionRoutes from "./routes/productionRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 
 const app = express();
+
+// Hostinger (and most PaaS hosts) run the app behind a reverse proxy that sets
+// X-Forwarded-For. Trust the first proxy hop so req.ip is the real client and
+// express-rate-limit can key on it instead of throwing a validation error.
+app.set("trust proxy", 1);
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const publicDir = path.resolve(__dirname, "../public");

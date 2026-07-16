@@ -7,6 +7,17 @@ function getStatusCode(error) {
   if (typeof error?.status === "number") return error.status;
 
   switch (error?.code) {
+    case "ER_ACCESS_DENIED_ERROR":
+    case "ER_BAD_DB_ERROR":
+    case "ENOTFOUND":
+    case "ECONNREFUSED":
+    case "ETIMEDOUT":
+    case "PROTOCOL_CONNECTION_LOST":
+      return 503;
+    case "P1000":
+    case "P1003":
+    case "P1010":
+      return 503;
     case "P2002":
     case "P2003":
       return 409;
@@ -32,6 +43,17 @@ function getStatusCode(error) {
 
 function getMessage(error, status) {
   if (error?.details) return "Please review the highlighted fields.";
+  if (error?.code === "ER_ACCESS_DENIED_ERROR" || error?.code === "P1000") {
+    return "Database login failed. Check the MySQL username and password in DATABASE_URL.";
+  }
+  if (error?.code === "ER_BAD_DB_ERROR" || error?.code === "P1003") {
+    return "Database name was not found. Check the database name in DATABASE_URL.";
+  }
+  if (error?.code === "ENOTFOUND") return "Database host was not found. Check the host in DATABASE_URL.";
+  if (error?.code === "ECONNREFUSED" || error?.code === "ETIMEDOUT" || error?.code === "PROTOCOL_CONNECTION_LOST") {
+    return "Database connection failed. Check Hostinger MySQL host, port, and remote access settings.";
+  }
+  if (error?.code === "P1010") return "Database user does not have permission to access this database.";
   if (error?.code === "P2002") return "A record with this value already exists.";
   if (error?.code === "P2003") return "A related record is missing.";
   if (error?.code === "P2025") return "Requested record not found.";
@@ -44,6 +66,9 @@ function getMessage(error, status) {
     error?.code === "P1001" ||
     error?.code === "P1002" ||
     error?.code === "P1008" ||
+    error?.code === "P1000" ||
+    error?.code === "P1003" ||
+    error?.code === "P1010" ||
     error?.code === "P1017" ||
     error?.name === "PrismaClientInitializationError" ||
     error?.name === "PrismaClientRustPanicError"

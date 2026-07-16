@@ -52,6 +52,12 @@ export const ENQUIRY_LIST_SELECT = {
   unitOfMeasurement: true,
   enquiryDate: true,
   modeOfEnquiry: true,
+  customerType: true,
+  enquiryType: true,
+  incoTerm: true,
+  country: true,
+  port: true,
+  lastTransaction: true,
   expectedTimeline: true,
   assignedPerson: true,
   notesForProduction: true,
@@ -116,6 +122,10 @@ export const ORDER_LIST_SELECT = {
   state: true,
   countryCode: true,
   status: true,
+  paymentStatus: true,
+  amountReceived: true,
+  paymentReceivedAt: true,
+  paymentRemarks: true,
   isUrgent: true,
   orderDate: true,
   createdAt: true,
@@ -209,7 +219,7 @@ export const PRODUCTION_LIST_SELECT = {
     select: { overallResult: true, approvedBy: true, approvedAt: true }
   },
   inProcessTestSheet: {
-    select: { updatedAt: true, _count: { select: { items: true } } }
+    select: { overallResult: true, approvedBy: true, approvedAt: true, updatedAt: true, _count: { select: { items: true } } }
   },
   order: {
     select: {
@@ -268,6 +278,7 @@ export const FG_TEST_SHEET_ITEM_SELECT = {
   bulkDensity:   true,
   sieveResidue:  true,
   analysisBy:    true,
+  approvedBy:    true,
   remarks:       true
 };
 
@@ -307,6 +318,9 @@ export const IN_PROCESS_TEST_SHEET_SELECT = {
   productName: true,
   grade:       true,
   batchNo:     true,
+  overallResult: true,
+  approvedBy:  true,
+  approvedAt:  true,
   createdAt:   true,
   updatedAt:   true,
   items: { select: IN_PROCESS_TEST_SHEET_ITEM_SELECT, orderBy: { id: "asc" } }
@@ -549,21 +563,4 @@ export const GRN_DETAIL_SELECT = {
   },
   items: { select: GRN_ITEM_SELECT, orderBy: { id: "asc" } },
   qcTestSheet: { select: QC_TEST_SHEET_SELECT }
-};
-
-export const AUDIT_LOG_SELECT = {
-  id: true,
-  action: true,
-  entityType: true,
-  entityId: true,
-  actorId: true,
-  actorName: true,
-  actorRole: true,
-  oldValue: true,
-  newValue: true,
-  note: true,
-  createdAt: true,
-  actor: {
-    select: USER_MIN_SELECT
-  }
 };

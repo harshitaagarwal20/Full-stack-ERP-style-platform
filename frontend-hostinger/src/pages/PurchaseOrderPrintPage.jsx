@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import api from "../api/axiosClient";
 import { logApiError } from "../utils/apiError";
 import { getShipToLocation } from "../config/shipToLocations";
+import { formatPct, splitTax } from "../utils/gst";
 
 const BILL_TO = {
   companyName: "NIMBASIA STABILIZERS",
@@ -29,8 +30,11 @@ function formatPoDate(val) {
   return `${String(d.getDate()).padStart(2, "0")}-${months[d.getMonth()]}-${d.getFullYear()}`;
 }
 
+// A purchase order is what we are asking the supplier to send, so every figure
+// on this sheet is priced off the ordered quantity. What actually turned up is
+// the GRN's business, not the PO's.
 function calcRowTotal(item) {
-  return Number(item.receivedQty || 0) * Number(item.unitPrice || 0);
+  return Number(item.qty || 0) * Number(item.unitPrice || 0);
 }
 
 function calcAmountAfterTax(item) {
@@ -177,6 +181,7 @@ function PurchaseOrderPrintPage() {
 
   const grossAmount = (po.items || []).reduce((s, i) => s + calcAmountAfterTax(i), 0);
   const shipToLocation = getShipToLocation(po.shipTo);
+  const itemRows = po.items || [];
 
   return (
     <>
@@ -297,43 +302,49 @@ function PurchaseOrderPrintPage() {
             <tr>
               <th style={styles.itemsTh}>S.No</th>
               <th style={styles.itemsTh}>Item ID</th>
-              <th style={styles.itemsTh}>Received QTY</th>
+              <th style={styles.itemsTh}>Order QTY</th>
               <th style={styles.itemsTh}>UoM</th>
               <th style={styles.itemsTh}>Grade</th>
-              <th style={styles.itemsTh}>Currency</th>
               <th style={styles.itemsTh}>Price Per Unit</th>
               <th style={styles.itemsTh}>Total Amount</th>
-              <th style={styles.itemsTh}>Tax</th>
+              <th style={styles.itemsTh}>SGST</th>
+              <th style={styles.itemsTh}>CGST</th>
+              <th style={styles.itemsTh}>IGST</th>
               <th style={styles.itemsTh}>Amount After Tax</th>
             </tr>
           </thead>
           <tbody>
-            {(po.items || []).map((item, idx) => (
-              <tr key={item.id} style={{ background: idx % 2 === 0 ? "#fff" : LIGHT_ROW }}>
-                <td style={styles.itemsTd}>{idx + 1}</td>
-                <td style={styles.itemsTdLeft}>{item.itemId || "-"}</td>
-                <td style={styles.itemsTd}>{item.receivedQty || 0}</td>
-                <td style={styles.itemsTd}>{item.uom || "-"}</td>
-                <td style={styles.itemsTd}>{item.grade || ""}</td>
-                <td style={styles.itemsTd}>{item.currency || "INR"}</td>
-                <td style={styles.itemsTd}>{formatNum(item.unitPrice)}</td>
-                <td style={styles.itemsTd}>{formatNum(calcRowTotal(item))}</td>
-                <td style={styles.itemsTd}>{item.taxPercent != null ? `${item.taxPercent}.00%` : "-"}</td>
-                <td style={styles.itemsTd}>{formatNum(calcAmountAfterTax(item))}</td>
-              </tr>
-            ))}
-            {/* Empty filler rows */}
-            {Array.from({ length: Math.max(0, 10 - (po.items || []).length) }).map((_, i) => (
-              <tr key={`empty-${i}`} style={{ background: i % 2 === ((po.items || []).length % 2) ? "#fff" : LIGHT_ROW }}>
-                {Array.from({ length: 10 }).map((__, j) => (
-                  <td key={j} style={{ ...styles.itemsTd, height: 22 }}></td>
-                ))}
-              </tr>
-            ))}
+            {itemRows.map((item, idx) => {
+              const remark = String(item.remark || "").trim();
+              const tax = splitTax(item.taxPercent, po.supplier?.gstNo, shipToLocation?.gstin);
+              return (
+                <Fragment key={item.id}>
+                  <tr style={{ background: idx % 2 === 0 ? "#fff" : LIGHT_ROW }}>
+                    <td style={styles.itemsTd}>{idx + 1}</td>
+                    <td style={styles.itemsTdLeft}>{item.itemId || "-"}</td>
+                    <td style={styles.itemsTd}>{item.qty || 0}</td>
+                    <td style={styles.itemsTd}>{item.uom || "-"}</td>
+                    <td style={styles.itemsTd}>{item.grade || ""}</td>
+                    <td style={styles.itemsTd}>{formatNum(item.unitPrice)}</td>
+                    <td style={styles.itemsTd}>{formatNum(calcRowTotal(item))}</td>
+                    <td style={styles.itemsTd}>{formatPct(tax.sgst)}</td>
+                    <td style={styles.itemsTd}>{formatPct(tax.cgst)}</td>
+                    <td style={styles.itemsTd}>{formatPct(tax.igst)}</td>
+                    <td style={styles.itemsTd}>{formatNum(calcAmountAfterTax(item))}</td>
+                  </tr>
+                  {remark && (
+                    <tr style={{ background: idx % 2 === 0 ? "#fff" : LIGHT_ROW }}>
+                      <td style={{ ...styles.itemsTd, fontWeight: "bold" }}>Remark</td>
+                      <td colSpan={10} style={styles.itemsTdLeft}>{remark}</td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={9} style={{ ...styles.itemsTd, textAlign: "right", fontWeight: "bold", padding: "5px 8px" }}>
+              <td colSpan={10} style={{ ...styles.itemsTd, textAlign: "right", fontWeight: "bold", padding: "5px 8px" }}>
                 Gross Amount
               </td>
               <td style={{ ...styles.itemsTd, fontWeight: "bold" }}>{formatNum(grossAmount)}</td>
@@ -352,14 +363,6 @@ function PurchaseOrderPrintPage() {
                   <td style={{ ...styles.valueCell, fontSize: 10 }}>{note}</td>
                 </tr>
               ))}
-              <tr>
-                <td style={{ ...styles.itemsTd, background: "#e8edf5" }}></td>
-                <td style={{ ...styles.valueCell, height: 22 }}></td>
-              </tr>
-              <tr>
-                <td style={{ ...styles.itemsTd, background: "#e8edf5" }}></td>
-                <td style={{ ...styles.valueCell, height: 22 }}></td>
-              </tr>
             </tbody>
           </table>
         </div>

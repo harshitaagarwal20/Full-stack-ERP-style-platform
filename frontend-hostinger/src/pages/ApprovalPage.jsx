@@ -7,7 +7,7 @@ import { getApprovalListParams, normalizeApprovalStatus } from "../utils/approva
 import { exportRowsToExcel } from "../utils/exportExcel";
 import { getDisplayEnquiryNumber, getDisplayManualOrderRequestNumber } from "../utils/businessNumbers";
 import { formatPriceValue } from "../utils/commerce";
-import { formatEnquiryProducts } from "../utils/enquiryProducts";
+import { formatEnquiryProductNames } from "../utils/enquiryProducts";
 import { sortByNewestFirst } from "../utils/recordOrdering";
 
 const approvalTabs = [
@@ -44,6 +44,40 @@ function ApprovalPage() {
   const canApprove = user?.role === "admin" || user?.role === "sales";
   const fetchSeqRef = useRef(0);
 
+  // Rejecting asks for a reason in a modal. window.prompt() used to do this, but
+  // browsers can suppress it outright — and a suppressed prompt reads as a
+  // cancel, so Reject silently did nothing.
+  const [rejectTarget, setRejectTarget] = useState(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejectError, setRejectError] = useState("");
+  const [rejecting, setRejecting] = useState(false);
+
+  const closeRejectModal = () => {
+    if (rejecting) return;
+    setRejectTarget(null);
+    setRejectReason("");
+    setRejectError("");
+  };
+
+  const submitRejection = async (event) => {
+    event.preventDefault();
+    const reason = rejectReason.trim();
+    if (!reason) {
+      setRejectError("A reason is required to reject.");
+      return;
+    }
+
+    setRejecting(true);
+    try {
+      await updateStatus(rejectTarget, "REJECTED", reason);
+      setRejectTarget(null);
+      setRejectReason("");
+      setRejectError("");
+    } finally {
+      setRejecting(false);
+    }
+  };
+
   const fetchItems = async ({ silent = false } = {}) => {
     const requestId = ++fetchSeqRef.current;
     if (!silent) {
@@ -78,7 +112,7 @@ function ApprovalPage() {
           createdAt: enquiry.createdAt,
           expectedDate: enquiry.expectedTimeline,
           quantity: enquiry.quantity,
-          products: formatEnquiryProducts(enquiry) || enquiry.product || "-",
+          products: formatEnquiryProductNames(enquiry) || enquiry.product || "-",
           price: enquiry.price,
           currency: enquiry.currency,
           raw: enquiry
@@ -92,12 +126,7 @@ function ApprovalPage() {
           createdAt: request.createdAt,
           expectedDate: request.dispatchDate,
           quantity: request.quantity,
-          products: formatEnquiryProducts([{
-            product: request.product,
-            grade: request.grade,
-            quantity: request.quantity,
-            unit_of_measurement: request.unit
-          }]) || request.product || "-",
+          products: request.product || "-",
           raw: request
         }))
       ];
@@ -149,24 +178,11 @@ function ApprovalPage() {
     };
   }, [statusFilter]);
 
-  const updateStatus = async (item, nextStatus) => {
+  // A rejection has to say why — it's the only record of the decision — so the
+  // reason arrives from the modal rather than being collected here.
+  const updateStatus = async (item, nextStatus, rejectionReason = null) => {
     if (!canApprove) return;
-
-    // A rejection has to say why — it's the only record of the decision.
-    let rejectionReason = null;
-    if (nextStatus === "REJECTED") {
-      const entered = window.prompt(
-        `Why is ${item.businessNumber || "this request"} being rejected?\n\n`
-        + "This reason is saved against the record and shown to the sales team."
-      );
-      // Cancel → abort the rejection entirely.
-      if (entered === null) return;
-      rejectionReason = entered.trim();
-      if (!rejectionReason) {
-        window.alert("A reason is required to reject. Nothing was changed.");
-        return;
-      }
-    }
+    if (nextStatus === "REJECTED" && !String(rejectionReason || "").trim()) return;
 
     const optimisticStatus = normalizeApprovalStatus(item.source, nextStatus === "ACCEPTED" ? (item.source === "manual" ? "APPROVED" : "ACCEPTED") : "REJECTED");
     const shouldRemoveFromCurrentView = statusFilter === "PENDING";
@@ -289,10 +305,6 @@ function ApprovalPage() {
                         {normalizeApprovalStatus(item.source, item.raw.status)}
                       </span>
                     </div>
-                    <p className="approval-request-number">{item.businessNumber}</p>
-                    <p className="approval-request-type">
-                      {item.source === "manual" ? "Manual Order Request" : "Enquiry"}
-                    </p>
                   </div>
                 </div>
 
@@ -317,17 +329,14 @@ function ApprovalPage() {
                     <p>Quantity</p>
                     <strong>{item.quantity || "-"}</strong>
                   </div>
+                  {/* The currency belongs to the price, not beside it — a tile
+                      holding only "EUR" is a label taking the space of a figure. */}
                   <div className="approval-request-tile">
                     <p>Price</p>
-                    <strong>{formatPriceValue(item.price)}</strong>
-                  </div>
-                  <div className="approval-request-tile">
-                    <p>Currency</p>
-                    <strong>{item.currency || "-"}</strong>
-                  </div>
-                  <div className="approval-request-tile">
-                    <p>Created</p>
-                    <strong>{formatDate(item.createdAt)}</strong>
+                    <strong>
+                      {formatPriceValue(item.price)}
+                      {item.currency ? <span className="approval-tile-unit"> {item.currency}</span> : null}
+                    </strong>
                   </div>
                 </div>
 
@@ -349,7 +358,11 @@ function ApprovalPage() {
                       </button>
                       <button
                         className="approval-btn-danger"
-                        onClick={() => updateStatus(item, "REJECTED")}
+                        onClick={() => {
+                          setRejectTarget(item);
+                          setRejectReason("");
+                          setRejectError("");
+                        }}
                       >
                         Reject
                       </button>
@@ -365,6 +378,52 @@ function ApprovalPage() {
           </div>
         )}
       </section>
+
+      {rejectTarget && (
+        <div className="masterdata-modal-overlay">
+          <div className="masterdata-modal-card approval-reject-modal">
+            <div className="approval-reject-head">
+              <div>
+                <h3>Reject Request</h3>
+                <p>
+                  {rejectTarget.businessNumber || "This request"}
+                  {rejectTarget.clientName ? ` — ${rejectTarget.clientName}` : ""}
+                </p>
+              </div>
+              <button className="approval-reject-close" onClick={closeRejectModal} disabled={rejecting} type="button" aria-label="Close">
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={submitRejection}>
+              <div className="approval-reject-body">
+                <label htmlFor="reject-reason">Reason for rejection <span>*</span></label>
+                <textarea
+                  id="reject-reason"
+                  rows={3}
+                  autoFocus
+                  value={rejectReason}
+                  onChange={(e) => { setRejectReason(e.target.value); setRejectError(""); }}
+                  placeholder="Why is this being rejected?"
+                />
+                <p className="approval-reject-hint">
+                  Saved against the record and shown to the sales team.
+                </p>
+                {rejectError && <p className="approval-reject-error">{rejectError}</p>}
+              </div>
+
+              <div className="approval-reject-actions">
+                <button type="button" className="masterdata-btn-secondary" onClick={closeRejectModal} disabled={rejecting}>
+                  Cancel
+                </button>
+                <button type="submit" className="approval-btn-danger" disabled={rejecting}>
+                  {rejecting ? "Rejecting..." : "Reject"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

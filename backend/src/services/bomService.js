@@ -1,5 +1,4 @@
 import prisma from "../config/prisma.js";
-import { recordAuditEvent } from "./auditService.js";
 import { invalidateCacheByPrefix } from "../utils/responseCache.js";
 import { BOM_LIST_SELECT, BOM_DETAIL_SELECT } from "../utils/selects.js";
 
@@ -78,14 +77,6 @@ export async function saveBOM(payload, user) {
     });
   });
 
-  await recordAuditEvent({
-    action:     "SAVE_BOM",
-    entityType: "BillOfMaterial",
-    entityId:   bom.id,
-    user,
-    newValue:   { product: payload.product, grade: payload.grade, itemCount: itemsData.length }
-  });
-
   invalidateBomCaches();
   return getBOM(bom.id);
 }
@@ -99,14 +90,6 @@ export async function deleteBOM(id, user) {
   }
 
   await prisma.billOfMaterial.delete({ where: { id } });
-
-  await recordAuditEvent({
-    action:     "DELETE_BOM",
-    entityType: "BillOfMaterial",
-    entityId:   id,
-    user,
-    oldValue:   bom
-  });
 
   invalidateBomCaches();
   return { success: true };

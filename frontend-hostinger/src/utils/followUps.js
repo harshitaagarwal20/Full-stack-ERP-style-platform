@@ -36,8 +36,3 @@ export function buildFollowUpMessage(enquiry) {
   return `Sample sent to ${company}${ref} ${days} days ago with no quote yet — time to follow up.`;
 }
 
-export function buildFollowUpSummary(followUps = []) {
-  if (followUps.length === 0) return "";
-  if (followUps.length === 1) return buildFollowUpMessage(followUps[0]);
-  return `${followUps.length} sampled enquiries have had no quote for over ${SAMPLED_FOLLOW_UP_DAYS} days — follow up with these clients.`;
-}

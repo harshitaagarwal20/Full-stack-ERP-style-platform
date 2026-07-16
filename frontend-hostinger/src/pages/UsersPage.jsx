@@ -397,7 +397,7 @@ function UsersPage() {
             <form className="users-form-grid" onSubmit={submitUser} noValidate>
               <div>
                 <label className="users-field-label">Name</label>
-                <input
+                <input autoComplete="off"
                   className={`users-input ${formErrors.name ? "input-error" : ""}`}
                   value={form.name}
                   onChange={(e) => updateFormField("name", e.target.value)}
@@ -407,7 +407,7 @@ function UsersPage() {
               </div>
               <div>
                 <label className="users-field-label">Email</label>
-                <input
+                <input autoComplete="off"
                   className={`users-input ${formErrors.email ? "input-error" : ""}`}
                   type="email"
                   value={form.email}

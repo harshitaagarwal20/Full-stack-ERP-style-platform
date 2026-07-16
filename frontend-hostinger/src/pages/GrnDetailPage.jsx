@@ -6,6 +6,10 @@ import { dispatchUserMessage } from "../utils/errorMessages";
 import SearchableSelect from "../components/common/SearchableSelect";
 import StatusBadge from "../components/common/StatusBadge";
 import { GRN_STATUS_CONFIG } from "../config/statusConfig";
+import { useIsMobile } from "../hooks/useIsMobile";
+import { minEntryDateFor } from "../utils/dateRules";
+import SampleFormModal from "../components/production/SampleFormModal";
+import SampleList from "../components/production/SampleList";
 
 function formatDate(val) {
   if (!val) return "-";
@@ -25,23 +29,52 @@ function emptyQcRow() {
   };
 }
 
+// A raw material test sheet always tests what actually arrived, so a fresh sheet
+// starts as one row per received line — product, batch and supplier already
+// filled in from the PO rather than retyped by hand.
+function qcRowsFromGrn(grn) {
+  const supplier = grn?.purchaseOrder?.supplier?.name || "";
+  const received = (grn?.items || []).filter((item) => Number(item.quantityReceived) > 0);
+  const source = received.length ? received : (grn?.items || []);
+
+  if (!source.length) return [emptyQcRow()];
+
+  return source.map((item) => ({
+    ...emptyQcRow(),
+    product_name: item.itemId || "",
+    batch_no:     item.batchNo || "",
+    supplier,
+    sample_qty:   ""
+  }));
+}
+
 function GrnDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
 
   const [grn, setGrn]               = useState(null);
   const [loading, setLoading]       = useState(true);
   const [confirming, setConfirming] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
   const [savingQc, setSavingQc]     = useState(false);
   const [qcRows, setQcRows]         = useState([emptyQcRow()]);
   const [qcOverallResult, setQcOverallResult] = useState("PENDING");
   const [qcApprovedBy, setQcApprovedBy]       = useState("");
+
+  // Which sample the form is open on: an index to edit, or "new".
+  const [editingQc, setEditingQc] = useState(null);
+  const [qcDraft, setQcDraft]     = useState(null);
 
   const loadGRN = async () => {
     setLoading(true);
     try {
       const { data } = await api.get(`/grns/${id}`);
       setGrn(data);
+      // No sheet saved yet → seed it from the consignment.
+      if (!data.qcTestSheet?.items?.length) {
+        setQcRows(qcRowsFromGrn(data));
+      }
       if (data.qcTestSheet) {
         setQcOverallResult(data.qcTestSheet.overallResult || "PENDING");
         setQcApprovedBy(data.qcTestSheet.approvedBy || "");
@@ -71,18 +104,127 @@ function GrnDetailPage() {
 
   useEffect(() => { loadGRN(); }, [id]);
 
-  const setQcRowField = (index, field, value) => {
-    setQcRows((rows) => rows.map((row, i) => (i === index ? { ...row, [field]: value } : row)));
+  // Only what this consignment actually contains can be tested on its sheet.
+  const grnProductOptions = (grn?.items || [])
+    .map((item) => item.itemId)
+    .filter(Boolean)
+    .map((itemId) => ({ value: itemId, label: itemId }));
+
+  // A sample is drawn from the consignment line, so it can never exceed what was
+  // ordered on that line.
+  const orderedQtyByItemId = new Map(
+    (grn?.items || []).map((item) => [item.itemId, Number(item.quantityOrdered || 0)])
+  );
+  const orderedQtyFor = (productName) => orderedQtyByItemId.get(productName);
+
+  // The sheet's twelve columns, grouped into what a person actually does: say
+  // which line was sampled, note the supplier's facts about the material, record
+  // the test, sign it off.
+  const QC_SECTIONS = [
+    {
+      title: "Sample",
+      fields: [
+        { key: "sampling_date", label: "Date of Sampling", type: "date", min: minEntryDateFor },
+        {
+          key: "product_name",
+          label: "Product Name",
+          type: "searchable",
+          options: grnProductOptions,
+          placeholder: "Select product",
+          allowCustom: true,
+          // Picking the product pulls its batch across with it — same line, same
+          // consignment, so retyping the batch number is only a chance to get it wrong.
+          derive: (value, draft) => {
+            const line = (grn?.items || []).find((item) => item.itemId === value);
+            return {
+              batch_no: line?.batchNo || draft.batch_no,
+              supplier: draft.supplier || grn?.purchaseOrder?.supplier?.name || ""
+            };
+          }
+        },
+        { key: "batch_no", label: "Batch No." },
+        { key: "supplier", label: "Mfr./Supplier" }
+      ]
+    },
+    {
+      // The supplier's facts about the material, not a record of when we did
+      // something — so these are free to sit in the past.
+      title: "Material",
+      fields: [
+        { key: "mfg_date",    label: "Mfg. Date",   type: "date" },
+        { key: "expiry_date", label: "Expiry Date", type: "date" }
+      ]
+    },
+    {
+      title: "Test",
+      fields: [
+        { key: "sample_qty",     label: "Qty. of Sample", type: "number", max: (draft) => orderedQtyFor(draft.product_name) },
+        { key: "test_parameter", label: "Test Parameter" },
+        { key: "result",         label: "Result" }
+      ]
+    },
+    {
+      title: "Sign-off",
+      fields: [
+        { key: "analysis_by", label: "Analysis By" },
+        { key: "remarks",     label: "Remarks", wide: true }
+      ]
+    }
+  ];
+
+  const summarizeQcRow = (row) => {
+    const primary = [row.product_name || "—", row.batch_no ? `Batch ${row.batch_no}` : null]
+      .filter(Boolean).join(" · ");
+    const detail = [
+      row.sampling_date || null,
+      row.test_parameter ? `${row.test_parameter}: ${row.result || "—"}` : null
+    ].filter(Boolean);
+    return { primary, secondary: detail.length ? detail.join(" · ") : "No result yet" };
   };
 
-  const addQcRow = () => setQcRows((rows) => [...rows, emptyQcRow()]);
-  const removeQcRow = (index) => setQcRows((rows) => rows.length > 1 ? rows.filter((_, i) => i !== index) : rows);
+  const openNewQcRow = () => {
+    setQcDraft({ ...emptyQcRow(), supplier: grn?.purchaseOrder?.supplier?.name || "" });
+    setEditingQc("new");
+  };
+
+  const openEditQcRow = (index) => {
+    setQcDraft(qcRows[index]);
+    setEditingQc(index);
+  };
+
+  const closeQcForm = () => {
+    setEditingQc(null);
+    setQcDraft(null);
+  };
+
+  const commitQcRow = (sample) => {
+    setQcRows((rows) => (
+      editingQc === "new"
+        ? [...rows, sample]
+        : rows.map((row, i) => (i === editingQc ? sample : row))
+    ));
+    closeQcForm();
+  };
+
+  const removeQcRow = (index) => setQcRows((rows) => rows.filter((_, i) => i !== index));
 
   const handleSaveQc = async () => {
     const approvedBy = qcApprovedBy.trim();
     const makerNames = qcRows.map((row) => row.analysis_by.trim()).filter(Boolean);
     if (approvedBy && makerNames.some((name) => name.toLowerCase() === approvedBy.toLowerCase())) {
       window.alert("Approved By must be a different person from the maker (Analysis By) on this test sheet.");
+      return;
+    }
+
+    const oversized = qcRows.find((row) => {
+      if (row.sample_qty === "" || row.sample_qty == null) return false;
+      const ordered = orderedQtyFor(row.product_name);
+      return ordered !== undefined && Number(row.sample_qty) > ordered;
+    });
+    if (oversized) {
+      window.alert(
+        `Sample quantity for ${oversized.product_name} (${oversized.sample_qty}) cannot be more than the ordered quantity (${orderedQtyFor(oversized.product_name)}).`
+      );
       return;
     }
 
@@ -104,6 +246,28 @@ function GrnDetailPage() {
       logApiError(error, "Failed to save QC test sheet");
     } finally {
       setSavingQc(false);
+    }
+  };
+
+  const handleReject = async () => {
+    const reason = window.prompt(
+      "Reject this consignment? None of its material will enter inventory.\n\nReason:"
+    );
+    if (reason === null) return;
+    if (!reason.trim()) {
+      dispatchUserMessage("A rejection needs a reason.", { title: "Reject", variant: "error" });
+      return;
+    }
+
+    setRejecting(true);
+    try {
+      await api.post(`/grns/${id}/reject`, { rejection_reason: reason.trim() });
+      dispatchUserMessage("Consignment rejected. No stock was booked in.", { title: "Rejected", variant: "success" });
+      await loadGRN();
+    } catch (error) {
+      logApiError(error, "Failed to reject the consignment");
+    } finally {
+      setRejecting(false);
     }
   };
 
@@ -137,8 +301,10 @@ function GrnDetailPage() {
   const totalOrdered  = (grn.items || []).reduce((s, i) => s + (i.quantityOrdered  || 0), 0);
   const totalReceived = (grn.items || []).reduce((s, i) => s + (i.quantityReceived || 0), 0);
   const isConfirmed   = grn.status === "CONFIRMED";
+  const isRejected    = grn.status === "REJECTED";
   const qcPassed      = grn.qcTestSheet?.overallResult === "PASS";
-  const canConfirm    = !isConfirmed && qcPassed;
+  const qcFailed      = grn.qcTestSheet?.overallResult === "FAIL";
+  const canConfirm    = !isConfirmed && !isRejected && qcPassed;
 
   return (
     <div className="order-page">
@@ -164,16 +330,135 @@ function GrnDetailPage() {
             <StatusBadge status={grn.status} config={GRN_STATUS_CONFIG} />
           </div>
         </div>
-        {!isConfirmed && (
+        {!isConfirmed && !isRejected && (
           <div className="po-detail-actions">
             <button className="order-btn-primary" disabled={confirming || !canConfirm} title={!qcPassed ? "QC test sheet must be completed with a Pass result first" : undefined} onClick={handleConfirm}>
               {confirming ? "Confirming..." : "Confirm GRN"}
             </button>
+            {/* The other outcome of the raw material test: turn the consignment
+                away. Only offered once the sheet has actually failed. */}
+            {qcFailed && (
+              <button className="order-btn-secondary" disabled={rejecting} onClick={handleReject}>
+                {rejecting ? "Rejecting..." : "Reject Consignment"}
+              </button>
+            )}
+          </div>
+        )}
+
+        {isRejected && (
+          <div className="grn-rejected-note">
+            <strong>Consignment rejected.</strong> {grn.rejectionReason}
+            <span> This GRN can never be confirmed, so none of its material entered inventory.</span>
           </div>
         )}
       </section>
 
-      {/* Info side by side */}
+      {/* QC Test Sheet */}
+      <section className="order-card">
+        <h3 style={{ margin: "0 0 14px", fontSize: 14, fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          Raw Material Test Sheet (QC)
+        </h3>
+        {/* A confirmed sheet is a record, not a form: show every column, stacked
+            into a card per sample on a phone. */}
+        {isConfirmed ? (
+          <div className="responsive-table-wrap">
+            <table className="order-table responsive-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Date of Sampling</th>
+                  <th>Product Name</th>
+                  <th>Batch No.</th>
+                  <th>Mfg. Date</th>
+                  <th>Expiry Date</th>
+                  <th>Mfr./Supplier</th>
+                  <th>Qty. of Sample</th>
+                  <th>Test Parameter</th>
+                  <th>Result</th>
+                  <th>Analysis By</th>
+                  <th>Remarks</th>
+                </tr>
+              </thead>
+              <tbody>
+                {qcRows.map((row, index) => (
+                  <tr key={index}>
+                    <td data-label="" style={{ color: "#94a3b8", fontSize: 12 }}>{index + 1}</td>
+                    <td data-label="Date of Sampling">{row.sampling_date || "-"}</td>
+                    <td data-label="Product Name" style={{ fontWeight: 600 }}>{row.product_name || "-"}</td>
+                    <td data-label="Batch No.">{row.batch_no || "-"}</td>
+                    <td data-label="Mfg. Date">{row.mfg_date || "-"}</td>
+                    <td data-label="Expiry Date">{row.expiry_date || "-"}</td>
+                    <td data-label="Mfr./Supplier">{row.supplier || "-"}</td>
+                    <td data-label="Qty. of Sample">{row.sample_qty === "" ? "-" : row.sample_qty}</td>
+                    <td data-label="Test Parameter">{row.test_parameter || "-"}</td>
+                    <td data-label="Result">{row.result || "-"}</td>
+                    <td data-label="Analysis By">{row.analysis_by || "-"}</td>
+                    <td data-label="Remarks" style={{ color: "#64748b" }}>{row.remarks || "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <SampleList
+            rows={qcRows}
+            summarize={summarizeQcRow}
+            onAdd={openNewQcRow}
+            onEdit={openEditQcRow}
+            onRemove={removeQcRow}
+          />
+        )}
+
+        {!isConfirmed && (
+          <>
+            <div className="mfg-verdict">
+              <div className="mfg-verdict-field">
+                <label className="label">Overall Result</label>
+                <SearchableSelect
+                  options={[
+                    { value: "PENDING", label: "Pending" },
+                    { value: "PASS", label: "Pass" },
+                    { value: "FAIL", label: "Fail" }
+                  ]}
+                  value={qcOverallResult}
+                  onChange={(value) => setQcOverallResult(value)}
+                  placeholder="Select result"
+                />
+              </div>
+              <div className="mfg-verdict-field">
+                <label className="label">Approved By</label>
+                <input className="input" autoComplete="off" value={qcApprovedBy} onChange={(e) => setQcApprovedBy(e.target.value)} />
+              </div>
+            </div>
+
+            <div className="sample-actions">
+              <button className="order-btn-primary" disabled={savingQc} onClick={handleSaveQc}>
+                {savingQc ? "Saving..." : "Save QC Test Sheet"}
+              </button>
+            </div>
+          </>
+        )}
+
+        {!isConfirmed && !qcPassed && (
+          <p style={{ marginTop: 12, color: "#d97706", fontSize: 13 }}>
+            GRN cannot be confirmed until the QC test sheet is saved with an overall result of "Pass".
+          </p>
+        )}
+      </section>
+
+      {editingQc !== null && (
+        <SampleFormModal
+          title={editingQc === "new" ? "Add Sample" : `Edit Sample #${editingQc + 1}`}
+          sections={QC_SECTIONS}
+          value={qcDraft}
+          onSave={commitQcRow}
+          onCancel={closeQcForm}
+        />
+      )}
+
+      {/* Info side by side — desktop only. On a phone this is a long scroll of
+          reference detail between the operator and the test sheet they came to fill in. */}
+      {!isMobile && (
       <div className="po-detail-info-grid">
         <section className="order-card" style={{ margin: 0 }}>
           <h3 style={{ margin: "0 0 14px", fontSize: 14, fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: "0.05em" }}>
@@ -200,7 +485,7 @@ function GrnDetailPage() {
           </h3>
           <div className="order-detail-grid">
             <p style={{ gridColumn: "1 / -1" }}>
-              <span>PO Number</span>
+              <span>PO Number</span>{" "}
               <strong
                 style={{ color: "#2563eb", cursor: "pointer" }}
                 onClick={() => navigate(`/purchase-orders/${grn.purchaseOrder?.id}`)}
@@ -233,6 +518,7 @@ function GrnDetailPage() {
           </div>
         </section>
       </div>
+      )}
 
       {/* Line Items */}
       <section className="order-card">
@@ -291,108 +577,6 @@ function GrnDetailPage() {
             </tfoot>
           </table>
         </div>
-      </section>
-
-      {/* QC Test Sheet */}
-      <section className="order-card">
-        <h3 style={{ margin: "0 0 14px", fontSize: 14, fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-          Raw Material Test Sheet (QC)
-        </h3>
-        <div className="order-table-wrap">
-          <table className="order-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Date of Sampling</th>
-                <th>Product Name</th>
-                <th>Batch No.</th>
-                <th>Mfg. Date</th>
-                <th>Expiry Date</th>
-                <th>Mfr./Supplier</th>
-                <th>Qty. of Sample</th>
-                <th>Test Parameter</th>
-                <th>Result</th>
-                <th>Analysis By</th>
-                <th>Remarks</th>
-                {!isConfirmed && <th />}
-              </tr>
-            </thead>
-            <tbody>
-              {qcRows.map((row, index) => (
-                <tr key={index}>
-                  <td style={{ color: "#94a3b8", fontSize: 12 }}>{index + 1}</td>
-                  {isConfirmed ? (
-                    <>
-                      <td>{row.sampling_date || "-"}</td>
-                      <td style={{ fontWeight: 600 }}>{row.product_name || "-"}</td>
-                      <td>{row.batch_no || "-"}</td>
-                      <td>{row.mfg_date || "-"}</td>
-                      <td>{row.expiry_date || "-"}</td>
-                      <td>{row.supplier || "-"}</td>
-                      <td>{row.sample_qty === "" ? "-" : row.sample_qty}</td>
-                      <td>{row.test_parameter || "-"}</td>
-                      <td>{row.result || "-"}</td>
-                      <td>{row.analysis_by || "-"}</td>
-                      <td style={{ color: "#64748b" }}>{row.remarks || "-"}</td>
-                    </>
-                  ) : (
-                    <>
-                      <td><input className="mfg-cell-input" type="date" value={row.sampling_date} onChange={(e) => setQcRowField(index, "sampling_date", e.target.value)} /></td>
-                      <td><input className="mfg-cell-input" value={row.product_name} onChange={(e) => setQcRowField(index, "product_name", e.target.value)} /></td>
-                      <td><input className="mfg-cell-input" value={row.batch_no} onChange={(e) => setQcRowField(index, "batch_no", e.target.value)} /></td>
-                      <td><input className="mfg-cell-input" type="date" value={row.mfg_date} onChange={(e) => setQcRowField(index, "mfg_date", e.target.value)} /></td>
-                      <td><input className="mfg-cell-input" type="date" value={row.expiry_date} onChange={(e) => setQcRowField(index, "expiry_date", e.target.value)} /></td>
-                      <td><input className="mfg-cell-input" value={row.supplier} onChange={(e) => setQcRowField(index, "supplier", e.target.value)} /></td>
-                      <td><input className="mfg-cell-input" type="number" value={row.sample_qty} onChange={(e) => setQcRowField(index, "sample_qty", e.target.value)} /></td>
-                      <td><input className="mfg-cell-input" value={row.test_parameter} onChange={(e) => setQcRowField(index, "test_parameter", e.target.value)} /></td>
-                      <td><input className="mfg-cell-input" value={row.result} onChange={(e) => setQcRowField(index, "result", e.target.value)} /></td>
-                      <td><input className="mfg-cell-input" value={row.analysis_by} onChange={(e) => setQcRowField(index, "analysis_by", e.target.value)} /></td>
-                      <td><input className="mfg-cell-input" value={row.remarks} onChange={(e) => setQcRowField(index, "remarks", e.target.value)} /></td>
-                      <td>
-                        <button className="order-btn-secondary" style={{ padding: "2px 8px" }} onClick={() => removeQcRow(index)}>×</button>
-                      </td>
-                    </>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {!isConfirmed && (
-          <>
-            <button className="order-btn-secondary" style={{ marginTop: 10 }} onClick={addQcRow}>+ Add Row</button>
-
-            <div style={{ display: "flex", gap: 16, alignItems: "flex-end", marginTop: 16, flexWrap: "wrap" }}>
-              <div>
-                <div style={{ fontSize: 11, color: "#64748b", fontWeight: 600, textTransform: "uppercase", marginBottom: 4 }}>Overall Result</div>
-                <SearchableSelect
-                  options={[
-                    { value: "PENDING", label: "Pending" },
-                    { value: "PASS", label: "Pass" },
-                    { value: "FAIL", label: "Fail" }
-                  ]}
-                  value={qcOverallResult}
-                  onChange={(value) => setQcOverallResult(value)}
-                  placeholder="Select result"
-                />
-              </div>
-              <div>
-                <div style={{ fontSize: 11, color: "#64748b", fontWeight: 600, textTransform: "uppercase", marginBottom: 4 }}>Approved By</div>
-                <input className="mfg-cell-input" value={qcApprovedBy} onChange={(e) => setQcApprovedBy(e.target.value)} />
-              </div>
-              <button className="order-btn-primary" disabled={savingQc} onClick={handleSaveQc}>
-                {savingQc ? "Saving..." : "Save QC Test Sheet"}
-              </button>
-            </div>
-          </>
-        )}
-
-        {!isConfirmed && !qcPassed && (
-          <p style={{ marginTop: 12, color: "#d97706", fontSize: 13 }}>
-            GRN cannot be confirmed until the QC test sheet is saved with an overall result of "Pass".
-          </p>
-        )}
       </section>
 
       {!isConfirmed && (

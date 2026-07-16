@@ -45,25 +45,48 @@ export function extractCustomerLookupCodeCandidates(customerInput) {
     .filter((value) => /[A-Z]/.test(value) && /\d/.test(value));
 }
 
+// Runs on every order creation, so it must not pull the whole customer master
+// back to filter in JS. The name match — which is the case that actually fires
+// almost every time — is pushed into SQL. Only if that misses do we fall back to
+// code matching, and even then we look at rows that have a code at all, rather
+// than every active customer.
 export async function getCustomerMasterProfileByName(customerName) {
-  const nameCandidates = new Set(extractCustomerLookupNameCandidates(customerName));
+  const nameCandidates = [...new Set(extractCustomerLookupNameCandidates(customerName))];
   const codeCandidates = new Set(extractCustomerLookupCodeCandidates(customerName));
-  if (!nameCandidates.size && !codeCandidates.size) return null;
+  if (!nameCandidates.length && !codeCandidates.size) return null;
 
-  const rows = await prisma.$queryRaw`
-    SELECT \`customerName\`, \`customerCode\`, \`address\`, \`city\`, \`pincode\`, \`state\`, \`countryCode\`
-    FROM \`CustomerMaster\`
-    WHERE \`isActive\` = 1
-    ORDER BY \`id\` DESC
-  `;
+  const COLUMNS = "`customerName`, `customerCode`, `address`, `city`, `pincode`, `state`, `countryCode`";
+  let row = null;
 
-  const row = rows?.find((item) => {
-    const rowName = normalizeName(item?.customerName);
-    const rowCode = normalizeCode(item?.customerCode);
-    if (rowName && nameCandidates.has(rowName)) return true;
-    if (rowCode && codeCandidates.has(rowCode)) return true;
-    return false;
-  });
+  if (nameCandidates.length) {
+    // Mirrors normalizeName(): trim + collapse runs of whitespace + lowercase.
+    const placeholders = nameCandidates.map(() => "?").join(", ");
+    const matches = await prisma.$queryRawUnsafe(
+      `SELECT ${COLUMNS} FROM \`CustomerMaster\`
+       WHERE \`isActive\` = 1
+         AND LOWER(TRIM(REGEXP_REPLACE(\`customerName\`, '[[:space:]]+', ' '))) IN (${placeholders})
+       ORDER BY \`id\` DESC
+       LIMIT 1`,
+      ...nameCandidates
+    );
+    row = matches?.[0] || null;
+  }
+
+  // The code form ("ACME (CU-001)") is rare, and normalizeCode strips every
+  // non-alphanumeric, which SQL can't reproduce cheaply — so match those in JS,
+  // but only across rows that actually carry a code.
+  if (!row && codeCandidates.size) {
+    const coded = await prisma.$queryRawUnsafe(
+      `SELECT ${COLUMNS} FROM \`CustomerMaster\`
+       WHERE \`isActive\` = 1 AND \`customerCode\` IS NOT NULL AND \`customerCode\` <> ''
+       ORDER BY \`id\` DESC`
+    );
+    row = coded?.find((item) => {
+      const rowCode = normalizeCode(item?.customerCode);
+      return rowCode && codeCandidates.has(rowCode);
+    }) || null;
+  }
+
   if (!row) return null;
 
   return {

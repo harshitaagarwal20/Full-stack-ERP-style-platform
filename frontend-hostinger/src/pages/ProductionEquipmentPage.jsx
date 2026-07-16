@@ -6,20 +6,20 @@ import useProductionRecord from "../hooks/useProductionRecord";
 import ProductionStepNav from "../components/production/ProductionStepNav";
 import { logApiError } from "../utils/apiError";
 import { dispatchUserMessage } from "../utils/errorMessages";
-import { buildSectionPatchPayload, cloneEquipRow, defaultEquipment, emptyEquipRow, parseMfgData } from "../utils/productionMfg";
+import { buildSectionPatchPayload, cloneEquipRow, emptyEquipRow, parseMfgData } from "../utils/productionMfg";
 
 function ProductionEquipmentPage() {
   const { id } = useParams();
   const { user } = useAuth();
   const canManageProduction = ["admin", "production"].includes(user?.role);
   const { record, loading, reload } = useProductionRecord(id);
-  const [rows, setRows] = useState(defaultEquipment());
+  const [rows, setRows] = useState([emptyEquipRow()]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!record) return;
     const mfg = parseMfgData(record.rawMaterials);
-    setRows(mfg.equipment.length ? mfg.equipment.map(cloneEquipRow) : defaultEquipment());
+    setRows(mfg.equipment.length ? mfg.equipment.map(cloneEquipRow) : [emptyEquipRow()]);
   }, [record]);
 
   const setRowField = (index, key, value) => {
@@ -71,8 +71,8 @@ function ProductionEquipmentPage() {
           )}
         </div>
 
-        <div className="order-table-wrap">
-          <table className="order-table">
+        <div className="responsive-table-wrap">
+          <table className="order-table responsive-table">
             <thead>
               <tr>
                 <th>#</th>
@@ -85,13 +85,13 @@ function ProductionEquipmentPage() {
             <tbody>
               {rows.map((row, index) => (
                 <tr key={index}>
-                  <td style={{ color: "#94a3b8", fontSize: 12 }}>{index + 1}</td>
+                  <td data-label="#" style={{ color: "#94a3b8", fontSize: 12 }}>{index + 1}</td>
                   {canManageProduction ? (
                     <>
-                      <td><input className="mfg-cell-input" value={row.name} onChange={(e) => setRowField(index, "name", e.target.value)} /></td>
-                      <td><input className="mfg-cell-input" value={row.equipId} onChange={(e) => setRowField(index, "equipId", e.target.value)} /></td>
-                      <td><input className="mfg-cell-input" value={row.capacity} onChange={(e) => setRowField(index, "capacity", e.target.value)} /></td>
-                      <td>
+                      <td data-label="Equipment Name"><input className="mfg-cell-input" autoComplete="off" value={row.name} onChange={(e) => setRowField(index, "name", e.target.value)} /></td>
+                      <td data-label="Equipment ID No."><input className="mfg-cell-input" autoComplete="off" value={row.equipId} onChange={(e) => setRowField(index, "equipId", e.target.value)} /></td>
+                      <td data-label="Capacity"><input className="mfg-cell-input" autoComplete="off" value={row.capacity} onChange={(e) => setRowField(index, "capacity", e.target.value)} /></td>
+                      <td data-label="">
                         {rows.length > 1 && (
                           <button type="button" className="order-btn-secondary" style={{ padding: "2px 8px" }} onClick={() => removeRow(index)}>×</button>
                         )}
@@ -99,9 +99,9 @@ function ProductionEquipmentPage() {
                     </>
                   ) : (
                     <>
-                      <td>{row.name || "-"}</td>
-                      <td>{row.equipId || "-"}</td>
-                      <td>{row.capacity || "-"}</td>
+                      <td data-label="Equipment Name">{row.name || "-"}</td>
+                      <td data-label="Equipment ID No.">{row.equipId || "-"}</td>
+                      <td data-label="Capacity">{row.capacity || "-"}</td>
                     </>
                   )}
                 </tr>

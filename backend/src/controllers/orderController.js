@@ -1,4 +1,4 @@
-import { createOrder, deleteOrder, listOrders, moveOrderToProduction, updateOrder } from "../services/orderService.js";
+import { createOrder, deleteOrder, listOrders, moveOrderToProduction, updateOrder, updateOrderPayment } from "../services/orderService.js";
 import { emptyPaginatedOrArrayFallback, isMissingTableError } from "../utils/prismaListFallback.js";
 import { toPositiveIntOrThrow } from "../utils/routeParams.js";
 
@@ -45,6 +45,19 @@ export async function removeOrder(req, res, next) {
 export async function updateOrderStatus(req, res, next) {
   try {
     const order = await moveOrderToProduction(toPositiveIntOrThrow(req.params.id, "id"), req.user);
+    return res.json(order);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function recordOrderPayment(req, res, next) {
+  try {
+    const order = await updateOrderPayment(
+      toPositiveIntOrThrow(req.params.id, "id"),
+      req.validatedBody,
+      req.user
+    );
     return res.json(order);
   } catch (error) {
     return next(error);

@@ -1,9 +1,10 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import GlobalNotification from "./components/common/GlobalNotification";
 import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { useAuth } from "./context/AuthContext";
+import { usePermissions } from "./context/PermissionContext";
 
 const ApprovalPage = lazy(() => import("./pages/ApprovalPage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
@@ -12,9 +13,9 @@ const PackingPage = lazy(() => import("./pages/PackingPage"));
 const EnquiryPage = lazy(() => import("./pages/EnquiryPage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const MasterDataPage = lazy(() => import("./pages/MasterDataPage"));
+const DropdownMastersPage = lazy(() => import("./pages/DropdownMastersPage"));
 const NotFoundPage = lazy(() => import("./pages/NotFoundPage"));
 const OrderPage = lazy(() => import("./pages/OrderPage"));
-const ActivityLogPage = lazy(() => import("./pages/ActivityLogPage"));
 const ProductionPage = lazy(() => import("./pages/ProductionPage"));
 const ProductionCompletePage = lazy(() => import("./pages/ProductionCompletePage"));
 const UsersPage = lazy(() => import("./pages/UsersPage"));
@@ -22,11 +23,14 @@ const PendingExportDatePage = lazy(() => import("./pages/PendingExportDatePage")
 const PurchaseOrderListPage = lazy(() => import("./pages/PurchaseOrderListPage"));
 const PurchaseOrderFormPage = lazy(() => import("./pages/PurchaseOrderFormPage"));
 const PurchaseOrderDetailPage = lazy(() => import("./pages/PurchaseOrderDetailPage"));
+const PurchaseOrderPricingPage = lazy(() => import("./pages/PurchaseOrderPricingPage"));
 const GrnListPage = lazy(() => import("./pages/GrnListPage"));
 const GrnFormPage = lazy(() => import("./pages/GrnFormPage"));
 const GrnDetailPage = lazy(() => import("./pages/GrnDetailPage"));
 const PurchaseOrderPrintPage = lazy(() => import("./pages/PurchaseOrderPrintPage"));
 const SupplierMasterPage = lazy(() => import("./pages/SupplierMasterPage"));
+const ProductMasterPage = lazy(() => import("./pages/ProductMasterPage"));
+const PaymentsPage = lazy(() => import("./pages/PaymentsPage"));
 const RawMaterialPage = lazy(() => import("./pages/RawMaterialPage"));
 const ProductionOverviewPage = lazy(() => import("./pages/ProductionOverviewPage"));
 const ProductionBatchSetupPage = lazy(() => import("./pages/ProductionBatchSetupPage"));
@@ -39,21 +43,7 @@ const ProductionQcTestSheetPage = lazy(() => import("./pages/ProductionQcTestShe
 const QualityCheckPage = lazy(() => import("./pages/QualityCheckPage"));
 const InProcessTestingListPage = lazy(() => import("./pages/InProcessTestingListPage"));
 const OperationLogListPage = lazy(() => import("./pages/OperationLogListPage"));
-
-const ROLES = {
-  ADMIN: "admin",
-  SALES: "sales",
-  PRODUCTION: "production",
-  DISPATCH: "dispatch"
-};
-
-const ENQUIRY_ROLES = [ROLES.ADMIN, ROLES.SALES];
-const ORDER_ROLES = [ROLES.ADMIN, ROLES.SALES];
-const PO_ROLES = [ROLES.ADMIN, ROLES.PRODUCTION];
-const GRN_ROLES = [ROLES.ADMIN];
-const PRODUCTION_ROLES = [ROLES.ADMIN, ROLES.PRODUCTION];
-const DISPATCH_ROLES = [ROLES.ADMIN, ROLES.DISPATCH];
-const PACKING_ROLES = [ROLES.ADMIN, ROLES.PRODUCTION, ROLES.DISPATCH];
+const RoleManagementPage = lazy(() => import("./pages/RolesAccessPage"));
 
 function RouteFallback() {
   return (
@@ -67,22 +57,65 @@ function withSuspense(node) {
   return <Suspense fallback={<RouteFallback />}>{node}</Suspense>;
 }
 
+// Land the user on the first thing they can actually open, rather than a
+// dashboard they may have no access to. Follows whatever the admin configured,
+// so it keeps working as permissions change.
+const HOME_FALLBACKS = [
+  { module: "production", to: "/production" },
+  { module: "dispatch", to: "/dispatch" },
+  { module: "purchase_orders", to: "/purchase-orders" },
+  { module: "enquiries", to: "/enquiries" },
+  { module: "packing", to: "/packing" }
+];
+
 function HomeRedirect() {
-  const { user } = useAuth();
+  const { can, loading } = usePermissions();
 
-  if (user?.role === ROLES.PRODUCTION) {
-    return <Navigate to="/production" replace />;
+  if (loading) return <RouteFallback />;
+
+  if (can("dashboard")) {
+    return withSuspense(<DashboardPage />);
   }
 
-  if (user?.role === ROLES.DISPATCH) {
-    return <Navigate to="/dispatch" replace />;
-  }
+  const target = HOME_FALLBACKS.find((item) => can(item.module));
+  if (target) return <Navigate to={target.to} replace />;
 
   return withSuspense(<DashboardPage />);
 }
 
+// Route code is only fetched when the route is first opened, so the first visit
+// to each page pays a chunk download before it can render anything. Once the
+// current page is idle there is nothing to compete with, so the pages the user
+// is most likely to open next are pulled into the browser cache in advance —
+// navigation then costs nothing. Idle-time only: it never delays the page the
+// user is actually looking at, and it is skipped on a metered/slow connection.
+const PREFETCH_ROUTES = [
+  () => import("./pages/OrderPage"),
+  () => import("./pages/ProductionPage"),
+  () => import("./pages/EnquiryPage"),
+  () => import("./pages/DispatchPage"),
+  () => import("./pages/QualityCheckPage")
+];
+
+function usePrefetchRoutes(isAuthenticated) {
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const connection = navigator.connection;
+    if (connection?.saveData || /2g/.test(connection?.effectiveType || "")) return;
+
+    const idle = window.requestIdleCallback || ((fn) => window.setTimeout(fn, 1200));
+    const handle = idle(() => {
+      PREFETCH_ROUTES.forEach((load) => load().catch(() => {}));
+    });
+
+    return () => window.cancelIdleCallback?.(handle);
+  }, [isAuthenticated]);
+}
+
 function App() {
   const { isAuthenticated } = useAuth();
+  usePrefetchRoutes(isAuthenticated);
 
   return (
     <>
@@ -91,7 +124,7 @@ function App() {
         <Route path="/login" element={isAuthenticated ? <Navigate to="/" replace /> : withSuspense(<LoginPage />)} />
 
         {/* Print routes — no Layout/navbar */}
-        <Route element={<ProtectedRoute roles={PO_ROLES} />}>
+        <Route element={<ProtectedRoute module="purchase_orders" />}>
           <Route path="/purchase-orders/:id/print" element={withSuspense(<PurchaseOrderPrintPage />)} />
         </Route>
 
@@ -99,40 +132,62 @@ function App() {
           <Route element={<Layout />}>
             <Route path="/" element={<HomeRedirect />} />
 
-            <Route element={<ProtectedRoute roles={ENQUIRY_ROLES} />}>
+            <Route element={<ProtectedRoute module="enquiries" />}>
               <Route path="/enquiries" element={withSuspense(<EnquiryPage />)} />
             </Route>
 
-            <Route element={<ProtectedRoute roles={[ROLES.ADMIN, ROLES.SALES]} />}>
+            <Route element={<ProtectedRoute module="enquiries" />}>
               <Route path="/approval" element={withSuspense(<ApprovalPage />)} />
             </Route>
 
-            <Route element={<ProtectedRoute roles={[ROLES.ADMIN]} />}>
-              <Route path="/activity-log" element={withSuspense(<ActivityLogPage />)} />
+            <Route element={<ProtectedRoute module="payments" />}>
+              <Route path="/payments" element={withSuspense(<PaymentsPage />)} />
+            </Route>
+            <Route element={<ProtectedRoute module="master_data" />}>
               <Route path="/master-data" element={withSuspense(<MasterDataPage />)} />
+              <Route path="/dropdown-masters" element={withSuspense(<DropdownMastersPage />)} />
               <Route path="/supplier-data" element={withSuspense(<SupplierMasterPage />)} />
+              <Route path="/product-data" element={withSuspense(<ProductMasterPage />)} />
+            </Route>
+
+            <Route element={<ProtectedRoute module="users" />}>
               <Route path="/users" element={withSuspense(<UsersPage />)} />
             </Route>
 
-            <Route element={<ProtectedRoute roles={ORDER_ROLES} />}>
+            {/* Editing who can do what is admin-only, enforced again server-side.
+                Deliberately not gated on the users module: an admin may grant a
+                role access to Users without handing it the permission matrix. */}
+            <Route element={<ProtectedRoute roles={["admin"]} />}>
+              <Route path="/role-management" element={withSuspense(<RoleManagementPage />)} />
+            </Route>
+
+            <Route element={<ProtectedRoute module="orders" />}>
               <Route path="/orders" element={withSuspense(<OrderPage />)} />
             </Route>
 
-            <Route element={<ProtectedRoute roles={PO_ROLES} />}>
+            <Route element={<ProtectedRoute module="purchase_orders" />}>
               <Route path="/purchase-orders" element={withSuspense(<PurchaseOrderListPage />)} />
               <Route path="/purchase-orders/new" element={withSuspense(<PurchaseOrderFormPage />)} />
               <Route path="/purchase-orders/:id" element={withSuspense(<PurchaseOrderDetailPage />)} />
               <Route path="/purchase-orders/:id/edit" element={withSuspense(<PurchaseOrderFormPage />)} />
+              <Route path="/purchase-orders/:id/pricing" element={withSuspense(<PurchaseOrderPricingPage />)} />
             </Route>
 
-            <Route element={<ProtectedRoute roles={GRN_ROLES} />}>
-              <Route path="/grns" element={withSuspense(<GrnListPage />)} />
+            <Route element={<ProtectedRoute module="grns" level="FULL" />}>
               <Route path="/grns/new" element={withSuspense(<GrnFormPage />)} />
+            </Route>
+
+            <Route element={<ProtectedRoute module="grns" />}>
+              <Route path="/grns" element={withSuspense(<GrnListPage />)} />
               <Route path="/grns/:id" element={withSuspense(<GrnDetailPage />)} />
+            </Route>
+
+            {/* Raw Materials reads the inventory ledger, not goods receipts. */}
+            <Route element={<ProtectedRoute module="inventory" />}>
               <Route path="/raw-materials" element={withSuspense(<RawMaterialPage />)} />
             </Route>
 
-            <Route element={<ProtectedRoute roles={PRODUCTION_ROLES} />}>
+            <Route element={<ProtectedRoute module="production" />}>
               <Route path="/quality-check" element={withSuspense(<QualityCheckPage />)} />
               <Route path="/in-process-testing" element={withSuspense(<InProcessTestingListPage />)} />
               <Route path="/operation-log" element={withSuspense(<OperationLogListPage />)} />
@@ -149,19 +204,19 @@ function App() {
               <Route path="/production/:id/qc-test-sheet" element={withSuspense(<ProductionQcTestSheetPage />)} />
             </Route>
 
-            <Route element={<ProtectedRoute roles={PRODUCTION_ROLES} />}>
+            <Route element={<ProtectedRoute module="production" />}>
               <Route path="/production/complete/:id" element={withSuspense(<ProductionCompletePage />)} />
             </Route>
 
-            <Route element={<ProtectedRoute roles={PACKING_ROLES} />}>
+            <Route element={<ProtectedRoute module="packing" />}>
               <Route path="/packing" element={withSuspense(<PackingPage />)} />
             </Route>
 
-            <Route element={<ProtectedRoute roles={DISPATCH_ROLES} />}>
+            <Route element={<ProtectedRoute module="dispatch" />}>
               <Route path="/dispatch" element={withSuspense(<DispatchPage />)} />
             </Route>
 
-            <Route element={<ProtectedRoute roles={DISPATCH_ROLES} />}>
+            <Route element={<ProtectedRoute module="dispatch" />}>
               <Route path="/pending-dispatch-date" element={withSuspense(<PendingExportDatePage />)} />
               <Route path="/pending-export-date" element={<Navigate to="/pending-dispatch-date" replace />} />
             </Route>

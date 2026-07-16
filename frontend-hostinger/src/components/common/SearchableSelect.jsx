@@ -1,6 +1,11 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+// Below this the menu is too cramped to be usable, so it flips instead of
+// squeezing; above it there is no point growing further.
+const MENU_MIN_HEIGHT = 140;
+const MENU_MAX_HEIGHT = 220;
+
 function normalizeText(value) {
   return String(value ?? "").toLowerCase().trim();
 }
@@ -16,10 +21,16 @@ export default function SearchableSelect({ options = [], value, onChange, placeh
   const menuRef = useRef(null);
   const [menuRect, setMenuRect] = useState(null);
 
-  const selected = useMemo(
-    () => options.find((option) => String(option.value) === String(value)) || null,
-    [options, value]
-  );
+  // Fall back to a case-insensitive match so a saved value whose casing drifted
+  // from the master list still shows up as the selected option instead of blank.
+  const selected = useMemo(() => {
+    if (value == null || value === "") return null;
+    return (
+      options.find((option) => String(option.value) === String(value))
+      || options.find((option) => normalizeText(option.value) === normalizeText(value))
+      || null
+    );
+  }, [options, value]);
 
   const filtered = useMemo(() => {
     const query = normalizeText(search);
@@ -60,21 +71,46 @@ export default function SearchableSelect({ options = [], value, onChange, placeh
       return;
     }
 
-    const selectedIndex = filtered.findIndex((option) => String(option.value) === String(value));
+    const selectedIndex = filtered.findIndex((option) => option.value === selected?.value);
     setActiveIndex(selectedIndex >= 0 ? selectedIndex : 0);
-  }, [open, filtered, value]);
+  }, [open, filtered, selected]);
 
   useEffect(() => {
     if (!open || activeIndex < 0) return;
     optionRefs.current[activeIndex]?.scrollIntoView({ block: "nearest" });
   }, [open, activeIndex]);
 
+  // The menu is portaled and positioned in viewport coordinates, so it has to
+  // place itself: drop below the input when there is room, flip above when
+  // there isn't (otherwise it runs off the bottom and sits over the page), and
+  // stay inside the left/right edges rather than overflowing them.
   useLayoutEffect(() => {
     if (!open) return;
 
     function updateRect() {
       const rect = inputRef.current?.getBoundingClientRect();
-      if (rect) setMenuRect(rect);
+      if (!rect) return;
+
+      const GAP = 6;
+      const MARGIN = 8;
+      const spaceBelow = window.innerHeight - rect.bottom - GAP - MARGIN;
+      const spaceAbove = rect.top - GAP - MARGIN;
+      const flipUp = spaceBelow < MENU_MIN_HEIGHT && spaceAbove > spaceBelow;
+
+      const width = Math.min(rect.width, window.innerWidth - MARGIN * 2);
+      const left = Math.max(MARGIN, Math.min(rect.left, window.innerWidth - width - MARGIN));
+      const maxHeight = Math.max(
+        MENU_MIN_HEIGHT,
+        Math.min(MENU_MAX_HEIGHT, flipUp ? spaceAbove : spaceBelow)
+      );
+
+      setMenuRect({
+        width,
+        left,
+        maxHeight,
+        top: flipUp ? undefined : rect.bottom + GAP,
+        bottom: flipUp ? window.innerHeight - rect.top + GAP : undefined
+      });
     }
 
     updateRect();
@@ -88,8 +124,10 @@ export default function SearchableSelect({ options = [], value, onChange, placeh
 
   useEffect(() => {
     if (open) return;
-    setSearch(selected?.label ?? (allowCustom ? String(value ?? "") : ""));
-  }, [open, selected, allowCustom, value]);
+    // Show the raw value when it matches no option (master data not loaded yet,
+    // or the option was retired) rather than silently rendering an empty box.
+    setSearch(selected?.label ?? String(value ?? ""));
+  }, [open, selected, value]);
 
   function openDropdown() {
     setOpen(true);
@@ -188,14 +226,16 @@ export default function SearchableSelect({ options = [], value, onChange, placeh
           role="listbox"
           style={{
             position: "fixed",
-            top: menuRect.bottom + 6,
+            top: menuRect.top,
+            bottom: menuRect.bottom,
             left: menuRect.left,
-            width: menuRect.width
+            width: menuRect.width,
+            maxHeight: menuRect.maxHeight
           }}
         >
           {filtered.length ? (
             filtered.map((option, index) => {
-              const isSelected = String(option.value) === String(value);
+              const isSelected = option.value === selected?.value;
               const isActive = index === activeIndex;
               return (
                 <button

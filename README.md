@@ -9,7 +9,10 @@ Production-ready full-stack web app for workflow:
 
 - Frontend: React (hooks), Axios, Tailwind CSS (mobile-first responsive)
 - Backend: Node.js, Express, JWT auth, RBAC middleware
-- Database: PostgreSQL + Prisma ORM
+- Database: MySQL + Prisma ORM
+
+The deployed frontend is `frontend-hostinger/`. The top-level `frontend/` folder
+is an older copy kept only for reference — do not develop against it.
 
 ## Folder Structure
 
@@ -48,10 +51,12 @@ Nimbasia/
 
 Roles implemented:
 
-- `admin`: full access + user management
-- `sales`: can view all operational modules except Activity Log; can manage enquiries and orders
-- `production`: can view all operational modules except Activity Log; can manage production
-- `dispatch`: can view all operational modules except Activity Log; can manage dispatch
+- `admin`: full access + user management (bypasses every role check)
+- `sales`: dashboard, enquiries, approvals, orders, manual order requests
+- `production`: production batches, batch cards, QC sheets, packing; raises purchase orders (without pricing); reads inventory and can post stock adjustments
+- `dispatch`: dispatch dashboard, dispatch-date queue, packing
+- `purchase`: raises purchase orders (supplier, items, quantities) but never sees or sets pricing and cannot release a PO; read-only GRNs and inventory
+- `accounts`: owns PO pricing (unit price, tax, currency, discount, freight) and releases the priced PO to the supplier; read-only GRNs and inventory
 
 ## Backend Setup
 
@@ -68,7 +73,7 @@ npm install
 cp .env.example .env
 ```
 
-4. Update `DATABASE_URL` in `.env` for your PostgreSQL.
+4. Update `DATABASE_URL` in `.env` for your MySQL instance.
 5. Run Prisma migration and generate client:
 
 ```bash
@@ -76,13 +81,22 @@ npx prisma migrate dev --name init
 npx prisma generate
 ```
 
-6. Remove legacy demo data and recreate the bootstrap admin account:
+6. Ensure the bootstrap accounts exist:
 
 ```bash
 npm run seed
 ```
 
-The seed script removes legacy demo rows from the operational tables and ensures the bootstrap admin account exists.
+`npm run seed` only creates the bootstrap accounts if they are missing — it never
+touches existing users or operational data.
+
+To also wipe operational data (enquiries, orders, productions, dispatches, manual
+requests and the audit log) and restore the known bootstrap passwords, use the
+development-only reset. It refuses to run when `NODE_ENV=production`:
+
+```bash
+node prisma/seed.js --reset
+```
 
 7. Start backend:
 
@@ -90,11 +104,11 @@ The seed script removes legacy demo rows from the operational tables and ensures
 npm run dev
 ```
 
-Backend runs on `http://localhost:5000`.
+Backend runs on `http://localhost:5001` (override with `PORT`).
 
 ## Frontend Setup
 
-1. Open terminal in `frontend`.
+1. Open terminal in `frontend-hostinger`.
 2. Install dependencies:
 
 ```bash
@@ -113,7 +127,7 @@ cp .env.example .env
 npm run dev
 ```
 
-Frontend runs on `http://localhost:5173`.
+Frontend runs on `http://localhost:5174` and proxies `/api` to `http://localhost:5001`.
 
 ## Deployment Notes
 
@@ -124,6 +138,9 @@ Frontend runs on `http://localhost:5173`.
 ## Bootstrap Login
 
 - Admin: `admin@gmail.com` / `123456`
+
+Change this password immediately after any deployment. The seed script will not
+overwrite it once the account exists.
 
 ## API Modules
 

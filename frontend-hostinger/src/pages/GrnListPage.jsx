@@ -7,6 +7,7 @@ import { BoxesIcon, SearchIcon } from "../components/erp/ErpIcons";
 import { logApiError } from "../utils/apiError";
 import { useIsMobile } from "../hooks/useIsMobile";
 import SearchableSelect from "../components/common/SearchableSelect";
+import MonthFilter from "../components/common/MonthFilter";
 import { exportRowsToExcel } from "../utils/exportExcel";
 import StatusBadge from "../components/common/StatusBadge";
 import { GRN_STATUS_CONFIG } from "../config/statusConfig";
@@ -35,6 +36,7 @@ function GrnListPage() {
   const [searchText, setSearchText]     = useState("");
   const [query, setQuery]               = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [monthFilter, setMonthFilter]   = useState("");
   const isMobile = useIsMobile();
   const [sortConfig, setSortConfig]     = useState({ key: "createdAt", direction: "desc" });
   const [currentPage, setCurrentPage]   = useState(1);
@@ -48,6 +50,7 @@ function GrnListPage() {
         params: {
           q:      query || undefined,
           status: statusFilter === "all" ? undefined : statusFilter,
+          month:  monthFilter || undefined,
           page:   currentPage,
           limit:  PAGE_SIZE
         }
@@ -65,7 +68,7 @@ function GrnListPage() {
     }
   };
 
-  useEffect(() => { fetchData(); }, [query, statusFilter, currentPage]);
+  useEffect(() => { fetchData(); }, [query, statusFilter, monthFilter, currentPage]);
   useEffect(() => { if (currentPage > totalPages) setCurrentPage(totalPages); }, [currentPage, totalPages]);
 
   const sortedGrns = useMemo(() => {
@@ -143,7 +146,7 @@ function GrnListPage() {
       <section className="order-card">
         <div className="unified-search-box">
           <SearchIcon />
-          <input
+          <input autoComplete="off"
             placeholder="Search GRN or PO number..."
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
@@ -158,10 +161,15 @@ function GrnListPage() {
             onChange={(value) => { setStatusFilter(value); setCurrentPage(1); }}
             placeholder="All Status"
           />
-          {(query || statusFilter !== "all") && (
+          <MonthFilter
+            title="Filter by month the goods were received"
+            value={monthFilter}
+            onChange={(month) => { setMonthFilter(month); setCurrentPage(1); }}
+          />
+          {(query || statusFilter !== "all" || monthFilter) && (
             <button
               className="order-btn-secondary"
-              onClick={() => { setQuery(""); setSearchText(""); setStatusFilter("all"); setCurrentPage(1); }}
+              onClick={() => { setQuery(""); setSearchText(""); setStatusFilter("all"); setMonthFilter(""); setCurrentPage(1); }}
             >
               Clear
             </button>

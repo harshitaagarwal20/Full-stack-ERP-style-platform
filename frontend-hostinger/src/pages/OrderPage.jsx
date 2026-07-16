@@ -8,12 +8,15 @@ import { useAuth } from "../context/AuthContext";
 import useMasterData from "../hooks/useMasterData";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { logApiError } from "../utils/apiError";
+import { dispatchUserMessage, getValidationFieldErrors } from "../utils/errorMessages";
+import { fetchAllPages, windowParams } from "../utils/listWindow";
 import { findCustomerProfile } from "../utils/customerLookup";
 import { exportRowsToExcel } from "../utils/exportExcel";
 import { CURRENCY_OPTIONS, formatPriceValue } from "../utils/commerce";
 import { getDisplaySalesGroupNumber } from "../utils/businessNumbers";
 import { formatEnquiryProducts } from "../utils/enquiryProducts";
 import SearchableSelect from "../components/common/SearchableSelect";
+import MonthFilter from "../components/common/MonthFilter";
 import StatusBadge from "../components/common/StatusBadge";
 
 const ORDER_STATUS_CONFIG = {
@@ -24,6 +27,21 @@ const ORDER_STATUS_CONFIG = {
   PARTIALLY_DISPATCHED: { label: "Partially Dispatched",   background: "#dbeafe", color: "#1d4ed8" },
   COMPLETED:            { label: "Completed",              background: "#dcfce7", color: "#15803d" },
   DISPATCHED:           { label: "Completed",              background: "#dcfce7", color: "#15803d" }
+};
+
+// The mobile card takes a colour name rather than the config's hex pair, so the
+// two views stay in step from one source. This used to call a
+// getOrderStatusClass() that was never defined anywhere — the Orders page threw
+// "Something went wrong" on every phone, and desktop never ran the code so it
+// went unnoticed.
+const ORDER_BADGE_COLOR = {
+  CREATED: "default",
+  APPROVED: "blue",
+  IN_PRODUCTION: "orange",
+  READY_FOR_DISPATCH: "purple",
+  PARTIALLY_DISPATCHED: "blue",
+  DISPATCHED: "green",
+  COMPLETED: "green"
 };
 
 function formatDate(dateValue) {
@@ -103,10 +121,12 @@ function getMissingLocationFields(order) {
   return missing;
 }
 
-const UNIT_OPTIONS = ["MT", "KG"];
+// Fallback only — units come from the `units` master (admin-maintained on the
+// Master Data screen). This is used just until master data loads.
+const UNIT_OPTIONS_FALLBACK = ["KG", "MT", "LTR"];
 
 function createEmptyProductRow() {
-  return { product: "", grade: "", quantity: "", unit_of_measurement: "" };
+  return { product: "", grade: "", quantity: "", unit_of_measurement: "", remark: "" };
 }
 
 function createCreateForm() {
@@ -146,6 +166,7 @@ function OrderPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [clientFilter, setClientFilter] = useState("");
   const [dateFilter, setDateFilter] = useState("");
+  const [monthFilter, setMonthFilter] = useState("");
   const isMobile = useIsMobile();
   useEffect(() => { if (isMobile) { setDateFilter(""); } }, [isMobile]);
   const [sortConfig, setSortConfig] = useState({ key: "createdAt", direction: "desc" });
@@ -153,14 +174,11 @@ function OrderPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [totalRecords, setTotalRecords] = useState(0);
   const [form, setForm] = useState(createCreateForm());
+  const [formErrors, setFormErrors] = useState({});
   const tableWrapRef = useRef(null);
   const customerMasterRows = useMemo(
     () => (Array.isArray(masterData.customerMaster) ? masterData.customerMaster : []),
     [masterData.customerMaster]
-  );
-  const selectedCustomerProfile = useMemo(
-    () => findCustomerProfile(customerMasterRows, form.client_name),
-    [customerMasterRows, form.client_name]
   );
   const getOrderLocation = (order) => {
     const profile = findCustomerProfile(customerMasterRows, order?.clientName);
@@ -175,13 +193,22 @@ function OrderPage() {
     () => (selectedOrder ? getOrderLocation(selectedOrder) : null),
     [selectedOrder, customerMasterRows]
   );
+  // The admin-maintained `units` master drives every unit dropdown on this page.
+  const unitOptions = useMemo(() => {
+    const rows = Array.isArray(masterData.units) ? masterData.units : [];
+    const values = rows.map((row) => row.value).filter(Boolean);
+    return values.length ? values : UNIT_OPTIONS_FALLBACK;
+  }, [masterData.units]);
+
   const orderUnitOptions = useMemo(() => {
     const current = String(form.unit || "").trim();
-    if (current && !UNIT_OPTIONS.includes(current)) {
-      return [current, ...UNIT_OPTIONS];
+    // Keep a unit already saved on the order selectable even if the admin has
+    // since removed it from the master, so editing doesn't silently blank it.
+    if (current && !unitOptions.includes(current)) {
+      return [current, ...unitOptions];
     }
-    return UNIT_OPTIONS;
-  }, [form.unit]);
+    return unitOptions;
+  }, [form.unit, unitOptions]);
   const productOptions = useMemo(() => {
     const options = Array.isArray(masterData.products) ? masterData.products : [];
     const current = String(form.product || "").trim();
@@ -211,6 +238,9 @@ function OrderPage() {
           status: statusFilter === "all" ? undefined : statusFilter,
           client: clientFilter || undefined,
           date: dateFilter || undefined,
+          month: monthFilter || undefined,
+          // Mobile loads only the last 45 days; desktop sees everything.
+          ...windowParams(isMobile),
           page: currentPage,
           limit: PAGE_SIZE
         }
@@ -230,7 +260,7 @@ function OrderPage() {
 
   useEffect(() => {
     fetchData();
-  }, [query, statusFilter, clientFilter, dateFilter, currentPage]);
+  }, [query, statusFilter, clientFilter, dateFilter, monthFilter, currentPage]);
 
   const sortedOrders = useMemo(() => {
     const sorted = [...orders];
@@ -248,7 +278,16 @@ function OrderPage() {
       return "";
     };
 
+    // A finished order is done with — it should never sit above live work, no
+    // matter which column the user sorts by. The server orders the same way, so
+    // completed orders land on the last page rather than the first.
+    const isFinished = (order) => order.status === "COMPLETED" || order.status === "DISPATCHED";
+
     sorted.sort((a, b) => {
+      const finishedA = isFinished(a);
+      const finishedB = isFinished(b);
+      if (finishedA !== finishedB) return finishedA ? 1 : -1;
+
       const va = getValue(a);
       const vb = getValue(b);
       if (va < vb) return -1 * sign;
@@ -283,6 +322,7 @@ function OrderPage() {
   const submitOrder = async (event) => {
     event.preventDefault();
     if (!canCreate) return;
+    setFormErrors({});
     setCreating(true);
     try {
       if (editingOrderId) {
@@ -299,7 +339,8 @@ function OrderPage() {
             product: String(row.product || "").trim(),
             grade: String(row.grade || "").trim(),
             quantity: Number(row.quantity || 0),
-            unit_of_measurement: String(row.unit_of_measurement || "").trim()
+            unit_of_measurement: String(row.unit_of_measurement || "").trim(),
+            remark: String(row.remark || "").trim()
           }))
           .filter((row) => row.product);
 
@@ -340,7 +381,14 @@ function OrderPage() {
       setIsCreateModalOpen(false);
       await fetchData();
     } catch (error) {
-      logApiError(error, "Failed to save order");
+      const validationErrors = getValidationFieldErrors(error);
+      if (Object.keys(validationErrors).length > 0) {
+        setFormErrors(validationErrors);
+        const firstMessage = Object.values(validationErrors).flat()[0] || "Please check the highlighted fields.";
+        dispatchUserMessage(firstMessage);
+      } else {
+        logApiError(error, "Failed to save order");
+      }
     } finally {
       setCreating(false);
     }
@@ -349,17 +397,15 @@ function OrderPage() {
   const exportOrders = async () => {
     let exportSource = sortedOrders;
     try {
-      const { data } = await api.get("/orders", {
-        params: {
-          q: query || undefined,
-          status: statusFilter === "all" ? undefined : statusFilter,
-          client: clientFilter || undefined,
-          date: dateFilter || undefined,
-          page: 1,
-          limit: 0
-        }
+      // Paged, not `limit: 0` — see utils/listWindow.js.
+      exportSource = await fetchAllPages("/orders", {
+        q: query || undefined,
+        status: statusFilter === "all" ? undefined : statusFilter,
+        client: clientFilter || undefined,
+        date: dateFilter || undefined,
+        month: monthFilter || undefined,
+        ...windowParams(isMobile)
       });
-      exportSource = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : sortedOrders;
     } catch {
       // Fall back to currently loaded page.
     }
@@ -464,6 +510,7 @@ function OrderPage() {
 
   const onEdit = (order) => {
     if (!canCreate) return;
+    setFormErrors({});
     const location = getOrderLocation(order);
     setEditingOrderId(order.id);
     setForm({
@@ -512,6 +559,7 @@ function OrderPage() {
   }, [searchParams, canCreate]);
 
   const onCustomerChange = (customerName) => {
+    setFormErrors((prev) => ({ ...prev, client_name: undefined, address: undefined, city: undefined, pincode: undefined, state: undefined, country_code: undefined }));
     const normalizedName = String(customerName || "").trim();
     const profile = findCustomerProfile(customerMasterRows, normalizedName);
     if (!profile) {
@@ -538,6 +586,27 @@ function OrderPage() {
     }));
   };
 
+  const setOrderField = (field, value) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+    setFormErrors((prev) => ({ ...prev, [field]: undefined }));
+  };
+
+  const setRequestProductField = (index, field, value, errorField = field) => {
+    setFormErrors((prev) => ({ ...prev, products: undefined, [errorField]: undefined }));
+    setForm((prev) => ({
+      ...prev,
+      products: prev.products.map((item, rowIndex) =>
+        rowIndex === index ? { ...item, [field]: value } : item
+      )
+    }));
+  };
+
+  const getOrderInputClass = (field) => (formErrors[field] ? "input-error" : undefined);
+
+  const renderFieldError = (field) => (
+    formErrors[field] ? <small className="field-error">{formErrors[field][0]}</small> : null
+  );
+
   return (
     <div className="order-page">
       {/* HEADER */}
@@ -553,6 +622,7 @@ function OrderPage() {
                 onClick={() => {
                   setEditingOrderId(null);
                   setForm(createCreateForm());
+                  setFormErrors({});
                   setIsCreateModalOpen(true);
                 }}
               >
@@ -567,7 +637,7 @@ function OrderPage() {
       <section className="order-card">
         <div className="unified-search-box">
           <SearchIcon />
-          <input
+          <input autoComplete="off"
             placeholder="Search sales order, client, product"
             value={searchText}
             onChange={(event) => setSearchText(event.target.value)}
@@ -584,13 +654,18 @@ function OrderPage() {
             onChange={(value) => { setStatusFilter(value); setCurrentPage(1); }}
             placeholder="All Status"
           />
-          <input
+          <input autoComplete="off"
             type="text"
             placeholder="Filter by client"
             value={clientFilter}
             onChange={(event) => { setClientFilter(event.target.value); setCurrentPage(1); }}
           />
-          {!isMobile && <input type="date" value={dateFilter} onChange={(event) => { setDateFilter(event.target.value); setCurrentPage(1); }} />}
+          {!isMobile && <input autoComplete="off" type="date" value={dateFilter} onChange={(event) => { setDateFilter(event.target.value); setCurrentPage(1); }} />}
+          <MonthFilter
+            title="Filter by month placed"
+            value={monthFilter}
+            onChange={(month) => { setMonthFilter(month); setCurrentPage(1); }}
+          />
         </div>
 
         <div className="unified-actions">
@@ -621,8 +696,8 @@ function OrderPage() {
                     <th>Order No</th>
                     <th><button className="order-sort-btn" onClick={() => onSort("product")}>Product</button></th>
                     <th>Grade</th>
-                    <th><button className="order-sort-btn" onClick={() => onSort("quantity")}>Quantity</button></th>
-                    <th>Price</th>
+                    <th className="num"><button className="order-sort-btn" onClick={() => onSort("quantity")}>Quantity</button></th>
+                    <th className="num">Price</th>
                     <th>Currency</th>
                     <th>Unit</th>
                     <th><button className="order-sort-btn" onClick={() => onSort("deliveryDate")}>Expected Timeline</button></th>
@@ -656,8 +731,8 @@ function OrderPage() {
                         <td>{order.orderNo}</td>
                         <td>{order.product}</td>
                         <td>{order.grade || "-"}</td>
-                        <td>{order.quantity}</td>
-                        <td>{formatPriceValue(order.price)}</td>
+                        <td className="num">{order.quantity}</td>
+                        <td className="num">{formatPriceValue(order.price)}</td>
                         <td>{order.currency || "-"}</td>
                         <td>{order.unit}</td>
                         <td>{formatDate(order.deliveryDate)}</td>
@@ -712,7 +787,7 @@ function OrderPage() {
                     title={getDisplaySalesGroupNumber(order)}
                     subtitle={order.clientName || "-"}
                     badge={getOrderStatusLabel(order.status)}
-                    badgeColor={getOrderStatusClass(order.status) === "dispatched" ? "green" : getOrderStatusClass(order.status) === "in-production" ? "blue" : getOrderStatusClass(order.status) === "approved" ? "purple" : "default"}
+                    badgeColor={ORDER_BADGE_COLOR[order.status] || "default"}
                     fields={[
                       { label: "Product", value: order.product || "-" },
                       { label: "Quantity", value: `${order.quantity} ${order.unit}` },
@@ -745,6 +820,7 @@ function OrderPage() {
                 setEditingOrderId(null);
                 setIsCreateModalOpen(true);
                 setForm(createCreateForm());
+                setFormErrors({});
               }}
             >
               Create Order
@@ -821,7 +897,10 @@ function OrderPage() {
               </div>
               <button
                 className="order-modal-close-btn"
-                onClick={() => setIsCreateModalOpen(false)}
+                onClick={() => {
+                  setIsCreateModalOpen(false);
+                  setFormErrors({});
+                }}
                 disabled={creating}
               >
                 Close
@@ -842,82 +921,62 @@ function OrderPage() {
                   placeholder="Search or select client"
                   allowCustom
                 />
-              </div>
-              <div>
-                <label>Customer Code</label>
-                <input value={selectedCustomerProfile?.customerCode || ""} disabled />
+                {renderFieldError("client_name")}
               </div>
               {!editingOrderId ? (
                 <>
                 <div className="full-row">
                   <label>Products Requested*</label>
+                  {renderFieldError("products")}
                   <div className="enquiry-product-rows">
                     {(form.products || []).map((row, index) => (
-                      <div key={index} className="enquiry-product-row">
+                      <div key={index} className="enquiry-product-row order-product-row">
                         <div>
                           <label>Product</label>
                           <SearchableSelect
                             options={requestProductOptions}
                             value={row.product}
-                            onChange={(value) =>
-                              setForm((prev) => ({
-                                ...prev,
-                                products: prev.products.map((item, rowIndex) =>
-                                  rowIndex === index ? { ...item, product: value } : item
-                                )
-                              }))
-                            }
+                            onChange={(value) => setRequestProductField(index, "product", value)}
                             placeholder="Select product"
                           />
                         </div>
                         <div>
                           <label>Grade *</label>
-                          <input
+                          <input autoComplete="off"
                             type="text"
                             value={row.grade}
-                            onChange={(event) =>
-                              setForm((prev) => ({
-                                ...prev,
-                                products: prev.products.map((item, rowIndex) =>
-                                  rowIndex === index ? { ...item, grade: event.target.value } : item
-                                )
-                              }))
-                            }
+                            onChange={(event) => setRequestProductField(index, "grade", event.target.value)}
                             placeholder="Enter grade"
                             required
                           />
                         </div>
                         <div>
                           <label>Quantity</label>
-                          <input
+                          <input autoComplete="off"
                             type="number"
+                            step="any"
                             min="1"
                             value={row.quantity}
-                            onChange={(event) =>
-                              setForm((prev) => ({
-                                ...prev,
-                                products: prev.products.map((item, rowIndex) =>
-                                  rowIndex === index ? { ...item, quantity: event.target.value } : item
-                                )
-                              }))
-                            }
+                            onChange={(event) => setRequestProductField(index, "quantity", event.target.value)}
                             placeholder="Enter quantity"
                           />
                         </div>
                         <div>
                           <label>Unit of Measurement</label>
                           <SearchableSelect
-                            options={UNIT_OPTIONS.map((unit) => ({ value: unit, label: unit }))}
+                            options={unitOptions.map((unit) => ({ value: unit, label: unit }))}
                             value={row.unit_of_measurement}
-                            onChange={(value) =>
-                              setForm((prev) => ({
-                                ...prev,
-                                products: prev.products.map((item, rowIndex) =>
-                                  rowIndex === index ? { ...item, unit_of_measurement: value } : item
-                                )
-                              }))
-                            }
+                            onChange={(value) => setRequestProductField(index, "unit_of_measurement", value, "unit")}
                             placeholder="Select unit"
+                          />
+                        </div>
+                        <div>
+                          <label>Remark</label>
+                          <input autoComplete="off"
+                            type="text"
+                            value={row.remark}
+                            onChange={(event) => setRequestProductField(index, "remark", event.target.value)}
+                            placeholder="Remark for this product"
                           />
                         </div>
                         <div className="enquiry-product-row-actions">
@@ -950,12 +1009,14 @@ function OrderPage() {
                 </div>
                 <div className="full-row">
                   <label>Expected Timeline</label>
-                  <input
+                  <input autoComplete="off"
+                    className={getOrderInputClass("delivery_date")}
                     type="date"
                     value={form.delivery_date}
-                    onChange={(e) => setForm((p) => ({ ...p, delivery_date: e.target.value }))}
+                    onChange={(e) => setOrderField("delivery_date", e.target.value)}
                     required
                   />
+                  {renderFieldError("delivery_date")}
                 </div>
                 </>
               ) : (
@@ -965,26 +1026,29 @@ function OrderPage() {
                     <SearchableSelect
                       options={productOptions}
                       value={form.product}
-                      onChange={(value) => setForm((p) => ({ ...p, product: value }))}
+                      onChange={(value) => setOrderField("product", value)}
                       placeholder="Select product"
                     />
+                    {renderFieldError("product")}
                   </div>
                   <div>
                     <label>Grade</label>
-                    <input value={form.grade} onChange={(e) => setForm((p) => ({ ...p, grade: e.target.value }))} required />
+                    <input autoComplete="off" className={getOrderInputClass("grade")} value={form.grade} onChange={(e) => setOrderField("grade", e.target.value)} required />
+                    {renderFieldError("grade")}
                   </div>
                   <div>
                     <label>Quantity</label>
-                    <input type="number" min="1" value={form.quantity} onChange={(e) => setForm((p) => ({ ...p, quantity: e.target.value }))} required />
+                    <input autoComplete="off" className={getOrderInputClass("quantity")} type="number" min="1" value={form.quantity} onChange={(e) => setOrderField("quantity", e.target.value)} required />
+                    {renderFieldError("quantity")}
                   </div>
                   <div>
                     <label>Price</label>
-                    <input
+                    <input autoComplete="off"
                       type="number"
                       min="0"
                       step="0.01"
                       value={form.price}
-                      onChange={(e) => setForm((p) => ({ ...p, price: e.target.value }))}
+                      onChange={(e) => setOrderField("price", e.target.value)}
                       placeholder="Enter price"
                     />
                   </div>
@@ -993,7 +1057,7 @@ function OrderPage() {
                     <SearchableSelect
                       options={CURRENCY_OPTIONS}
                       value={form.currency}
-                      onChange={(value) => setForm((p) => ({ ...p, currency: value }))}
+                      onChange={(value) => setOrderField("currency", value)}
                       placeholder="Select currency"
                     />
                   </div>
@@ -1002,44 +1066,51 @@ function OrderPage() {
                     <SearchableSelect
                       options={orderUnitOptions.map((unit) => ({ value: unit, label: unit }))}
                       value={form.unit}
-                      onChange={(value) => setForm((p) => ({ ...p, unit: value }))}
+                      onChange={(value) => setOrderField("unit", value)}
                       placeholder="Select unit"
                     />
+                    {renderFieldError("unit")}
                   </div>
                   <div>
                     <label>Dispatch Date</label>
-                    <input type="date" value={form.delivery_date} onChange={(e) => setForm((p) => ({ ...p, delivery_date: e.target.value }))} required />
+                    <input autoComplete="off" className={getOrderInputClass("delivery_date")} type="date" value={form.delivery_date} onChange={(e) => setOrderField("delivery_date", e.target.value)} required />
+                    {renderFieldError("delivery_date")}
                   </div>
                 </>
               )}
               <div>
                 <label>City</label>
-                <input value={form.city} onChange={(e) => setForm((p) => ({ ...p, city: e.target.value }))} required />
+                <input autoComplete="off" className={getOrderInputClass("city")} value={form.city} onChange={(e) => setOrderField("city", e.target.value)} required />
+                {renderFieldError("city")}
               </div>
               <div>
                 <label>Address</label>
-                <input value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} />
+                <input autoComplete="off" className={getOrderInputClass("address")} value={form.address} onChange={(e) => setOrderField("address", e.target.value)} />
+                {renderFieldError("address")}
               </div>
               <div>
                 <label>Pincode</label>
-                <input value={form.pincode} onChange={(e) => setForm((p) => ({ ...p, pincode: e.target.value }))} required />
+                <input autoComplete="off" className={getOrderInputClass("pincode")} value={form.pincode} onChange={(e) => setOrderField("pincode", e.target.value)} required />
+                {renderFieldError("pincode")}
               </div>
               <div>
                 <label>State</label>
-                <input value={form.state} onChange={(e) => setForm((p) => ({ ...p, state: e.target.value }))} required />
+                <input autoComplete="off" className={getOrderInputClass("state")} value={form.state} onChange={(e) => setOrderField("state", e.target.value)} required />
+                {renderFieldError("state")}
               </div>
               <div>
                 <label>Country Code</label>
                 <SearchableSelect
                   options={masterData.countryCodes}
                   value={form.country_code}
-                  onChange={(value) => setForm((p) => ({ ...p, country_code: value }))}
+                  onChange={(value) => setOrderField("country_code", value)}
                   placeholder="Select country code"
                 />
+                {renderFieldError("country_code")}
               </div>
               <div className="full-row">
                 <label>Remarks</label>
-                <textarea rows="2" value={form.remarks} onChange={(e) => setForm((p) => ({ ...p, remarks: e.target.value }))} />
+                <textarea rows="2" value={form.remarks} onChange={(e) => setOrderField("remarks", e.target.value)} />
               </div>
               <div className="full-row order-form-actions">
                 <button
@@ -1048,6 +1119,7 @@ function OrderPage() {
                   onClick={() => {
                     setIsCreateModalOpen(false);
                     setEditingOrderId(null);
+                    setFormErrors({});
                   }}
                   disabled={creating}
                 >

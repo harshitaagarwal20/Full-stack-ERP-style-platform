@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../api/axiosClient";
 import { BoxesIcon, SearchIcon } from "../components/erp/ErpIcons";
 import { logApiError } from "../utils/apiError";
+import { dispatchUserMessage } from "../utils/errorMessages";
 import Toolbar from "../components/common/Toolbar";
 import SearchableSelect from "../components/common/SearchableSelect";
 import ProductionBatchPicker from "../components/production/ProductionBatchPicker";
@@ -58,6 +59,7 @@ function QualityCheckPage() {
   const [search, setSearch] = useState("");
   const [qcFilter, setQcFilter] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [resumingId, setResumingId] = useState(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -66,8 +68,12 @@ function QualityCheckPage() {
       const items = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
       // Only batches with at least a partial produced quantity are eligible
       // for QC — mirrors the same gate the backend enforces when saving a
-      // finished-goods test sheet.
-      const eligible = items.filter((r) => r.status === "COMPLETED" || r.status === "PARTIALLY_PRODUCED");
+      // finished-goods test sheet. REWORK is in the list because a QC failure
+      // moves the batch there: without it, the batch you just rejected would
+      // drop off this screen and the rework loop would have no home.
+      const eligible = items.filter((r) =>
+        ["COMPLETED", "PARTIALLY_PRODUCED", "REWORK"].includes(r.status)
+      );
       setRecords(eligible);
     } catch (err) {
       logApiError(err, "Failed to load quality check queue");
@@ -121,6 +127,25 @@ function QualityCheckPage() {
     exportRowsToExcel("quality-check", columns, rows);
   };
 
+  // Closes the rework loop: the rejected batch goes back onto the floor as
+  // In Progress, and can be re-tested on the same QC sheet afterwards.
+  const onResumeRework = async (record) => {
+    if (resumingId) return;
+    setResumingId(record.id);
+    try {
+      await api.post(`/production/${record.id}/resume-rework`);
+      dispatchUserMessage(`${record.batchNo || "Batch"} sent back to production for rework.`, {
+        title: "Rework started",
+        variant: "success"
+      });
+      await fetchData();
+    } catch (error) {
+      logApiError(error, "Failed to send batch back to production");
+    } finally {
+      setResumingId(null);
+    }
+  };
+
   const clearFilters = () => {
     setSearch("");
     setSearchText("");
@@ -134,9 +159,9 @@ function QualityCheckPage() {
       <Toolbar
         title="Quality Check"
         search={
-          <div className="ui-toolbar-search">
+          <>
             <SearchIcon />
-            <input
+            <input autoComplete="off"
               placeholder="Search batch, client or product..."
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
@@ -144,7 +169,7 @@ function QualityCheckPage() {
                 if (e.key === "Enter") onSearchSubmit();
               }}
             />
-          </div>
+          </>
         }
         actions={
           <>
@@ -224,15 +249,31 @@ function QualityCheckPage() {
                     <td>{record.order?.clientName || "-"}</td>
                     <td style={{ textAlign: "right" }}>{Number(record.producedQuantity || 0).toLocaleString()}</td>
                     <td>{formatDate(record.productionCompletionDate)}</td>
-                    <td><QcStatusBadge status={qcStatusOf(record)} /></td>
+                    <td>
+                      <QcStatusBadge status={qcStatusOf(record)} />
+                      {record.status === "REWORK" && (
+                        <span className="order-status rework" style={{ marginLeft: 6 }}>In Rework</span>
+                      )}
+                    </td>
                     <td>{record.finishedGoodsTestSheet?.approvedBy || "-"}</td>
                     <td>
-                      <button
-                        className="order-sort-btn"
-                        onClick={() => navigate(`/production/${record.id}/qc-test-sheet`)}
-                      >
-                        Open QC Test Sheet
-                      </button>
+                      <div className="order-row-actions">
+                        <button
+                          className="order-btn-secondary"
+                          onClick={() => navigate(`/production/${record.id}/qc-test-sheet`)}
+                        >
+                          Open QC Test Sheet
+                        </button>
+                        {record.status === "REWORK" && (
+                          <button
+                            className="order-btn-primary"
+                            disabled={resumingId === record.id}
+                            onClick={() => onResumeRework(record)}
+                          >
+                            {resumingId === record.id ? "Sending..." : "Send to Production"}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -248,16 +289,20 @@ function QualityCheckPage() {
                 key={record.id}
                 title={record.batchNo || "—"}
                 subtitle={record.order?.product || "-"}
-                badge={qcBadgeLabel(qcStatusOf(record))}
-                badgeColor={qcBadgeColor(qcStatusOf(record))}
+                badge={record.status === "REWORK" ? "In Rework" : qcBadgeLabel(qcStatusOf(record))}
+                badgeColor={record.status === "REWORK" ? "orange" : qcBadgeColor(qcStatusOf(record))}
                 fields={[
                   { label: "Client", value: record.order?.clientName || "-" },
                   { label: "Grade", value: record.order?.grade || "-" },
                   { label: "Produced Qty", value: Number(record.producedQuantity || 0).toLocaleString() },
                   { label: "Completed On", value: formatDate(record.productionCompletionDate) }
                 ]}
-                onActionClick={() => navigate(`/production/${record.id}/qc-test-sheet`)}
-                actionLabel="Open QC Test Sheet"
+                onActionClick={
+                  record.status === "REWORK"
+                    ? () => onResumeRework(record)
+                    : () => navigate(`/production/${record.id}/qc-test-sheet`)
+                }
+                actionLabel={record.status === "REWORK" ? "Send to Production" : "Open QC Test Sheet"}
               />
             ))}
             {showingRecentOnly && (

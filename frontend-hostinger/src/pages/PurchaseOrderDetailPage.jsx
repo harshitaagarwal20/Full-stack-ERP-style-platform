@@ -6,6 +6,8 @@ import { useAuth } from "../context/AuthContext";
 import { logApiError } from "../utils/apiError";
 import { dispatchUserMessage } from "../utils/errorMessages";
 import { getShipToLocation } from "../config/shipToLocations";
+import { useIsMobile } from "../hooks/useIsMobile";
+import { formatPct, splitTax } from "../utils/gst";
 
 function formatDate(val) {
   if (!val) return "-";
@@ -70,7 +72,7 @@ function getPOStatusLabel(status) {
   return status;
 }
 
-function StatusActions({ po, onStatusChange, onDelete, navigateToEdit, navigateToGRN, isAdmin }) {
+function StatusActions({ po, onStatusChange, onDelete, navigateToEdit, navigateToPricing, navigateToGRN, isAdmin, canRelease }) {
   const [updating, setUpdating] = useState(false);
 
   const doStatus = async (newStatus) => {
@@ -91,8 +93,16 @@ function StatusActions({ po, onStatusChange, onDelete, navigateToEdit, navigateT
         <button className="order-btn-secondary" onClick={navigateToEdit}>
           Edit PO
         </button>
-        {isAdmin && (
-          <button className="order-btn-primary" disabled={updating} onClick={() => doStatus("SENT_TO_SUPPLIER")}>
+        {/* Accounts prices the PO on a dedicated screen and releases it from
+            there; the inline Generate button stays as the shortcut once the
+            pricing is already in. */}
+        {canRelease && (
+          <button className="order-btn-primary" onClick={navigateToPricing}>
+            Add Pricing
+          </button>
+        )}
+        {canRelease && (
+          <button className="order-btn-primary ghost" disabled={updating} onClick={() => doStatus("SENT_TO_SUPPLIER")}>
             Generate PO — Send to Supplier
           </button>
         )}
@@ -109,7 +119,10 @@ function StatusActions({ po, onStatusChange, onDelete, navigateToEdit, navigateT
     );
   }
 
+  // Recording a receipt and closing a PO are both admin-only on the backend —
+  // showing these to a purchase/accounts user would only walk them into a 403.
   if (status === "SENT_TO_SUPPLIER" || status === "PARTIALLY_RECEIVED") {
+    if (!isAdmin) return null;
     return (
       <button className="order-btn-primary ghost" onClick={navigateToGRN}>
         Create GRN
@@ -118,6 +131,7 @@ function StatusActions({ po, onStatusChange, onDelete, navigateToEdit, navigateT
   }
 
   if (status === "FULLY_RECEIVED") {
+    if (!isAdmin) return null;
     return (
       <button className="order-btn-primary" disabled={updating} onClick={() => doStatus("CLOSED")}>
         Close PO
@@ -131,8 +145,12 @@ function StatusActions({ po, onStatusChange, onDelete, navigateToEdit, navigateT
 function PurchaseOrderDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
+  // Accounts prices the PO and then releases it to the supplier; that release
+  // is the one lifecycle transition it owns.
+  const canRelease = isAdmin || user?.role === "accounts";
 
   const [po, setPo] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -227,22 +245,25 @@ function PurchaseOrderDetailPage() {
           <StatusActions
             po={po}
             isAdmin={isAdmin}
+            canRelease={canRelease}
             onStatusChange={handleStatusChange}
             onDelete={handleDelete}
             navigateToEdit={() => navigate(`/purchase-orders/${id}/edit`)}
+            navigateToPricing={() => navigate(`/purchase-orders/${id}/pricing`)}
             navigateToGRN={() => navigate(`/grns/new?po_id=${id}`)}
           />
         </div>
       </section>
 
-      {/* Info cards side by side */}
+      {/* Info cards side by side — desktop only. On a phone this is a long scroll of
+          reference detail before you reach the line items you came for. */}
+      {!isMobile && (
       <div className="po-detail-info-grid">
         <section className="order-card" style={{ margin: 0 }}>
           <h3 style={{ margin: "0 0 14px", fontSize: 14, fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: "0.05em" }}>Order Details</h3>
           <div className="order-detail-grid">
             <p><span>PO Number</span> {po.poNumber}</p>
             <p><span>Order Date</span> {formatDate(po.orderDate)}</p>
-            <p><span>Exp. Delivery</span> {formatDate(po.expectedDeliveryDate)}</p>
             <p><span>Ship To</span> {shipToLocation.label}</p>
             {po.department && <p><span>Department</span> {po.department}</p>}
             <p><span>Total Amount</span> <strong>{formatAmount(po.totalAmount)}</strong></p>
@@ -266,6 +287,7 @@ function PurchaseOrderDetailPage() {
           </div>
         </section>
       </div>
+      )}
 
       {/* Line Items */}
       <section className="order-card">
@@ -281,10 +303,11 @@ function PurchaseOrderDetailPage() {
                 <th>Qty Ordered</th>
                 <th>UoM</th>
                 <th>Grade</th>
-                <th>Currency</th>
                 <th>Price / UoM</th>
                 <th>Ordered Value</th>
-                <th>Tax %</th>
+                <th>SGST</th>
+                <th>CGST</th>
+                <th>IGST</th>
                 <th>Qty Received</th>
                 <th>Received Value</th>
                 <th>Payable (incl. tax)</th>
@@ -293,6 +316,7 @@ function PurchaseOrderDetailPage() {
             <tbody>
               {(po.items || []).map((item, index) => {
                 const fullyReceived = Number(item.receivedQty || 0) >= Number(item.qty || 0);
+                const tax = splitTax(item.taxPercent, po.supplier?.gstNo, shipToLocation?.gstin);
                 return (
                   <tr key={item.id}>
                     <td data-label="">{index + 1}</td>
@@ -300,10 +324,11 @@ function PurchaseOrderDetailPage() {
                     <td data-label="Qty Ordered">{item.qty}</td>
                     <td data-label="UoM">{item.uom || "-"}</td>
                     <td data-label="Grade">{item.grade || "-"}</td>
-                    <td data-label="Currency">{item.currency || "INR"}</td>
                     <td data-label="Price / UoM">{formatAmount(item.unitPrice)}</td>
                     <td data-label="Ordered Value">{formatAmount(calcOrderedTotal(item))}</td>
-                    <td data-label="Tax %">{item.taxPercent != null ? `${item.taxPercent}%` : "-"}</td>
+                    <td data-label="SGST">{formatPct(tax.sgst)}</td>
+                    <td data-label="CGST">{formatPct(tax.cgst)}</td>
+                    <td data-label="IGST">{formatPct(tax.igst)}</td>
                     <td
                       data-label="Qty Received"
                       style={{ color: fullyReceived ? "#047857" : "#b45309", fontWeight: 600 }}
@@ -342,11 +367,6 @@ function PurchaseOrderDetailPage() {
             </tfoot>
           </table>
         </div>
-        <p style={{ margin: "10px 2px 0", fontSize: 12.5, color: "#64748b" }}>
-          Prices are per UoM. <strong>Payable</strong> is calculated from the quantity actually
-          received (received qty × price/UoM, plus tax), so it rises as goods arrive against
-          this PO — it only equals the full PO value once everything is received.
-        </p>
       </section>
 
       {/* Linked GRNs */}

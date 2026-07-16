@@ -36,6 +36,22 @@ test("summarizes validation errors for end users", () => {
   assert.match(message, /Email is required\./i);
 });
 
+test("rewrites technical string length validation for end users", () => {
+  const message = getUserFacingErrorMessage({
+    response: {
+      status: 400,
+      data: {
+        message: "Please review the highlighted fields.",
+        errors: {
+          pincode: ["String must contain at least 4 character(s)"]
+        }
+      }
+    }
+  });
+
+  assert.equal(message, "Please check the highlighted fields. Pincode must be at least 4 characters.");
+});
+
 test("hides technical route not found messages", () => {
   const message = getUserFacingErrorMessage({
     response: {
@@ -63,5 +79,24 @@ test("extracts backend field validation errors", () => {
   assert.deepStrictEqual(fieldErrors, {
     email: ["Email is required."],
     password: ["Password is required."]
+  });
+});
+
+test("extracts readable backend field validation errors", () => {
+  const fieldErrors = getValidationFieldErrors({
+    response: {
+      status: 400,
+      data: {
+        errors: {
+          pincode: ["String must contain at least 4 character(s)"],
+          products: ["Required"]
+        }
+      }
+    }
+  });
+
+  assert.deepStrictEqual(fieldErrors, {
+    pincode: ["Pincode must be at least 4 characters."],
+    products: ["Products requested is required."]
   });
 });

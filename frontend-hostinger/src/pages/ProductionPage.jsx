@@ -8,13 +8,16 @@ import useMasterData from "../hooks/useMasterData";
 import useKnownItemIds from "../hooks/useKnownItemIds";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { logApiError } from "../utils/apiError";
+import { fetchAllPages, windowParams } from "../utils/listWindow";
 import { exportRowsToExcel } from "../utils/exportExcel";
 import { getDisplaySalesNumber } from "../utils/businessNumbers";
 import SearchableSelect from "../components/common/SearchableSelect";
-import { formatDuration } from "../utils/productionMfg";
+import MonthFilter from "../components/common/MonthFilter";
+import { formatDuration, SPEED_UNITS } from "../utils/productionMfg";
 import Toolbar from "../components/common/Toolbar";
 import Alert from "../components/common/Alert";
 import StatusBadge from "../components/common/StatusBadge";
+import printSheet from "../utils/printSheet";
 
 const PRODUCTION_STATUS_CONFIG = {
   PENDING: { label: "Not Started", background: "#e2e8f0", color: "#475569" },
@@ -23,6 +26,10 @@ const PRODUCTION_STATUS_CONFIG = {
   HOLD: { label: "Hold", background: "#dbeafe", color: "#1d4ed8" },
   COMPLETED: { label: "Completed", background: "#dbeafe", color: "#1d4ed8" }
 };
+
+// Mirrors MAX_SPLIT_BATCHES in productionService: a plan that would create more
+// batches than this is almost certainly a typo'd batch size.
+const MAX_BATCHES = 100;
 
 function formatDate(value) {
   if (!value) return "-";
@@ -67,6 +74,12 @@ export function isUrgentRecord(record) {
 function getStatusLabel(status) {
   return PRODUCTION_STATUS_CONFIG[status]?.label || status || "-";
 }
+
+function hasApprovedInProcessTest(record) {
+  return record?.inProcessTestSheet?.overallResult === "PASS";
+}
+
+const IN_PROCESS_GATE_TITLE = "Approve the in-process test sheet before completing production.";
 
 function getLatestDispatchDate(order) {
   const dispatches = order?.dispatches || [];
@@ -143,6 +156,11 @@ function ProductionPage() {
   const [fetchError, setFetchError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  // The production row whose order is being planned, plus the server's view of
+  // that order's batches (what is locked, what is free to divide).
+  const [planRecord, setPlanRecord] = useState(null);
+  const [batchPlan, setBatchPlan] = useState(null);
+  const [planBatchSize, setPlanBatchSize] = useState("");
   const [editingProductionId, setEditingProductionId] = useState(null);
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [mfgOrderRecord, setMfgOrderRecord] = useState(null);
@@ -157,11 +175,14 @@ function ProductionPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [companyFilter, setCompanyFilter] = useState("");
   const [dateFilter, setDateFilter] = useState("");
+  const [monthFilter, setMonthFilter] = useState("");
   const isMobile = useIsMobile();
   useEffect(() => { if (isMobile) { setDateFilter(""); } }, [isMobile]);
   // FIFO by default — oldest job first. Urgent jobs are floated above this
   // regardless (see sortedRecords).
-  const [sortConfig, setSortConfig] = useState({ key: "createdAt", direction: "asc" });
+  // Default to the production queue's real priority: soonest expected timeline
+  // first (urgency is applied on top of whatever column is sorted, below).
+  const [sortConfig, setSortConfig] = useState({ key: "deliveryDate", direction: "asc" });
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalRecords, setTotalRecords] = useState(0);
@@ -170,6 +191,7 @@ function ProductionPage() {
   const [form, setForm] = useState({
     delivery_date: "",
     capacity: "",
+    product_remark: "",
     remarks: "",
     status: "PENDING",
     state: ""
@@ -253,6 +275,9 @@ function ProductionPage() {
           status: statusFilter === "all" ? undefined : statusFilter,
           company: companyFilter || undefined,
           date: dateFilter || undefined,
+          month: monthFilter || undefined,
+          // Mobile loads only the last 45 days; desktop sees everything.
+          ...windowParams(isMobile),
           page: currentPage,
           limit: PAGE_SIZE
         }
@@ -276,10 +301,10 @@ function ProductionPage() {
 
   useEffect(() => {
     fetchData();
-  }, [query, statusFilter, companyFilter, dateFilter, currentPage]);
+  }, [query, statusFilter, companyFilter, dateFilter, monthFilter, currentPage]);
 
   useEffect(() => {
-    const id = setInterval(() => fetchDataRef.current(), 10_000);
+    const id = setInterval(() => fetchDataRef.current(), 30_000);
     return () => clearInterval(id);
   }, []);
 
@@ -306,18 +331,38 @@ function ProductionPage() {
     const { key, direction } = sortConfig;
     const sign = direction === "asc" ? 1 : -1;
 
+    // The expected timeline is the order's committed delivery date — the promise
+    // made to the customer. Only fall back to the batch's own date if the order
+    // carries none, and sort an undated job last rather than letting it sort as
+    // epoch 0 and jump the whole queue.
+    const getExpectedTimeline = (record) => {
+      const raw = record.order?.deliveryDate || record.deliveryDate;
+      const time = raw ? new Date(raw).getTime() : Number.NaN;
+      return Number.isNaN(time) ? Number.POSITIVE_INFINITY : time;
+    };
+
+    const getCreatedAt = (record) =>
+      new Date(record.createdAt || record.order?.createdAt || 0).getTime();
+
     const getValue = (record) => {
       if (key === "orderNo") return String(record.order?.orderNo || "").toLowerCase();
-      if (key === "createdAt") return new Date(record.createdAt || record.order?.createdAt || 0).getTime();
+      if (key === "createdAt") return getCreatedAt(record);
       if (key === "salesOrderNumber") return String(getDisplaySalesNumber(record.order) || "").toLowerCase();
       if (key === "product") return String(record.order?.product || record.order?.enquiry?.product || "").toLowerCase();
       if (key === "quantity") return Number(record.order?.quantity || 0);
-      if (key === "deliveryDate") return new Date(record.deliveryDate || record.order?.deliveryDate || 0).getTime();
+      if (key === "deliveryDate") return getExpectedTimeline(record);
       if (key === "status") return String(record.status || "").toLowerCase();
       return "";
     };
 
     sorted.sort((a, b) => {
+      // Completed jobs are no longer work, so they sink below everything still
+      // open — ahead of even the urgent rule, since a finished urgent job is
+      // still finished. The floor reads the queue from the top down.
+      const da = a.status === "COMPLETED" ? 1 : 0;
+      const db = b.status === "COMPLETED" ? 1 : 0;
+      if (da !== db) return da - db;
+
       // Urgent jobs always head the production queue, whatever column the user
       // has sorted by — an urgent job must never be buried below a normal one.
       const ua = isUrgentRecord(a) ? 1 : 0;
@@ -328,13 +373,14 @@ function ProductionPage() {
       const vb = getValue(b);
       if (va < vb) return -1 * sign;
       if (va > vb) return 1 * sign;
-      if (key === "orderNo") {
-        const ta = new Date(a.createdAt || a.order?.createdAt || 0).getTime();
-        const tb = new Date(b.createdAt || b.order?.createdAt || 0).getTime();
-        if (ta < tb) return -1 * sign;
-        if (ta > tb) return 1 * sign;
-      }
-      return 0;
+
+      // Equal on the sorted column — very common, since many orders share a
+      // delivery date. Break the tie the same way the backend queue does:
+      // FIFO, oldest batch first, so nothing starves.
+      const ta = getCreatedAt(a);
+      const tb = getCreatedAt(b);
+      if (ta !== tb) return ta - tb;
+      return Number(a.id || 0) - Number(b.id || 0);
     });
     return sorted;
   }, [productionRecords, sortConfig]);
@@ -369,6 +415,7 @@ function ProductionPage() {
     try {
       const payload = {
         delivery_date: form.delivery_date,
+        product_remark: form.product_remark,
         remarks: form.remarks,
         status: form.status,
         state: form.state,
@@ -379,6 +426,7 @@ function ProductionPage() {
       setForm({
         delivery_date: "",
         capacity: "",
+        product_remark: "",
         remarks: "",
         status: "PENDING",
         state: ""
@@ -396,17 +444,15 @@ function ProductionPage() {
   const exportProduction = async () => {
     let exportSource = sortedRecords;
     try {
-      const { data } = await api.get("/production", {
-        params: {
-          q: query || undefined,
-          status: statusFilter === "all" ? undefined : statusFilter,
-          company: companyFilter || undefined,
-          date: dateFilter || undefined,
-          page: 1,
-          limit: 0
-        }
+      // Paged, not `limit: 0` — see utils/listWindow.js.
+      exportSource = await fetchAllPages("/production", {
+        q: query || undefined,
+        status: statusFilter === "all" ? undefined : statusFilter,
+        company: companyFilter || undefined,
+        date: dateFilter || undefined,
+        month: monthFilter || undefined,
+        ...windowParams(isMobile)
       });
-      exportSource = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : sortedRecords;
     } catch {
       // Fall back to loaded page.
     }
@@ -462,6 +508,11 @@ function ProductionPage() {
 
   const completeProduction = async (id) => {
     if (!canManageProduction) return;
+    const record = productionRecords.find((item) => item.id === id);
+    if (record && !hasApprovedInProcessTest(record)) {
+      window.alert(IN_PROCESS_GATE_TITLE);
+      return;
+    }
     try {
       await api.put(`/production/${id}`);
       await fetchData();
@@ -476,6 +527,7 @@ function ProductionPage() {
     setForm({
       delivery_date: record.deliveryDate ? new Date(record.deliveryDate).toISOString().slice(0, 10) : "",
       capacity: record.capacity ? String(record.capacity) : "",
+      product_remark: record.productRemark || "",
       remarks: record.remarks || "",
       status: record.status || "PENDING",
       state: record.state || ""
@@ -494,18 +546,108 @@ function ProductionPage() {
     }
   };
 
+  // "Plan Batches" asks the server what the order looks like right now — how much
+  // is locked into batches that have already started, and how much is still free
+  // to divide — rather than working it out here, so the dialog can never propose
+  // a plan the server would reject.
+  const openPlanBatches = async (record) => {
+    if (!canManageProduction) return;
+    const orderId = record?.order?.id;
+    if (!orderId) return;
+
+    setPlanRecord(record);
+    setBatchPlan(null);
+    setPlanBatchSize("");
+    try {
+      const { data } = await api.get(`/production/order/${orderId}/batch-plan`);
+      setBatchPlan(data);
+      // Default to the batch size already in use, so opening the dialog and
+      // saving without thinking is a no-op rather than a surprise re-plan.
+      setPlanBatchSize(String(record.capacity ?? data?.plannableQty ?? ""));
+    } catch (error) {
+      logApiError(error, "Failed to load the order's batch plan");
+      setPlanRecord(null);
+    }
+  };
+
+  const closePlanBatches = () => {
+    setPlanRecord(null);
+    setBatchPlan(null);
+    setPlanBatchSize("");
+  };
+
+  const submitPlanBatches = async (event) => {
+    event.preventDefault();
+    if (!canManageProduction || !planRecord || !planPreview || planPreview.error) return;
+
+    setSaving(true);
+    try {
+      await api.post(`/production/order/${planRecord.order.id}/plan`, {
+        batch_size: Number(planBatchSize)
+      });
+      closePlanBatches();
+      await fetchData();
+    } catch (error) {
+      logApiError(error, "Failed to plan the order's batches");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Mirrors the backend (see productionService.planOrderBatches) so the planner
+  // sees exactly the batches and dates they are about to commit to.
+  const planPreview = useMemo(() => {
+    if (!planRecord || !batchPlan) return null;
+
+    const plannable = Number(batchPlan.plannableQty || 0);
+    const unit = planRecord.order?.unit || "";
+
+    if (plannable <= 0) {
+      return { error: "Every unit of this order is already committed to batches that have started. Nothing left to plan." };
+    }
+
+    const batchSize = Number(planBatchSize);
+    if (!Number.isInteger(batchSize) || batchSize <= 0) {
+      return { error: "Enter a batch size." };
+    }
+
+    const count = Math.max(1, Math.ceil(plannable / batchSize));
+    if (count > MAX_BATCHES) {
+      return { error: `That batch size would create ${count} batches (max ${MAX_BATCHES}). Check the batch size.` };
+    }
+
+    const base = Math.floor(plannable / count);
+    const remainder = plannable % count;
+    const quantities = Array.from({ length: count }, (_, i) => base + (i < remainder ? 1 : 0));
+
+    const due = new Date(planRecord.order?.deliveryDate || planRecord.deliveryDate);
+    const start = Date.now();
+    const end = due.getTime();
+    const hasWindow = Number.isFinite(end) && end > start;
+    const dates = Array.from({ length: count }, (_, i) =>
+      hasWindow ? new Date(start + ((end - start) / count) * (i + 1)) : due
+    );
+
+    // What the plan does to the rows that exist today.
+    const editableCount = (batchPlan.batches || []).filter((batch) => batch.editable).length;
+    const reused = Math.min(count, editableCount);
+
+    return {
+      count,
+      quantities,
+      dates,
+      unit,
+      hasWindow,
+      plannable,
+      reused,
+      created: Math.max(0, count - editableCount),
+      removed: Math.max(0, editableCount - count)
+    };
+  }, [planRecord, batchPlan, planBatchSize]);
+
   const emptyMaterialRow = () => ({ name: "", vendor: "", grade: "", batch_no: "", qty: "", remark: "", shift: "" });
   const emptyEquipRow    = () => ({ name: "", equipId: "", capacity: "" });
   const emptyParamRow    = () => ({ parameter: "", range: "", doneBy: "", reviewedBy: "", remark: "" });
-
-  const defaultEquipment = () => [
-    { name: "Stainless Steel Reactor", equipId: "", capacity: "" },
-    { name: "Screw Conveyor No",       equipId: "", capacity: "" },
-    { name: "Grinding Mill, No",       equipId: "", capacity: "" },
-    { name: "Classifier No",           equipId: "", capacity: "" },
-    { name: "Dust Collector No",       equipId: "", capacity: "" },
-    { name: "Storage Silo",            equipId: "", capacity: "" }
-  ];
 
   const defaultProcessParams = () => [
     { parameter: "Initial Temperature",    range: "70 to 120°C", doneBy: "", reviewedBy: "", remark: "" },
@@ -522,13 +664,17 @@ function ProductionPage() {
         additives:     Array.isArray(parsed.additives)     ? parsed.additives     : [emptyMaterialRow()],
         catalysts:     Array.isArray(parsed.catalysts)     ? parsed.catalysts     : [emptyMaterialRow()],
         pulveriserRpm: parsed.pulveriserRpm || "",
-        equipment:     Array.isArray(parsed.equipment)     ? parsed.equipment     : defaultEquipment(),
+        acmRpmUnit:        SPEED_UNITS.includes(parsed.acmRpmUnit)        ? parsed.acmRpmUnit        : "RPM",
+        pulveriserRpmUnit: SPEED_UNITS.includes(parsed.pulveriserRpmUnit) ? parsed.pulveriserRpmUnit : "RPM",
+        blowerRpmUnit:     SPEED_UNITS.includes(parsed.blowerRpmUnit)     ? parsed.blowerRpmUnit     : "RPM",
+        equipment:     Array.isArray(parsed.equipment)     ? parsed.equipment     : [emptyEquipRow()],
         processParams: Array.isArray(parsed.processParams) ? parsed.processParams : defaultProcessParams()
       };
     } catch {
       return {
         rm: [emptyMaterialRow()], additives: [emptyMaterialRow()], catalysts: [emptyMaterialRow()],
-        pulveriserRpm: "", equipment: defaultEquipment(), processParams: defaultProcessParams()
+        pulveriserRpm: "", acmRpmUnit: "RPM", pulveriserRpmUnit: "RPM", blowerRpmUnit: "RPM",
+        equipment: [emptyEquipRow()], processParams: defaultProcessParams()
       };
     }
   };
@@ -550,8 +696,11 @@ function ProductionPage() {
       batch_no:       record.batchNo      || "",
       particle_size:  record.particleSize || "Fine",
       acm_rpm:        record.acmRpm       ? String(record.acmRpm)    : "",
+      acm_rpm_unit:        mats.acmRpmUnit,
       classifier_rpm: mats.pulveriserRpm  || (record.classifierRpm ? String(record.classifierRpm) : ""),
+      classifier_rpm_unit: mats.pulveriserRpmUnit,
       blower_rpm:     record.blowerRpm    ? String(record.blowerRpm) : "",
+      blower_rpm_unit:     mats.blowerRpmUnit,
       rm:             mats.rm,
       additives:      mats.additives,
       catalysts:      mats.catalysts,
@@ -601,8 +750,11 @@ function ProductionPage() {
       batch_no:       record.batchNo      || "",
       particle_size:  record.particleSize || "Fine",
       acm_rpm:        record.acmRpm       ? String(record.acmRpm)    : "",
+      acm_rpm_unit:        mats.acmRpmUnit,
       classifier_rpm: mats.pulveriserRpm  || (record.classifierRpm ? String(record.classifierRpm) : ""),
+      classifier_rpm_unit: mats.pulveriserRpmUnit,
       blower_rpm:     record.blowerRpm    ? String(record.blowerRpm) : "",
+      blower_rpm_unit:     mats.blowerRpmUnit,
       rm:             mats.rm,
       additives:      mats.additives,
       catalysts:      mats.catalysts,
@@ -758,7 +910,10 @@ function ProductionPage() {
         rm:            mfgForm.rm,
         additives:     mfgForm.additives,
         catalysts:     mfgForm.catalysts,
-        pulveriserRpm: mfgForm.classifier_rpm
+        pulveriserRpm: mfgForm.classifier_rpm,
+        acmRpmUnit:        mfgForm.acm_rpm_unit,
+        pulveriserRpmUnit: mfgForm.classifier_rpm_unit,
+        blowerRpmUnit:     mfgForm.blower_rpm_unit
       });
       const newStatus = mfgOrderRecord.status === "PENDING" ? "IN_PROGRESS" : mfgOrderRecord.status;
       await api.put(`/production/${mfgOrderRecord.id}/edit`, {
@@ -801,6 +956,9 @@ function ProductionPage() {
         additives:     mfgForm.additives,
         catalysts:     mfgForm.catalysts,
         pulveriserRpm: mfgForm.classifier_rpm,
+        acmRpmUnit:        mfgForm.acm_rpm_unit,
+        pulveriserRpmUnit: mfgForm.classifier_rpm_unit,
+        blowerRpmUnit:     mfgForm.blower_rpm_unit,
         equipment:     pfrForm.equipment,
         processParams: pfrForm.processParams
       });
@@ -829,9 +987,9 @@ function ProductionPage() {
       <Toolbar
         title="Production"
         search={
-          <div className="ui-toolbar-search">
+          <>
             <SearchIcon />
-            <input
+            <input autoComplete="off"
               placeholder="Search order, product, company, or assigned team"
               value={searchText}
               onChange={(event) => setSearchText(event.target.value)}
@@ -839,7 +997,7 @@ function ProductionPage() {
                 if (event.key === "Enter") onSearchSubmit();
               }}
             />
-          </div>
+          </>
         }
         actions={<button className="order-btn-secondary" onClick={exportProduction}>Export to Excel</button>}
         filters={
@@ -850,7 +1008,7 @@ function ProductionPage() {
               onChange={(value) => { setStatusFilter(value); setCurrentPage(1); }}
               placeholder="All Status"
             />
-            <input
+            <input autoComplete="off"
               className="production-filter-company"
               type="text"
               placeholder="Filter by company"
@@ -858,13 +1016,19 @@ function ProductionPage() {
               onChange={(event) => { setCompanyFilter(event.target.value); setCurrentPage(1); }}
             />
             {!isMobile && (
-              <input
+              <input autoComplete="off"
                 className="production-filter-date"
                 type="date"
                 value={dateFilter}
                 onChange={(event) => { setDateFilter(event.target.value); setCurrentPage(1); }}
               />
             )}
+            <MonthFilter
+              className="production-filter-date"
+              title="Filter by month the batch was created"
+              value={monthFilter}
+              onChange={(month) => { setMonthFilter(month); setCurrentPage(1); }}
+            />
             <button className="order-btn-primary ghost" onClick={onSearchSubmit}>Search</button>
           </>
         }
@@ -924,6 +1088,7 @@ function ProductionPage() {
                   getRowKey={(record) => record.id}
                   renderRow={(record, index) => {
                     const location = getOrderLocation(record.order);
+                    const canCompleteRecord = hasApprovedInProcessTest(record);
                     return (
                       <tr key={record.id} className={isUrgentRecord(record) ? "row-urgent" : undefined}>
                         <td>{(currentPage - 1) * PAGE_SIZE + index + 1}</td>
@@ -959,6 +1124,15 @@ function ProductionPage() {
                                 <EditIcon />
                               </button>
                             )}
+                            {canManageProduction && (
+                              <button
+                                className="order-btn-secondary"
+                                onClick={() => openPlanBatches(record)}
+                                title="Set the batch size for this order — splits, adds or drops batches to match"
+                              >
+                                Plan Batches
+                              </button>
+                            )}
                             {canManageProduction && record.status === "PENDING" && (
                               <button className="order-btn-primary" onClick={() => openMfgOrder(record)}>
                                 Start Production
@@ -975,7 +1149,14 @@ function ProductionPage() {
                               </button>
                             )}
                             {canManageProduction && record.status === "IN_PROGRESS" && (
-                              <button className="order-btn-primary" onClick={() => completeProduction(record.id)}>Complete</button>
+                              <button
+                                className="order-btn-primary"
+                                onClick={() => completeProduction(record.id)}
+                                disabled={!canCompleteRecord}
+                                title={!canCompleteRecord ? IN_PROCESS_GATE_TITLE : undefined}
+                              >
+                                Complete
+                              </button>
                             )}
                             {canManageProduction && record.status === "COMPLETED" && (
                               <button className="order-btn-secondary" disabled>Completed</button>
@@ -1011,6 +1192,7 @@ function ProductionPage() {
                   status === "HOLD" ? "is-hold" : "is-pending";
                 const stage = status === "COMPLETED" ? 2 : status === "PENDING" ? 0 : 1;
                 const productName = record.order?.product || record.order?.enquiry?.product || "-";
+                const canCompleteRecord = hasApprovedInProcessTest(record);
                 return (
                   <div
                     key={record.id}
@@ -1019,10 +1201,11 @@ function ProductionPage() {
                   >
                     <div className="prod-mcard-top">
                       <div className="prod-mcard-idwrap">
-                        <span className="prod-mcard-code">
-                          {record.order?.orderNo || "-"}
-                          {isUrgentRecord(record) && <span className="urgent-tag">Urgent</span>}
-                        </span>
+                        {isUrgentRecord(record) && (
+                          <span className="prod-mcard-code">
+                            <span className="urgent-tag">Urgent</span>
+                          </span>
+                        )}
                         <span className="prod-mcard-name">{productName}</span>
                       </div>
                       <span className={`prod-mcard-pill ${stateClass}`}>{getStatusLabel(status)}</span>
@@ -1053,6 +1236,7 @@ function ProductionPage() {
                         >
                           <EyeIcon />
                         </button>
+                        <button onClick={() => openPlanBatches(record)}>Plan Batches</button>
                         {status === "PENDING" && (
                           <button className="pa-primary" onClick={() => openMfgOrder(record)}>
                             Start Production
@@ -1061,7 +1245,12 @@ function ProductionPage() {
                         {status === "IN_PROGRESS" && (
                           <>
                             <button onClick={() => openOps(record)}>Operations</button>
-                            <button className="pa-complete" onClick={() => completeProduction(record.id)}>
+                            <button
+                              className="pa-complete"
+                              onClick={() => completeProduction(record.id)}
+                              disabled={!canCompleteRecord}
+                              title={!canCompleteRecord ? IN_PROCESS_GATE_TITLE : undefined}
+                            >
                               Complete
                             </button>
                           </>
@@ -1090,6 +1279,117 @@ function ProductionPage() {
           </div>
         )}
       </section>
+
+      {planRecord && canManageProduction && (
+        <div className="production-modal-overlay">
+          <div className="production-modal-card" style={{ maxWidth: 560 }}>
+            <div className="production-modal-head">
+              <div>
+                <h3>Plan Batches</h3>
+                <p>
+                  {batchPlan?.salesOrderNumber || getDisplaySalesNumber(planRecord.order)} &middot;{" "}
+                  order quantity {batchPlan?.orderQuantity ?? planRecord.order?.quantity}{" "}
+                  {planRecord.order?.unit || ""} &middot; due{" "}
+                  {formatDate(planRecord.order?.deliveryDate || planRecord.deliveryDate)}
+                </p>
+              </div>
+              <button className="production-modal-close" onClick={closePlanBatches} disabled={saving}>
+                Close
+              </button>
+            </div>
+
+            {!batchPlan ? (
+              <p style={{ padding: "4px", color: "#64748b" }}>Loading the order&apos;s batches…</p>
+            ) : (
+              <form className="production-form-grid" onSubmit={submitPlanBatches}>
+                {/* Only worth saying when some of the order is actually locked —
+                    on a fresh order "locked: 0, free: everything" is just noise. */}
+                {batchPlan.lockedQty > 0 && (
+                  <div className="full-row plan-note">
+                    <strong>{batchPlan.lockedQty} {planRecord.order?.unit || ""}</strong> is locked in batches already
+                    started. Only the remaining <strong>{batchPlan.plannableQty}</strong> can be re-divided.
+                  </div>
+                )}
+
+                <div className="full-row">
+                  <label>Batch size ({planRecord.order?.unit || "units"} per batch)</label>
+                  <input autoComplete="off"
+                    type="number"
+                    min="1"
+                    value={planBatchSize}
+                    onChange={(e) => setPlanBatchSize(e.target.value)}
+                    placeholder="e.g. 500"
+                    autoFocus
+                    required
+                  />
+                </div>
+
+                {planPreview?.error && (
+                  <div className="full-row">
+                    <Alert type="error" message={planPreview.error} />
+                  </div>
+                )}
+
+                {planPreview && !planPreview.error && (
+                  <div className="full-row">
+                    {/* One batch needs a sentence, not a table with one row in it. */}
+                    {planPreview.count === 1 ? (
+                      <p className="plan-summary">
+                        <strong>1 batch</strong> of {planPreview.quantities[0]} {planPreview.unit}, due{" "}
+                        {formatDate(planPreview.dates[0])}.
+                      </p>
+                    ) : (
+                      <>
+                        <p className="plan-summary">
+                          <strong>{planPreview.count} batches</strong>
+                          {planPreview.removed > 0 && `, ${planPreview.removed} empty dropped`}
+                          {" "}&middot; last batch on the due date
+                        </p>
+                        <div className="plan-preview-table">
+                          <table>
+                            <thead>
+                              <tr>
+                                <th>Batch</th>
+                                <th style={{ textAlign: "right" }}>Quantity</th>
+                                <th style={{ textAlign: "right" }}>Expected</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {planPreview.quantities.map((qty, i) => (
+                                <tr key={i}>
+                                  <td>{i + 1} of {planPreview.count}</td>
+                                  <td style={{ textAlign: "right" }}>{qty} {planPreview.unit}</td>
+                                  <td style={{ textAlign: "right" }}>{formatDate(planPreview.dates[i])}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </>
+                    )}
+                    {!planPreview.hasWindow && (
+                      <p className="plan-hint">This order is already due, so every batch carries the due date.</p>
+                    )}
+                  </div>
+                )}
+
+                <div className="full-row production-form-actions">
+                  <button type="button" className="production-btn-secondary" onClick={closePlanBatches} disabled={saving}>
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="production-btn-primary"
+                    disabled={saving || !planPreview || Boolean(planPreview.error)}
+                  >
+                    {saving ? "Planning..." : planPreview?.count ? `Apply ${planPreview.count} batch${planPreview.count === 1 ? "" : "es"}` : "Apply"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
 
       {isCreateModalOpen && editingProductionId && canManageProduction && (
         <div className="production-modal-overlay">
@@ -1123,11 +1423,15 @@ function ProductionPage() {
               </div>
               <div>
                 <label>Expected Delivery Date</label>
-                <input type="date" value={form.delivery_date} onChange={(e) => setForm((p) => ({ ...p, delivery_date: e.target.value }))} required />
+                <input autoComplete="off" type="date" value={form.delivery_date} onChange={(e) => setForm((p) => ({ ...p, delivery_date: e.target.value }))} required />
               </div>
               <div>
                 <label>Capacity</label>
-                <input type="number" min="1" value={form.capacity} onChange={(e) => setForm((p) => ({ ...p, capacity: e.target.value }))} required />
+                <input autoComplete="off" type="number" min="1" value={form.capacity} onChange={(e) => setForm((p) => ({ ...p, capacity: e.target.value }))} required />
+              </div>
+              <div className="full-row">
+                <label>Product Remark</label>
+                <input autoComplete="off" type="text" value={form.product_remark} onChange={(e) => setForm((p) => ({ ...p, product_remark: e.target.value }))} placeholder="Remark for this product" />
               </div>
               <div className="full-row">
                 <label>Remarks</label>
@@ -1156,7 +1460,7 @@ function ProductionPage() {
 
       {/* Step 1 – Manufacturing Order Modal */}
       {mfgOrderRecord && mfgForm && mfgStep === "mfg" && (
-        <div className="mfg-overlay">
+        <div className="mfg-overlay print-root">
           <div className="mfg-modal">
             <div className="mfg-header">
               <div className="mfg-header-left">
@@ -1164,7 +1468,14 @@ function ProductionPage() {
                 <h3 className="mfg-title">{mfgOrderRecord.order?.product || "Product"}</h3>
                 <p className="mfg-subtitle">{mfgOrderRecord.order?.clientName} &mdash; {mfgOrderRecord.order?.orderNo}</p>
               </div>
-              <button className="mfg-close-btn" onClick={closeAll} disabled={saving} aria-label="Close">&#10005;</button>
+              <div className="mfg-header-actions">
+                {/* Prints the sheet exactly as it appears — the print rules below
+                    isolate this modal and drop the on-screen chrome. */}
+                <button type="button" className="mfg-print-btn" onClick={() => printSheet()}>
+                  Print
+                </button>
+                <button className="mfg-close-btn" onClick={closeAll} disabled={saving} aria-label="Close">&#10005;</button>
+              </div>
             </div>
 
             <div className="mfg-summary">
@@ -1193,23 +1504,38 @@ function ProductionPage() {
                 <div className="mfg-settings-grid">
                   <div className="mfg-field">
                     <label className="mfg-label">Batch No. <span className="mfg-required">*</span></label>
-                    <input className="mfg-input" placeholder="e.g. K/CS/143" value={mfgForm.batch_no} onChange={(e) => setMfgField("batch_no", e.target.value)} required />
+                    <input autoComplete="off" className="mfg-input" placeholder="e.g. K/CS/143" value={mfgForm.batch_no} onChange={(e) => setMfgField("batch_no", e.target.value)} required />
                   </div>
                   <div className="mfg-field">
                     <label className="mfg-label">Particle Size</label>
-                    <input className="mfg-input" placeholder="e.g. Fine" value={mfgForm.particle_size} onChange={(e) => setMfgField("particle_size", e.target.value)} />
+                    <input autoComplete="off" className="mfg-input" placeholder="e.g. Fine" value={mfgForm.particle_size} onChange={(e) => setMfgField("particle_size", e.target.value)} />
                   </div>
                   <div className="mfg-field">
-                    <label className="mfg-label">ACM-RPM</label>
-                    <input className="mfg-input" type="number" min="1" placeholder="e.g. 1200" value={mfgForm.acm_rpm} onChange={(e) => setMfgField("acm_rpm", e.target.value)} />
+                    <label className="mfg-label">ACM Speed</label>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <input autoComplete="off" className="mfg-input" type="number" min="1" placeholder="e.g. 1200" value={mfgForm.acm_rpm} onChange={(e) => setMfgField("acm_rpm", e.target.value)} style={{ flex: 1 }} />
+                      <select className="mfg-input" value={mfgForm.acm_rpm_unit} onChange={(e) => setMfgField("acm_rpm_unit", e.target.value)} style={{ flex: "0 0 76px" }}>
+                        {SPEED_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+                      </select>
+                    </div>
                   </div>
                   <div className="mfg-field">
-                    <label className="mfg-label">Pulveriser-RPM</label>
-                    <input className="mfg-input" placeholder="e.g. Full / 1500" value={mfgForm.classifier_rpm} onChange={(e) => setMfgField("classifier_rpm", e.target.value)} />
+                    <label className="mfg-label">Pulveriser Speed</label>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <input autoComplete="off" className="mfg-input" placeholder="e.g. Full / 1500" value={mfgForm.classifier_rpm} onChange={(e) => setMfgField("classifier_rpm", e.target.value)} style={{ flex: 1 }} />
+                      <select className="mfg-input" value={mfgForm.classifier_rpm_unit} onChange={(e) => setMfgField("classifier_rpm_unit", e.target.value)} style={{ flex: "0 0 76px" }}>
+                        {SPEED_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+                      </select>
+                    </div>
                   </div>
                   <div className="mfg-field">
-                    <label className="mfg-label">Blower-RPM</label>
-                    <input className="mfg-input" type="number" min="1" placeholder="e.g. 1050" value={mfgForm.blower_rpm} onChange={(e) => setMfgField("blower_rpm", e.target.value)} />
+                    <label className="mfg-label">Blower Speed</label>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <input autoComplete="off" className="mfg-input" type="number" min="1" placeholder="e.g. 1050" value={mfgForm.blower_rpm} onChange={(e) => setMfgField("blower_rpm", e.target.value)} style={{ flex: 1 }} />
+                      <select className="mfg-input" value={mfgForm.blower_rpm_unit} onChange={(e) => setMfgField("blower_rpm_unit", e.target.value)} style={{ flex: "0 0 76px" }}>
+                        {SPEED_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+                      </select>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1255,7 +1581,7 @@ function ProductionPage() {
                                 allowCustom
                               />
                             </td>
-                            <td><input className="mfg-cell-input" value={row.grade}    placeholder="Grade"    onChange={(e) => setMaterialRow(key, i, "grade",    e.target.value)} /></td>
+                            <td><input className="mfg-cell-input" autoComplete="off" value={row.grade}    placeholder="Grade"    onChange={(e) => setMaterialRow(key, i, "grade",    e.target.value)} /></td>
                             <td>
                               <SearchableSelect
                                 options={(batchOptionsByItem[row.name] || []).map((batch) => ({
@@ -1269,7 +1595,7 @@ function ProductionPage() {
                                 allowCustom
                               />
                             </td>
-                            <td><input className="mfg-cell-input mfg-cell-qty" type="number" min="0" step="0.1" value={row.qty} placeholder="0" onChange={(e) => setMaterialRow(key, i, "qty", e.target.value)} /></td>
+                            <td><input autoComplete="off" className="mfg-cell-input mfg-cell-qty" type="number" min="0" step="0.1" value={row.qty} placeholder="0" onChange={(e) => setMaterialRow(key, i, "qty", e.target.value)} /></td>
                             <td>
                               <SearchableSelect
                                 options={[{ value: "A", label: "A-Shift" }, { value: "B", label: "B-Shift" }, { value: "C", label: "C-Shift" }]}
@@ -1278,7 +1604,7 @@ function ProductionPage() {
                                 placeholder="Shift"
                               />
                             </td>
-                            <td><input className="mfg-cell-input" value={row.remark}   placeholder="Remark"   onChange={(e) => setMaterialRow(key, i, "remark",   e.target.value)} /></td>
+                            <td><input className="mfg-cell-input" autoComplete="off" value={row.remark}   placeholder="Remark"   onChange={(e) => setMaterialRow(key, i, "remark",   e.target.value)} /></td>
                             <td className="mfg-td-del">
                               {mfgForm[key].length > 1 && (
                                 <button type="button" className="mfg-del-btn" onClick={() => removeMaterialRow(key, i)} aria-label="Remove">&#10005;</button>
@@ -1317,7 +1643,7 @@ function ProductionPage() {
 
       {/* Step 2 – Process Feeding Record Modal */}
       {mfgOrderRecord && pfrForm && mfgStep === "pfr" && (
-        <div className="mfg-overlay">
+        <div className="mfg-overlay print-root">
           <div className="mfg-modal">
             <div className="mfg-header pfr-header">
               <div className="mfg-header-left">
@@ -1325,7 +1651,12 @@ function ProductionPage() {
                 <h3 className="mfg-title">{mfgOrderRecord.order?.product || "Product"}</h3>
                 <p className="mfg-subtitle">{mfgOrderRecord.order?.clientName} &mdash; Batch: {mfgForm.batch_no || "—"}</p>
               </div>
-              <button className="mfg-close-btn" onClick={closeAll} disabled={saving} aria-label="Close">&#10005;</button>
+              <div className="mfg-header-actions">
+                <button type="button" className="mfg-print-btn" onClick={() => printSheet()}>
+                  Print
+                </button>
+                <button className="mfg-close-btn" onClick={closeAll} disabled={saving} aria-label="Close">&#10005;</button>
+              </div>
             </div>
 
             <div className="mfg-summary">
@@ -1365,9 +1696,9 @@ function ProductionPage() {
                     <tbody>
                       {pfrForm.equipment.map((row, i) => (
                         <tr key={i}>
-                          <td><input className="mfg-cell-input" value={row.name}     placeholder="Equipment name" onChange={(e) => setEquipRow(i, "name",     e.target.value)} /></td>
-                          <td><input className="mfg-cell-input" value={row.equipId}  placeholder="NS/SSR/01"     onChange={(e) => setEquipRow(i, "equipId",  e.target.value)} /></td>
-                          <td><input className="mfg-cell-input" value={row.capacity} placeholder="e.g. 2kl"     onChange={(e) => setEquipRow(i, "capacity", e.target.value)} /></td>
+                          <td><input className="mfg-cell-input" autoComplete="off" value={row.name}     placeholder="Equipment name" onChange={(e) => setEquipRow(i, "name",     e.target.value)} /></td>
+                          <td><input className="mfg-cell-input" autoComplete="off" value={row.equipId}  placeholder="NS/SSR/01"     onChange={(e) => setEquipRow(i, "equipId",  e.target.value)} /></td>
+                          <td><input className="mfg-cell-input" autoComplete="off" value={row.capacity} placeholder="e.g. 2kl"     onChange={(e) => setEquipRow(i, "capacity", e.target.value)} /></td>
                           <td className="mfg-td-del">
                             {pfrForm.equipment.length > 1 && (
                               <button type="button" className="mfg-del-btn" onClick={() => removeEquipRow(i)} aria-label="Remove">&#10005;</button>
@@ -1402,8 +1733,8 @@ function ProductionPage() {
                     <tbody>
                       {pfrForm.processParams.map((row, i) => (
                         <tr key={i}>
-                          <td><input className="mfg-cell-input" value={row.parameter}  placeholder="Parameter"      onChange={(e) => setParamRow(i, "parameter",  e.target.value)} /></td>
-                          <td><input className="mfg-cell-input" value={row.range}      placeholder="e.g. 70-120°C" onChange={(e) => setParamRow(i, "range",      e.target.value)} /></td>
+                          <td><input className="mfg-cell-input" autoComplete="off" value={row.parameter}  placeholder="Parameter"      onChange={(e) => setParamRow(i, "parameter",  e.target.value)} /></td>
+                          <td><input className="mfg-cell-input" autoComplete="off" value={row.range}      placeholder="e.g. 70-120°C" onChange={(e) => setParamRow(i, "range",      e.target.value)} /></td>
                           <td>
                             <SearchableSelect
                               options={supervisorOptions}
@@ -1422,7 +1753,7 @@ function ProductionPage() {
                               allowCustom
                             />
                           </td>
-                          <td><input className="mfg-cell-input" value={row.remark}     placeholder="Remark"         onChange={(e) => setParamRow(i, "remark",     e.target.value)} /></td>
+                          <td><input className="mfg-cell-input" autoComplete="off" value={row.remark}     placeholder="Remark"         onChange={(e) => setParamRow(i, "remark",     e.target.value)} /></td>
                           <td className="mfg-td-del">
                             {pfrForm.processParams.length > 1 && (
                               <button type="button" className="mfg-del-btn" onClick={() => removeParamRow(i)} aria-label="Remove">&#10005;</button>
@@ -1449,7 +1780,7 @@ function ProductionPage() {
       )}
       {/* Manufacturing Operation Log Modal */}
       {opsRecord && opsLogs && (
-        <div className="mfg-overlay">
+        <div className="mfg-overlay print-root">
           <div className="mfg-modal ops-modal">
             <div className="mfg-header ops-header">
               <div className="mfg-header-left">
@@ -1494,14 +1825,14 @@ function ProductionPage() {
                     <tbody>
                       {opsLogs.map((row, i) => (
                         <tr key={i}>
-                          <td><input className="mfg-cell-input ops-input-sm" value={row.lotNo}          placeholder={String(i + 1)}  onChange={(e) => setOpsRow(i, "lotNo",          e.target.value)} /></td>
-                          <td><input className="mfg-cell-input" value={row.date}            placeholder="DD/MM/YY"       onChange={(e) => setOpsRow(i, "date",            e.target.value)} /></td>
-                          <td><input className="mfg-cell-input" value={row.material1Qty}  placeholder="800"             onChange={(e) => setOpsRow(i, "material1Qty",   e.target.value)} /></td>
-                          <td><input className="mfg-cell-input" value={row.material2Qty}  placeholder="114"             onChange={(e) => setOpsRow(i, "material2Qty",   e.target.value)} /></td>
-                          <td><input className="mfg-cell-input" value={row.initialTemp}    placeholder="90°C / 12:00"    onChange={(e) => setOpsRow(i, "initialTemp",    e.target.value)} /></td>
-                          <td><input className="mfg-cell-input" value={row.reactionTemp}   placeholder="93°C / 13:30"    onChange={(e) => setOpsRow(i, "reactionTemp",   e.target.value)} /></td>
-                          <td><input className="mfg-cell-input" value={row.chopperTemp}    placeholder="91°C"            onChange={(e) => setOpsRow(i, "chopperTemp",    e.target.value)} /></td>
-                          <td><input className="mfg-cell-input" value={row.completionTemp} placeholder="99°C"            onChange={(e) => setOpsRow(i, "completionTemp", e.target.value)} /></td>
+                          <td><input autoComplete="off" className="mfg-cell-input ops-input-sm" value={row.lotNo}          placeholder={String(i + 1)}  onChange={(e) => setOpsRow(i, "lotNo",          e.target.value)} /></td>
+                          <td><input className="mfg-cell-input" autoComplete="off" value={row.date}            placeholder="DD/MM/YY"       onChange={(e) => setOpsRow(i, "date",            e.target.value)} /></td>
+                          <td><input className="mfg-cell-input" autoComplete="off" value={row.material1Qty}  placeholder="800"             onChange={(e) => setOpsRow(i, "material1Qty",   e.target.value)} /></td>
+                          <td><input className="mfg-cell-input" autoComplete="off" value={row.material2Qty}  placeholder="114"             onChange={(e) => setOpsRow(i, "material2Qty",   e.target.value)} /></td>
+                          <td><input className="mfg-cell-input" autoComplete="off" value={row.initialTemp}    placeholder="90°C / 12:00"    onChange={(e) => setOpsRow(i, "initialTemp",    e.target.value)} /></td>
+                          <td><input className="mfg-cell-input" autoComplete="off" value={row.reactionTemp}   placeholder="93°C / 13:30"    onChange={(e) => setOpsRow(i, "reactionTemp",   e.target.value)} /></td>
+                          <td><input className="mfg-cell-input" autoComplete="off" value={row.chopperTemp}    placeholder="91°C"            onChange={(e) => setOpsRow(i, "chopperTemp",    e.target.value)} /></td>
+                          <td><input className="mfg-cell-input" autoComplete="off" value={row.completionTemp} placeholder="99°C"            onChange={(e) => setOpsRow(i, "completionTemp", e.target.value)} /></td>
                           <td>
                             <SearchableSelect
                               options={supervisorOptions}

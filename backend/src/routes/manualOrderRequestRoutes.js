@@ -7,6 +7,7 @@ import {
 } from "../controllers/manualOrderRequestController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import { allowRoles } from "../middleware/roleMiddleware.js";
+import { requirePermission } from "../middleware/permissionMiddleware.js";
 import { validateBody } from "../middleware/validateMiddleware.js";
 import {
   createManualOrderRequestSchema,
@@ -16,10 +17,15 @@ import {
 
 const router = Router();
 
+// The "manual_orders" module permission decides who reaches this at all. Which
+// side of it you act on is business policy and stays in code: sales raises and
+// approves the request, dispatch only sets the dispatch date.
+const manualOrders = requirePermission("manual_orders");
+
 router.use(authMiddleware);
-router.get("/", allowRoles("admin", "sales", "dispatch"), getManualOrderRequests);
-router.post("/", allowRoles("admin", "sales"), validateBody(createManualOrderRequestSchema), addManualOrderRequest);
-router.put("/:id/status", allowRoles("admin", "sales"), validateBody(updateManualOrderRequestStatusSchema), updateManualOrderRequest);
-router.put("/:id/dispatch-date", allowRoles("admin", "dispatch"), validateBody(setManualOrderRequestDispatchDateSchema), setManualOrderDate);
+router.get("/", manualOrders, getManualOrderRequests);
+router.post("/", manualOrders, allowRoles("sales"), validateBody(createManualOrderRequestSchema), addManualOrderRequest);
+router.put("/:id/status", manualOrders, allowRoles("sales"), validateBody(updateManualOrderRequestStatusSchema), updateManualOrderRequest);
+router.put("/:id/dispatch-date", manualOrders, allowRoles("dispatch"), validateBody(setManualOrderRequestDispatchDateSchema), setManualOrderDate);
 
 export default router;

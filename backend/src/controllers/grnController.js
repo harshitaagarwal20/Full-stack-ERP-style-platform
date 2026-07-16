@@ -1,4 +1,4 @@
-import { createGRN, listGRNs, getGRN, confirmGRN, saveQcTestSheet } from "../services/grnService.js";
+import { rejectGRN, createGRN, listGRNs, getGRN, confirmGRN, saveQcTestSheet } from "../services/grnService.js";
 import { isMissingTableError } from "../utils/prismaListFallback.js";
 import { toPositiveIntOrThrow } from "../utils/routeParams.js";
 
@@ -47,6 +47,15 @@ export async function confirmGRNHandler(req, res, next) {
 export async function saveQcTestSheetHandler(req, res, next) {
   try {
     const grn = await saveQcTestSheet(toPositiveIntOrThrow(req.params.id, "id"), req.validatedBody, req.user);
+    return res.json(grn);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function rejectGRNHandler(req, res, next) {
+  try {
+    const grn = await rejectGRN(toPositiveIntOrThrow(req.params.id, "id"), req.validatedBody, req.user);
     return res.json(grn);
   } catch (error) {
     return next(error);

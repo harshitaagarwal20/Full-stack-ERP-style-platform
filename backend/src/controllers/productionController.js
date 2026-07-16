@@ -1,4 +1,4 @@
-import { createProduction, deleteProduction, getProductionById, listBatchSubstitutions, listProductionOrders, markProductionComplete, saveFinishedGoodsTestSheet, saveInProcessTestSheet, substituteProductionBatch, updateProduction } from "../services/productionService.js";
+import { createProduction, deleteProduction, getOrderBatchPlan, getProductionById, listBatchSubstitutions, listProductionOrders, markProductionComplete, planOrderBatches, resumeReworkBatch, saveFinishedGoodsTestSheet, saveInProcessTestSheet, splitProductionIntoBatches, substituteProductionBatch, updateProduction } from "../services/productionService.js";
 import { emptyPaginatedOrArrayFallback, isMissingTableError } from "../utils/prismaListFallback.js";
 import { toPositiveIntOrThrow } from "../utils/routeParams.js";
 
@@ -6,6 +6,38 @@ export async function addProduction(req, res, next) {
   try {
     const production = await createProduction(req.validatedBody, req.user);
     return res.status(201).json(production);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+// How much of an order is still unplanned — drives the "Add Batch" dialog so it
+// can show the remaining quantity and stop the user over-planning the order.
+export async function getBatchPlan(req, res, next) {
+  try {
+    const orderId = toPositiveIntOrThrow(req.params.orderId, "order id");
+    return res.json(await getOrderBatchPlan(orderId));
+  } catch (error) {
+    return next(error);
+  }
+}
+
+// The merged "Plan Batches" action: reshape an order's batches to a batch size.
+export async function planBatches(req, res, next) {
+  try {
+    const orderId = toPositiveIntOrThrow(req.params.orderId, "order id");
+    const plan = await planOrderBatches(orderId, req.validatedBody, req.user);
+    return res.status(200).json(plan);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function splitProduction(req, res, next) {
+  try {
+    const productionId = toPositiveIntOrThrow(req.params.id, "production id");
+    const batches = await splitProductionIntoBatches(productionId, req.validatedBody, req.user);
+    return res.status(201).json({ items: batches });
   } catch (error) {
     return next(error);
   }
@@ -65,6 +97,15 @@ export async function saveFinishedGoodsTestSheetHandler(req, res, next) {
 export async function saveInProcessTestSheetHandler(req, res, next) {
   try {
     const production = await saveInProcessTestSheet(toPositiveIntOrThrow(req.params.id, "id"), req.validatedBody, req.user);
+    return res.json(production);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function resumeReworkBatchHandler(req, res, next) {
+  try {
+    const production = await resumeReworkBatch(toPositiveIntOrThrow(req.params.id, "id"), req.user);
     return res.json(production);
   } catch (error) {
     return next(error);

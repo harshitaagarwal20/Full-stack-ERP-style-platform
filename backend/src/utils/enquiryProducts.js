@@ -5,7 +5,7 @@ function normalizeText(value) {
 function normalizeProductGradePair(item) {
   if (typeof item === "string") {
     const product = normalizeText(item);
-    return product ? { product, grade: "", quantity: "", unit_of_measurement: "" } : null;
+    return product ? { product, grade: "", quantity: "", unit_of_measurement: "", price_per_uom: "", packaging_requirement: "", remark: "" } : null;
   }
 
   if (!item || typeof item !== "object") {
@@ -19,7 +19,10 @@ function normalizeProductGradePair(item) {
     product,
     grade: normalizeText(item.grade),
     quantity: String(item.quantity ?? "").trim(),
-    unit_of_measurement: normalizeText(item.unit_of_measurement ?? item.unit ?? item.measurement)
+    unit_of_measurement: normalizeText(item.unit_of_measurement ?? item.unit ?? item.measurement),
+    price_per_uom: String(item.price_per_uom ?? item.pricePerUom ?? "").trim(),
+    packaging_requirement: normalizeText(item.packaging_requirement ?? item.packagingRequirement ?? item.packaging_req ?? item.packagingReq),
+    remark: normalizeText(item.remark ?? item.remarks ?? item.note ?? item.notes)
   };
 }
 
@@ -57,6 +60,7 @@ export function formatEnquiryProducts(products, fallback = "") {
         if (item.quantity) {
           pieces.push(item.unit_of_measurement ? `${item.quantity} ${item.unit_of_measurement}` : item.quantity);
         }
+        if (item.packaging_requirement) pieces.push(`Packaging: ${item.packaging_requirement}`);
         return pieces.join(" - ");
       })
       .join(", ");
@@ -71,6 +75,7 @@ export function formatEnquiryProducts(products, fallback = "") {
         if (item.quantity) {
           pieces.push(item.unit_of_measurement ? `${item.quantity} ${item.unit_of_measurement}` : item.quantity);
         }
+        if (item.packaging_requirement) pieces.push(`Packaging: ${item.packaging_requirement}`);
         return pieces.join(" - ");
       })
       .join(", ");
@@ -80,10 +85,16 @@ export function formatEnquiryProducts(products, fallback = "") {
 }
 
 export function getPrimaryEnquiryProduct(enquiry) {
-  const products = normalizeEnquiryProductRows(enquiry?.products);
-  if (products.length > 0) {
-    return products[0].product;
-  }
+  const primary = getPrimaryEnquiryProductRow(enquiry);
+  if (primary?.product) return primary.product;
 
   return normalizeEnquiryProducts(enquiry?.product)[0] || normalizeText(enquiry?.product);
+}
+
+export function getPrimaryEnquiryProductRow(enquiry) {
+  const products = normalizeEnquiryProductRows(enquiry?.products);
+  if (products.length > 0) return products[0];
+
+  const product = normalizeEnquiryProducts(enquiry?.product)[0] || normalizeText(enquiry?.product);
+  return product ? { product, grade: "", quantity: "", unit_of_measurement: "", packaging_requirement: "", remark: "" } : null;
 }

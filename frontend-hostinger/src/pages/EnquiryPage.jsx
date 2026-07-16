@@ -7,12 +7,15 @@ import { useAuth } from "../context/AuthContext";
 import useMasterData from "../hooks/useMasterData";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { logApiError } from "../utils/apiError";
+import { fetchAllPages, windowParams } from "../utils/listWindow";
 import { exportRowsToExcel } from "../utils/exportExcel";
-import { CURRENCY_OPTIONS, formatPriceValue } from "../utils/commerce";
+import { CURRENCY_OPTIONS, currencyForCountry, formatPriceValue } from "../utils/commerce";
 import { getDisplayEnquiryNumber } from "../utils/businessNumbers";
-import { formatEnquiryProducts, normalizeEnquiryProductRows } from "../utils/enquiryProducts";
+import { formatEnquiryProductNames, formatEnquiryProducts, normalizeEnquiryProductRows } from "../utils/enquiryProducts";
 import { SAMPLED_FOLLOW_UP_DAYS, buildFollowUpMessage, getFollowUpEnquiries } from "../utils/followUps";
 import SearchableSelect from "../components/common/SearchableSelect";
+import MonthFilter from "../components/common/MonthFilter";
+import { minEntryDateFor } from "../utils/dateRules";
 
 function prettyLabel(value) {
   return String(value || "")
@@ -75,7 +78,7 @@ const STAGE_OPTIONS = [
 ];
 
 function createEmptyProductRow() {
-  return { product: "", grade: "", quantity: "", unit_of_measurement: "", price_per_uom: "" };
+  return { product: "", grade: "", quantity: "", unit_of_measurement: "", price_per_uom: "", packaging_requirement: "", remark: "" };
 }
 
 function getEnquiryProducts(enquiry) {
@@ -89,7 +92,9 @@ function getEnquiryProductGrades(enquiry) {
     .join(", ");
 }
 
-const UNIT_OPTIONS = ["MT", "KG"];
+// Fallback only — units come from the `units` master (admin-maintained on the
+// Master Data screen). This is used just until master data loads.
+const UNIT_OPTIONS_FALLBACK = ["KG", "MT", "LTR"];
 const INCO_TERMS = [
   { value: "EXW", label: "EXW (Ex Works)" },
   { value: "FCA", label: "FCA (Free Carrier)" },
@@ -126,6 +131,8 @@ const COUNTRY_OPTIONS_INTL = [
   "Uzbekistan", "Vanuatu", "Vatican City", "Venezuela", "Vietnam", "Yemen", "Zambia", "Zimbabwe"
 ];
 
+const COUNTRY_SELECT_OPTIONS = COUNTRY_OPTIONS_INTL.map((country) => ({ value: country, label: country }));
+
 function EnquiryPage() {
   const PAGE_SIZE = 10;
   const { user } = useAuth();
@@ -140,6 +147,7 @@ function EnquiryPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [stageFilter, setStageFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("");
+  const [monthFilter, setMonthFilter] = useState("");
   const [assignedFilter, setAssignedFilter] = useState("");
   const isMobile = useIsMobile();
   useEffect(() => { if (isMobile) { setDateFilter(""); } }, [isMobile]);
@@ -149,6 +157,9 @@ function EnquiryPage() {
   const [totalRecords, setTotalRecords] = useState(0);
   const [enquiries, setEnquiries] = useState([]);
   const [form, setForm] = useState(createEmptyForm());
+  // Structured version of the last-transaction summary, so it can be rendered as
+  // a readable panel rather than a wall of pipe-separated text in a textarea.
+  const [lastTxn, setLastTxn] = useState(null);
   const canManageEnquiries = user?.role === "admin" || user?.role === "sales";
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -172,6 +183,7 @@ function EnquiryPage() {
   useEffect(() => {
     const company = String(form.company_name || "").trim();
     if (form.customer_type !== "Old" || !company) {
+      setLastTxn(null);
       return;
     }
 
@@ -186,28 +198,39 @@ function EnquiryPage() {
         if (cancelled) return;
 
         if (!prior.length) {
+          setLastTxn({ empty: true });
           setForm((p) => ({ ...p, last_transaction: "No previous transaction found for this customer." }));
           return;
         }
 
         const latest = prior[0]; // list is returned newest-first
         const rows = normalizeEnquiryProductRows(latest.products ?? latest.product);
-        const productLines = rows.length
-          ? rows.map((row) => {
-              const parts = [`Product: ${row.product || "-"}`];
-              if (row.grade) parts.push(`Grade: ${row.grade}`);
-              if (row.unit_of_measurement) parts.push(`UOM: ${row.unit_of_measurement}`);
-              if (row.quantity) parts.push(`Qty: ${row.quantity}`);
-              return parts.join(" | ");
-            })
-          : [`Product: ${latest.product || "-"}`];
+        const productRows = rows.length ? rows : [{ product: latest.product || "-" }];
+
+        // The panel renders the structured rows; the string is what gets saved
+        // on the enquiry, so both have to stay in step.
+        const productLines = productRows.map((row) => {
+          const parts = [`Product: ${row.product || "-"}`];
+          if (row.grade) parts.push(`Grade: ${row.grade}`);
+          if (row.unit_of_measurement) parts.push(`UOM: ${row.unit_of_measurement}`);
+          if (row.quantity) parts.push(`Qty: ${row.quantity}`);
+          if (row.packaging_requirement) parts.push(`Packaging: ${row.packaging_requirement}`);
+          return parts.join(" | ");
+        });
         const summary = [
           `From ${getDisplayEnquiryNumber(latest)} (${formatDate(latest.enquiryDate || latest.createdAt)}):`,
           ...productLines
         ].join("\n");
+
+        setLastTxn({
+          number: getDisplayEnquiryNumber(latest),
+          date: formatDate(latest.enquiryDate || latest.createdAt),
+          rows: productRows
+        });
         setForm((p) => ({ ...p, last_transaction: summary }));
       } catch {
         if (!cancelled) {
+          setLastTxn({ error: true });
           setForm((p) => ({ ...p, last_transaction: "Could not load previous transaction details." }));
         }
       }
@@ -221,6 +244,13 @@ function EnquiryPage() {
   const followUps = useMemo(() => getFollowUpEnquiries(enquiries), [enquiries]);
 
   const tableWrapRef = useRef(null);
+  // The admin-maintained `units` master drives the unit dropdown on each
+  // product row.
+  const unitOptions = useMemo(() => {
+    const rows = Array.isArray(masterData.units) ? masterData.units : [];
+    const values = rows.map((row) => row.value).filter(Boolean);
+    return values.length ? values : UNIT_OPTIONS_FALLBACK;
+  }, [masterData.units]);
   const statusOptions = useMemo(
     () => [
       { value: "all", label: "All Status" },
@@ -231,10 +261,16 @@ function EnquiryPage() {
     ],
     [masterData.enquiryStatuses]
   );
-  const companyOptions = useMemo(
-    () => (Array.isArray(masterData.companyNames) ? masterData.companyNames : []),
-    [masterData.companyNames]
-  );
+  // An "Old" customer must be picked from the customer master, not typed — the
+  // merged companyNames list also carries names typed into past enquiries, which
+  // is exactly what we do not want to offer as an existing customer.
+  const customerMasterOptions = useMemo(() => {
+    const rows = Array.isArray(masterData.customerMaster) ? masterData.customerMaster : [];
+    return rows
+      .map((row) => String(row.customerName || "").trim())
+      .filter(Boolean)
+      .map((name) => ({ value: name, label: name }));
+  }, [masterData.customerMaster]);
   const fetchEnquiries = async () => {
     setLoading(true);
     try {
@@ -245,6 +281,9 @@ function EnquiryPage() {
           stage: stageFilter === "all" ? undefined : stageFilter,
           assigned: assignedFilter || undefined,
           date: dateFilter || undefined,
+          month: monthFilter || undefined,
+          // Mobile loads only the last 45 days; desktop sees everything.
+          ...windowParams(isMobile),
           page: currentPage,
           limit: PAGE_SIZE
         }
@@ -263,7 +302,7 @@ function EnquiryPage() {
 
   useEffect(() => {
     fetchEnquiries();
-  }, [query, statusFilter, stageFilter, assignedFilter, dateFilter, currentPage]);
+  }, [query, statusFilter, stageFilter, assignedFilter, dateFilter, monthFilter, currentPage]);
 
   const pendingCount = useMemo(
     () => enquiries.filter((item) => item.status === "PENDING").length,
@@ -279,7 +318,7 @@ function EnquiryPage() {
       if (key === "id") return Number(item.id || 0);
       if (key === "enquiryDate") return new Date(item.enquiryDate || 0).getTime();
       if (key === "companyName") return String(item.companyName || "").toLowerCase();
-      if (key === "product") return formatEnquiryProducts(item).toLowerCase();
+      if (key === "product") return formatEnquiryProductNames(item).toLowerCase();
       if (key === "grade") return getEnquiryProductGrades(item).toLowerCase();
       if (key === "quantity") return Number(item.quantity || 0);
       if (key === "expectedTimeline") return new Date(item.expectedTimeline || 0).getTime();
@@ -319,6 +358,25 @@ function EnquiryPage() {
     setCurrentPage(1);
   };
 
+  // Picking a country suggests the currency that country's business is priced
+  // in. Only a suggestion: sales can still change it, and once they have, a
+  // later country change does not overwrite their choice.
+  const onCountryChange = (country) => {
+    setForm((prev) => {
+      // No country picked yet means the currency is still the form's INR
+      // default, not a decision — an international enquiry should not silently
+      // stay in rupees just because that is what the field opened with.
+      const untouched =
+        !prev.currency || !prev.country || prev.currency === currencyForCountry(prev.country);
+
+      return {
+        ...prev,
+        country,
+        currency: untouched ? currencyForCountry(country) : prev.currency
+      };
+    });
+  };
+
   const resetForm = () => {
     // Default the assignee to whoever is filling the form (the logged-in user),
     // since that's the common case; it stays editable via the dropdown.
@@ -333,7 +391,10 @@ function EnquiryPage() {
         product: String(row.product || "").trim(),
         grade: String(row.grade || "").trim(),
         quantity: Number(row.quantity || 0),
-        unit_of_measurement: String(row.unit_of_measurement || "").trim()
+        unit_of_measurement: String(row.unit_of_measurement || "").trim(),
+        price_per_uom: String(row.price_per_uom ?? "").trim(),
+        packaging_requirement: String(row.packaging_requirement || "").trim(),
+        remark: String(row.remark || "").trim()
       }))
       .filter((row) => row.product);
 
@@ -413,17 +474,16 @@ function EnquiryPage() {
   const exportEnquiries = async () => {
     let exportSource = sortedEnquiries;
     try {
-      const { data } = await api.get("/enquiries", {
-        params: {
-          q: query || undefined,
-          status: statusFilter === "all" ? undefined : statusFilter,
-          assigned: assignedFilter || undefined,
-          date: dateFilter || undefined,
-          page: 1,
-          limit: 0
-        }
+      // Paged, not `limit: 0`. Asking the API for every row built one huge
+      // response — fine at 30 rows, fatal on a phone at 10,000.
+      exportSource = await fetchAllPages("/enquiries", {
+        q: query || undefined,
+        status: statusFilter === "all" ? undefined : statusFilter,
+        assigned: assignedFilter || undefined,
+        date: dateFilter || undefined,
+        month: monthFilter || undefined,
+        ...windowParams(isMobile)
       });
-      exportSource = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : sortedEnquiries;
     } catch {
       // Fall back to loaded page.
     }
@@ -453,8 +513,8 @@ function EnquiryPage() {
         enquiryNumber: getDisplayEnquiryNumber(item),
         enquiryDate: formatDate(item.enquiryDate),
         modeOfEnquiry: item.modeOfEnquiry || "-",
-        product: formatEnquiryProducts(item) || "-",
-        products: formatEnquiryProducts(item) || "-",
+        product: formatEnquiryProductNames(item) || "-",
+        products: formatEnquiryProductNames(item) || "-",
         grade: getEnquiryProductGrades(item) || "-",
         price: formatPriceValue(item.price),
         currency: item.currency || "-",
@@ -544,10 +604,9 @@ function EnquiryPage() {
       </section>
 
       <section className="enquiry-card">
-        <div className="enquiry-search-wrap">
+        <div className="unified-search-box">
           <SearchIcon />
-          <input
-            className="enquiry-search-input"
+          <input autoComplete="off"
             placeholder="Search by company, product, or person"
             value={searchText}
             onChange={(event) => setSearchText(event.target.value)}
@@ -557,8 +616,7 @@ function EnquiryPage() {
           />
         </div>
 
-        <div className="enquiry-toolbar">
-          <div className="enquiry-filter-grid">
+        <div className="unified-filter-row">
             <SearchableSelect
               options={statusOptions}
               value={statusFilter}
@@ -571,18 +629,23 @@ function EnquiryPage() {
               onChange={(value) => { setStageFilter(value); setCurrentPage(1); }}
               placeholder="All Stages"
             />
-            {!isMobile && <input type="date" value={dateFilter} onChange={(event) => { setDateFilter(event.target.value); setCurrentPage(1); }} />}
-            <input
+            {!isMobile && <input autoComplete="off" type="date" value={dateFilter} onChange={(event) => { setDateFilter(event.target.value); setCurrentPage(1); }} />}
+            <MonthFilter
+              title="Filter by month raised"
+              value={monthFilter}
+              onChange={(month) => { setMonthFilter(month); setCurrentPage(1); }}
+            />
+            <input autoComplete="off"
               type="text"
               placeholder="Filter by assigned"
               value={assignedFilter}
               onChange={(event) => { setAssignedFilter(event.target.value); setCurrentPage(1); }}
             />
-          </div>
-          <div className="enquiry-toolbar-actions">
-            <button className="enquiry-btn-primary ghost" onClick={onSearchSubmit}>Search</button>
-            <button className="enquiry-btn-secondary" onClick={exportEnquiries}>Export to Excel</button>
-          </div>
+        </div>
+
+        <div className="unified-actions">
+          <button className="enquiry-btn-primary ghost" onClick={onSearchSubmit}>Search</button>
+          <button className="enquiry-btn-secondary" onClick={exportEnquiries}>Export to Excel</button>
         </div>
 
         {loading ? (
@@ -629,7 +692,7 @@ function EnquiryPage() {
                       <td>{formatDate(enquiry.enquiryDate)}</td>
                       <td>{enquiry.modeOfEnquiry || "-"}</td>
                       <td>{enquiry.companyName}</td>
-                      <td>{formatEnquiryProducts(enquiry) || "-"}</td>
+                      <td>{formatEnquiryProductNames(enquiry) || "-"}</td>
                       <td>{getEnquiryProductGrades(enquiry) || "-"}</td>
                       <td>{enquiry.quantity}</td>
                       <td>{formatPriceValue(enquiry.price)}</td>
@@ -729,11 +792,21 @@ function EnquiryPage() {
             <form className="enquiry-form-grid" onSubmit={submit}>
               <div>
                 <label>Enquiry Date*</label>
-                <input type="date" value={form.enquiry_date} onChange={(e) => setForm((p) => ({ ...p, enquiry_date: e.target.value }))} required />
+                <input autoComplete="off" type="date" min={minEntryDateFor(form.enquiry_date)} value={form.enquiry_date} onChange={(e) => setForm((p) => ({ ...p, enquiry_date: e.target.value }))} required />
               </div>
               <div>
                 <label>Customer Type*</label>
-                <select value={form.customer_type} onChange={(e) => setForm((p) => ({ ...p, customer_type: e.target.value }))} required>
+                <select
+                  value={form.customer_type}
+                  onChange={(e) => setForm((p) => ({
+                    ...p,
+                    customer_type: e.target.value,
+                    // The name means different things either side of this switch
+                    // (a master record vs. free text), so never carry it across.
+                    company_name: ""
+                  }))}
+                  required
+                >
                   <option value="">Select customer type</option>
                   <option value="Old">Old Customer</option>
                   <option value="New">New Customer</option>
@@ -763,13 +836,24 @@ function EnquiryPage() {
               </div>
               <div>
                 <label>Company Name*</label>
-                <SearchableSelect
-                  options={companyOptions}
-                  value={form.company_name}
-                  onChange={(value) => setForm((p) => ({ ...p, company_name: value }))}
-                  placeholder="Search or select company"
-                  allowCustom
-                />
+                {form.customer_type === "Old" ? (
+                  <SearchableSelect
+                    options={customerMasterOptions}
+                    value={form.company_name}
+                    onChange={(value) => setForm((p) => ({ ...p, company_name: value }))}
+                    placeholder="Select existing customer"
+                  />
+                ) : (
+                  <input
+                    autoComplete="off"
+                    type="text"
+                    value={form.company_name}
+                    onChange={(e) => setForm((p) => ({ ...p, company_name: e.target.value }))}
+                    placeholder={form.customer_type ? "Enter customer name" : "Select customer type first"}
+                    disabled={!form.customer_type}
+                    required
+                  />
+                )}
               </div>
               {form.enquiry_type === "International" && (
                 <>
@@ -784,16 +868,16 @@ function EnquiryPage() {
                   </div>
                   <div>
                     <label>Country*</label>
-                    <select value={form.country} onChange={(e) => setForm((p) => ({ ...p, country: e.target.value }))} required>
-                      <option value="">Select country</option>
-                      {COUNTRY_OPTIONS_INTL.map((country) => (
-                        <option key={country} value={country}>{country}</option>
-                      ))}
-                    </select>
+                    <SearchableSelect
+                      options={COUNTRY_SELECT_OPTIONS}
+                      value={form.country}
+                      onChange={onCountryChange}
+                      placeholder="Search country"
+                    />
                   </div>
                   <div>
                     <label>Port*</label>
-                    <input
+                    <input autoComplete="off"
                       type="text"
                       value={form.port}
                       onChange={(e) => setForm((p) => ({ ...p, port: e.target.value }))}
@@ -806,12 +890,47 @@ function EnquiryPage() {
               {form.customer_type === "Old" && (
                 <div className="full-row">
                   <label>Last Transaction Details</label>
-                  <textarea
-                    rows="4"
-                    value={form.last_transaction}
-                    readOnly
-                    placeholder="Auto-filled from this customer's most recent enquiry."
-                  />
+
+                  {!lastTxn && (
+                    <div className="last-txn last-txn-muted">
+                      Select a company to see what they last enquired for.
+                    </div>
+                  )}
+
+                  {lastTxn?.empty && (
+                    <div className="last-txn last-txn-muted">
+                      No previous transaction found for this customer.
+                    </div>
+                  )}
+
+                  {lastTxn?.error && (
+                    <div className="last-txn last-txn-error">
+                      Could not load previous transaction details.
+                    </div>
+                  )}
+
+                  {lastTxn?.rows && (
+                    <div className="last-txn">
+                      <div className="last-txn-head">
+                        <span className="last-txn-ref">{lastTxn.number}</span>
+                        <span className="last-txn-date">{lastTxn.date}</span>
+                      </div>
+                      {lastTxn.rows.map((row, index) => (
+                        <div key={index} className="last-txn-row">
+                          <span className="last-txn-product">{row.product || "-"}</span>
+                          <div className="last-txn-facts">
+                            {row.grade && <span><em>Grade</em>{row.grade}</span>}
+                            {row.quantity && (
+                              <span><em>Qty</em>{row.quantity}{row.unit_of_measurement ? ` ${row.unit_of_measurement}` : ""}</span>
+                            )}
+                            {row.packaging_requirement && <span><em>Packaging</em>{row.packaging_requirement}</span>}
+                            {row.remark && <span><em>Remark</em>{row.remark}</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   <small style={{ color: "#64748b" }}>
                     Auto-fetched from the customer's most recent enquiry.
                   </small>
@@ -826,6 +945,11 @@ function EnquiryPage() {
                     onChange={(value) => setForm((p) => ({ ...p, currency: value }))}
                     placeholder="Select currency"
                   />
+                  {form.country && (
+                    <small style={{ color: "#64748b" }}>
+                      Suggested from {form.country}. Change it if this sale is priced differently.
+                    </small>
+                  )}
                 </div>
               )}
               <div className="full-row">
@@ -851,7 +975,7 @@ function EnquiryPage() {
                       </div>
                       <div>
                         <label>Grade *</label>
-                        <input
+                        <input autoComplete="off"
                           type="text"
                           value={row.grade}
                           onChange={(e) =>
@@ -868,8 +992,9 @@ function EnquiryPage() {
                       </div>
                       <div>
                         <label>Quantity</label>
-                        <input
+                        <input autoComplete="off"
                           type="number"
+                          step="any"
                           min="1"
                           value={row.quantity}
                           onChange={(e) =>
@@ -886,7 +1011,7 @@ function EnquiryPage() {
                       <div>
                         <label>Unit of Measurement</label>
                         <SearchableSelect
-                          options={UNIT_OPTIONS.map((unit) => ({ value: unit, label: unit }))}
+                          options={unitOptions.map((unit) => ({ value: unit, label: unit }))}
                           value={row.unit_of_measurement}
                           onChange={(value) =>
                             setForm((prev) => ({
@@ -901,7 +1026,7 @@ function EnquiryPage() {
                       </div>
                       <div>
                         <label>Price per {row.unit_of_measurement || "UOM"}</label>
-                        <input
+                        <input autoComplete="off"
                           type="number"
                           min="0"
                           step="0.01"
@@ -915,6 +1040,37 @@ function EnquiryPage() {
                             }))
                           }
                           placeholder="Enter price per UOM"
+                        />
+                      </div>
+                      <div>
+                        <label>Packaging Req</label>
+                        <input autoComplete="off"
+                          type="text"
+                          value={row.packaging_requirement}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              products: prev.products.map((item, rowIndex) =>
+                                rowIndex === index ? { ...item, packaging_requirement: e.target.value } : item
+                              )
+                            }))
+                          }
+                        />
+                      </div>
+                      <div>
+                        <label>Remark</label>
+                        <input autoComplete="off"
+                          type="text"
+                          value={row.remark}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              products: prev.products.map((item, rowIndex) =>
+                                rowIndex === index ? { ...item, remark: e.target.value } : item
+                              )
+                            }))
+                          }
+                          placeholder="Remark for this product"
                         />
                       </div>
                       <div className="enquiry-product-row-actions">
@@ -982,11 +1138,7 @@ function EnquiryPage() {
 
               <div>
                 <label>Expected Timeline*</label>
-                <input type="date" value={form.expected_timeline} onChange={(e) => setForm((p) => ({ ...p, expected_timeline: e.target.value }))} required />
-              </div>
-              <div>
-                <label>Status</label>
-                <input value={editingEnquiryId ? (enquiries.find((item) => item.id === editingEnquiryId)?.status || "PENDING") : "PENDING"} disabled />
+                <input autoComplete="off" type="date" value={form.expected_timeline} onChange={(e) => setForm((p) => ({ ...p, expected_timeline: e.target.value }))} required />
               </div>
               <div className="full-row">
                 <label>Remarks</label>

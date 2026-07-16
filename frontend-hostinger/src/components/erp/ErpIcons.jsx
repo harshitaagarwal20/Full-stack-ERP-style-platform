@@ -45,10 +45,6 @@ export function UsersIcon() {
   return <IconBase><circle cx="9" cy="8" r="3" /><circle cx="16.5" cy="9.5" r="2.5" /><path d="M3.5 19c.9-2.8 3-4 5.5-4s4.6 1.2 5.5 4" /><path d="M13 18c.5-1.7 1.8-2.7 3.9-2.7 1.3 0 2.6.4 3.5 1.6" /></IconBase>;
 }
 
-export function BellIcon() {
-  return <IconBase><path d="M6 9a6 6 0 1 1 12 0v4l2 2H4l2-2z" /><path d="M10 18a2 2 0 0 0 4 0" /></IconBase>;
-}
-
 export function MenuIcon() {
   return <IconBase><path d="M4 7h16M4 12h16M4 17h16" /></IconBase>;
 }
@@ -77,10 +73,6 @@ export function TrashIcon() {
   return <IconBase><path d="M4 7h16" /><path d="M9 7V5h6v2" /><path d="M7 7l1 13h8l1-13" /><path d="M10 11v6M14 11v6" /></IconBase>;
 }
 
-export function PlusIcon() {
-  return <IconBase><path d="M12 5v14M5 12h14" /></IconBase>;
-}
-
 export function ClipboardIcon() {
   return <IconBase><rect x="6" y="4" width="12" height="16" rx="2" /><path d="M9 4.5h6" /><path d="M9 10h6M9 14h6" /></IconBase>;
 }
@@ -91,10 +83,6 @@ export function HourglassIcon() {
 
 export function BoxesIcon() {
   return <IconBase><path d="M3 8 12 3l9 5-9 5-9-5Z" /><path d="M3 8v8l9 5 9-5V8" /><path d="M12 13v8" /></IconBase>;
-}
-
-export function CircleCheckIcon() {
-  return <IconBase><circle cx="12" cy="12" r="9" /><path d="m8.5 12 2.4 2.4L15.8 9.5" /></IconBase>;
 }
 
 export function PrinterIcon() {

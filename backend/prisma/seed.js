@@ -10,25 +10,20 @@ const SEED_USERS = [
   { name: "Dispatch User", email: "dispatch@gmail.com", password: "123456", role: "dispatch" }
 ];
 
-const AUDIT_TABLE_SQL = `
-  CREATE TABLE IF NOT EXISTS \`AuditLog\` (
-    \`id\` INT NOT NULL AUTO_INCREMENT,
-    \`action\` VARCHAR(191) NOT NULL,
-    \`entityType\` VARCHAR(191) NOT NULL,
-    \`entityId\` INT NULL,
-    \`actorId\` INT NULL,
-    \`actorName\` VARCHAR(191) NULL,
-    \`actorRole\` VARCHAR(32) NULL,
-    \`oldValue\` LONGTEXT NULL,
-    \`newValue\` LONGTEXT NULL,
-    \`note\` VARCHAR(191) NULL,
-    \`createdAt\` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    PRIMARY KEY (\`id\`)
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-`;
+// Wiping every enquiry/order/production/dispatch is a
+// development-only action, so it must be asked for explicitly (`--reset`) and
+// can never run against a production database. It used to run unconditionally
+// — and `db:deploy` called it — which meant a routine deploy destroyed live
+// operational data.
+const shouldReset = process.argv.includes("--reset");
+const isProduction = process.env.NODE_ENV === "production";
 
-async function main() {
-  await prisma.$executeRawUnsafe(AUDIT_TABLE_SQL);
+async function resetOperationalData() {
+  if (isProduction) {
+    throw new Error(
+      "Refusing to wipe operational data: NODE_ENV=production. Run without --reset to only ensure the bootstrap users exist."
+    );
+  }
 
   await prisma.$transaction(async (tx) => {
     await tx.dispatch.deleteMany();
@@ -38,8 +33,6 @@ async function main() {
     await tx.enquiry.deleteMany();
   });
 
-  await prisma.$executeRawUnsafe("DELETE FROM `AuditLog`");
-
   await prisma.user.deleteMany({
     where: {
       email: {
@@ -48,7 +41,28 @@ async function main() {
     }
   });
 
+  console.log("Reset: legacy demo data and audit log removed.");
+}
+
+async function main() {
+
+  if (shouldReset) {
+    await resetOperationalData();
+  }
+
   for (const seedUser of SEED_USERS) {
+    const existing = await prisma.user.findUnique({
+      where: { email: seedUser.email },
+      select: { id: true }
+    });
+
+    // Never silently reset the password of an account that already exists —
+    // on a live database that would hand the bootstrap password back to
+    // anyone who knows it. Only `--reset` (dev) restores the known password.
+    if (existing && !shouldReset) {
+      continue;
+    }
+
     const hashedPassword = await bcrypt.hash(seedUser.password, 10);
 
     await prisma.user.upsert({
@@ -69,7 +83,7 @@ async function main() {
     });
   }
 
-  console.log("Legacy demo data removed. Bootstrap logins available (password 123456): " +
+  console.log("Bootstrap logins ensured (password 123456 for newly created accounts): " +
     SEED_USERS.map((u) => u.email).join(", "));
 }
 

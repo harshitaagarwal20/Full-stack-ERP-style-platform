@@ -4,6 +4,7 @@ import api from "../api/axiosClient";
 import { logApiError } from "../utils/apiError";
 import { dispatchUserMessage } from "../utils/errorMessages";
 import SearchableSelect from "../components/common/SearchableSelect";
+import { minEntryDateFor } from "../utils/dateRules";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -22,6 +23,8 @@ function GrnFormPage({ isModal = false, onClose, onSuccess }) {
   const [loadingOptions, setLoadingOptions] = useState(false);
   const [optionsError, setOptionsError] = useState(false);
 
+  const [formError, setFormError] = useState("");
+
   const [form, setForm] = useState({
     received_date:      today(),
     received_by:        "",
@@ -30,6 +33,15 @@ function GrnFormPage({ isModal = false, onClose, onSuccess }) {
     remarks:            "",
     items:              []
   });
+
+  // A receipt is only meaningful against what is still outstanding, so the
+  // summary strip and the over-receipt guard both work off this.
+  const receiving = form.items.filter((item) => Number(item.quantity_received) > 0);
+  const receivingQty = receiving.reduce((sum, item) => sum + Number(item.quantity_received || 0), 0);
+  const overReceipt = form.items.some(
+    (item) => Number(item.quantity_received || 0) > Number(item.remaining || 0)
+  );
+  const allSettled = form.items.length > 0 && form.items.every((item) => Number(item.remaining) <= 0);
 
   useEffect(() => {
     if (!poIdParam) {
@@ -96,21 +108,40 @@ function GrnFormPage({ isModal = false, onClose, onSuccess }) {
     else navigate(po ? `/purchase-orders/${po.id}` : "/grns");
   };
 
+  // Fill every outstanding line with what is still due — the common case when a
+  // full consignment turns up.
+  const receiveAllRemaining = () => {
+    setFormError("");
+    setForm((prev) => ({
+      ...prev,
+      items: prev.items.map((item) => ({
+        ...item,
+        quantity_received: item.remaining > 0 ? item.remaining : item.quantity_received
+      }))
+    }));
+  };
+
   const onSubmit = async (e) => {
     e.preventDefault();
     if (saving) return;
 
     if (!po) {
-      window.alert("Please select a Purchase Order.");
+      setFormError("Select a purchase order first.");
       return;
     }
 
     const receivingItems = form.items.filter((i) => Number(i.quantity_received) > 0);
     if (!receivingItems.length) {
-      window.alert("Enter a received quantity for at least one item.");
+      setFormError("Enter a received quantity for at least one item.");
       return;
     }
 
+    if (overReceipt) {
+      setFormError("A line is receiving more than is outstanding. Reduce it to the remaining quantity or less.");
+      return;
+    }
+
+    setFormError("");
     setSaving(true);
     try {
       const payload = {
@@ -148,7 +179,7 @@ function GrnFormPage({ isModal = false, onClose, onSuccess }) {
     <>
       {!poIdParam && (
         <section className="order-card">
-          <h3 style={{ margin: "0 0 14px", fontSize: 15, color: "#334155" }}>Select Purchase Order</h3>
+          <h3 className="grn-section-title">Select Purchase Order</h3>
           <div style={{ maxWidth: 480 }}>
             <label className="label">Purchase Order</label>
             <SearchableSelect
@@ -177,21 +208,43 @@ function GrnFormPage({ isModal = false, onClose, onSuccess }) {
 
       {po && (
         <form onSubmit={onSubmit}>
+          <section className="order-card grn-po-strip">
+            <div>
+              <span className="grn-po-strip-label">Purchase Order</span>
+              <span className="grn-po-strip-value">{po.poNumber}</span>
+            </div>
+            <div>
+              <span className="grn-po-strip-label">Supplier</span>
+              <span className="grn-po-strip-value">{po.supplier?.name || "-"}</span>
+            </div>
+            <div>
+              <span className="grn-po-strip-label">Status</span>
+              <span className="grn-po-strip-value">{po.status}</span>
+            </div>
+            <div>
+              <span className="grn-po-strip-label">Lines outstanding</span>
+              <span className="grn-po-strip-value">
+                {form.items.filter((item) => Number(item.remaining) > 0).length} of {form.items.length}
+              </span>
+            </div>
+          </section>
+
           <section className="order-card">
-            <h3 style={{ margin: "0 0 14px", fontSize: 15, color: "#334155" }}>Receipt Details</h3>
+            <h3 className="grn-section-title">Receipt Details</h3>
             <div className="order-form-grid">
               <div>
                 <label className="label">Received Date</label>
-                <input
+                <input autoComplete="off"
                   className="input"
                   type="date"
+                  min={minEntryDateFor(form.received_date)}
                   value={form.received_date}
                   onChange={(e) => setFormField("received_date", e.target.value)}
                 />
               </div>
               <div>
                 <label className="label">Received By</label>
-                <input
+                <input autoComplete="off"
                   className="input"
                   placeholder="Name of receiver"
                   value={form.received_by}
@@ -200,7 +253,7 @@ function GrnFormPage({ isModal = false, onClose, onSuccess }) {
               </div>
               <div>
                 <label className="label">Vehicle / Delivery Ref</label>
-                <input
+                <input autoComplete="off"
                   className="input"
                   placeholder="e.g. TN-01-AB-1234"
                   value={form.vehicle_ref}
@@ -209,7 +262,7 @@ function GrnFormPage({ isModal = false, onClose, onSuccess }) {
               </div>
               <div>
                 <label className="label">Warehouse Location</label>
-                <input
+                <input autoComplete="off"
                   className="input"
                   placeholder="e.g. Warehouse A, Bay 3"
                   value={form.warehouse_location}
@@ -231,9 +284,21 @@ function GrnFormPage({ isModal = false, onClose, onSuccess }) {
           </section>
 
           <section className="order-card">
-            <h3 style={{ margin: "0 0 14px", fontSize: 15, color: "#334155" }}>
-              Line Items ({form.items.length})
-            </h3>
+            <div className="grn-items-head">
+              <h3 className="grn-section-title">Line Items ({form.items.length})</h3>
+              {!allSettled && (
+                <button type="button" className="order-btn-secondary" onClick={receiveAllRemaining}>
+                  Receive all remaining
+                </button>
+              )}
+            </div>
+
+            {allSettled && (
+              <p className="grn-note grn-note-done">
+                Every line on this PO has been fully received. There is nothing left to receipt.
+              </p>
+            )}
+
             <div className="responsive-table-wrap">
               <table className="order-table responsive-table">
                 <thead>
@@ -251,53 +316,98 @@ function GrnFormPage({ isModal = false, onClose, onSuccess }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {form.items.map((item, index) => (
-                    <tr key={item.po_item_id}>
-                      <td data-label="">{index + 1}</td>
-                      <td data-label="Item" style={{ fontWeight: 500 }}>{item.item_id}</td>
-                      <td data-label="Category">{item.category || "-"}</td>
-                      <td data-label="Grade">{item.grade || "-"}</td>
-                      <td data-label="UOM">{item.uom || "-"}</td>
-                      <td data-label="Qty Ordered">{item.qty_ordered}</td>
-                      <td data-label="Already Received">{item.already_received}</td>
-                      <td data-label="Remaining" style={{ fontWeight: 600, color: item.remaining <= 0 ? "#16a34a" : "#0f172a" }}>
-                        {item.remaining <= 0 ? "✓ Done" : item.remaining}
-                      </td>
-                      <td data-label="Receiving Now *">
-                        <input
-                          className="input"
-                          style={{ minWidth: 80 }}
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          placeholder="0"
-                          value={item.quantity_received}
-                          onChange={(e) => setItemField(index, "quantity_received", e.target.value)}
-                        />
-                      </td>
-                      <td data-label="Item Remarks">
-                        <input
-                          className="input"
-                          style={{ minWidth: 120 }}
-                          placeholder="Remarks"
-                          value={item.remarks}
-                          onChange={(e) => setItemField(index, "remarks", e.target.value)}
-                        />
-                      </td>
-                    </tr>
-                  ))}
+                  {form.items.map((item, index) => {
+                    const settled = Number(item.remaining) <= 0;
+                    const entered = Number(item.quantity_received || 0);
+                    const exceeds = entered > Number(item.remaining || 0);
+                    const rowClass = [
+                      settled ? "grn-row-done" : "",
+                      exceeds ? "grn-row-over" : entered > 0 ? "grn-row-active" : ""
+                    ].filter(Boolean).join(" ");
+
+                    return (
+                      <tr key={item.po_item_id} className={rowClass}>
+                        <td data-label="">{index + 1}</td>
+                        <td data-label="Item" style={{ fontWeight: 600 }}>{item.item_id}</td>
+                        <td data-label="Category">{item.category || "-"}</td>
+                        <td data-label="Grade">{item.grade || "-"}</td>
+                        <td data-label="UOM">{item.uom || "-"}</td>
+                        <td data-label="Qty Ordered">{item.qty_ordered}</td>
+                        <td data-label="Already Received">{item.already_received}</td>
+                        <td data-label="Remaining">
+                          {settled
+                            ? <span className="grn-pill grn-pill-done">Fully received</span>
+                            : <span className="grn-remaining">{item.remaining} {item.uom}</span>}
+                        </td>
+                        <td data-label="Receiving Now *">
+                          <div className="grn-qty-cell">
+                            <input autoComplete="off"
+                              className={`input grn-qty-input${exceeds ? " input-error" : ""}`}
+                              type="number"
+                              min="0"
+                              max={item.remaining}
+                              step="any"
+                              placeholder="0"
+                              disabled={settled}
+                              value={item.quantity_received}
+                              onChange={(e) => { setFormError(""); setItemField(index, "quantity_received", e.target.value); }}
+                            />
+                            {!settled && entered !== Number(item.remaining) && (
+                              <button
+                                type="button"
+                                className="grn-fill-btn"
+                                onClick={() => { setFormError(""); setItemField(index, "quantity_received", item.remaining); }}
+                              >
+                                All
+                              </button>
+                            )}
+                          </div>
+                          {exceeds && (
+                            <span className="grn-cell-error">Only {item.remaining} outstanding</span>
+                          )}
+                        </td>
+                        <td data-label="Item Remarks">
+                          <input autoComplete="off"
+                            className="input"
+                            style={{ minWidth: 120 }}
+                            placeholder="Remarks"
+                            disabled={settled}
+                            value={item.remarks}
+                            onChange={(e) => setItemField(index, "remarks", e.target.value)}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           </section>
 
-          <section className="order-card order-form-actions">
-            <button type="button" className="order-btn-secondary" onClick={handleClose}>
-              Cancel
-            </button>
-            <button type="submit" className="order-btn-primary" disabled={saving}>
-              {saving ? "Saving..." : "Save GRN"}
-            </button>
+          <section className="order-card grn-footer">
+            <div className="grn-footer-summary">
+              {receiving.length === 0 ? (
+                <span className="grn-footer-muted">Nothing entered yet — enter a quantity on at least one line.</span>
+              ) : (
+                <span>
+                  Receiving <strong>{receivingQty}</strong> across{" "}
+                  <strong>{receiving.length}</strong> line{receiving.length === 1 ? "" : "s"}
+                </span>
+              )}
+              {formError && <span className="grn-footer-error">{formError}</span>}
+            </div>
+            <div className="grn-footer-actions">
+              <button type="button" className="order-btn-secondary" onClick={handleClose}>
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="order-btn-primary"
+                disabled={saving || receiving.length === 0 || overReceipt}
+              >
+                {saving ? "Saving..." : "Save GRN"}
+              </button>
+            </div>
           </section>
         </form>
       )}
@@ -333,23 +443,15 @@ function GrnFormPage({ isModal = false, onClose, onSuccess }) {
 
   return (
     <div className="order-page">
-      <section className="order-card order-header-card">
-        <div>
-          <button
-            className="order-btn-secondary"
-            style={{ marginRight: 12 }}
-            onClick={handleClose}
-          >
-            ← Back
-          </button>
-          <span style={{ fontSize: 20, fontWeight: 700, color: "#0f172a" }}>
-            New Goods Receipt Note
-          </span>
-          {po && (
-            <span style={{ fontSize: 13, color: "#64748b", marginLeft: 10 }}>
-              for {po.poNumber} — {po.supplier?.name}
-            </span>
-          )}
+      <section className="order-card grn-header">
+        <button className="order-btn-secondary" onClick={handleClose}>← Back</button>
+        <div className="grn-header-title">
+          <h2>New Goods Receipt Note</h2>
+          <p>
+            {po
+              ? `Receiving against ${po.poNumber} — ${po.supplier?.name || ""}`
+              : "Select the purchase order this consignment arrived against."}
+          </p>
         </div>
       </section>
       {formBody}

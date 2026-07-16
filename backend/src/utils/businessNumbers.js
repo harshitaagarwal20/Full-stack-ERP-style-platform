@@ -44,16 +44,6 @@ export function formatEnquiryNumber(id) {
   return `ENQ_${padId(numeric, 4)}`;
 }
 
-export function generateBusinessNumber(prefix) {
-  const stamp = Date.now();
-  const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
-  return `${prefix}-${stamp}-${suffix}`;
-}
-
-export function generateEnquiryNumber() {
-  return generateBusinessNumber("ENQ");
-}
-
 export function formatManualOrderRequestNumber(sequence) {
   return `MOR_${padId(sequence, 4)}`;
 }
@@ -74,14 +64,6 @@ export function formatSupplierCode(sequence) {
   return `SO-${padId(numeric, 3)}`;
 }
 
-export function generateSalesGroupNumber(enquiryNumber) {
-  const normalized = String(enquiryNumber || "").trim();
-  if (!normalized) {
-    return normalizeSalesPrefix(generateBusinessNumber("SO"));
-  }
-  return normalizeSalesPrefix(normalized);
-}
-
 export function normalizeSalesGroupNumber(value) {
   const normalized = String(value || "").trim();
   if (!normalized) return "";
@@ -92,10 +74,6 @@ export function normalizeSalesGroupNumber(value) {
   return normalizeSalesPrefix(normalized);
 }
 
-export function getSalesGroupNumberFromEnquiry(enquiry) {
-  if (!enquiry) return "";
-  return normalizeSalesGroupNumber(enquiry.salesGroupNumber || enquiry.order?.salesGroupNumber);
-}
 
 export function formatSalesOrderNumber(id) {
   return `SO_${padSalesOrderId(id)}`;
@@ -109,6 +87,16 @@ export function getDisplayEnquiryNumber(enquiry) {
 export function getDisplaySalesNumber(order) {
   if (!order) return "";
   return normalizeSalesGroupNumber(order.salesGroupNumber || order.salesOrderNumber || formatSalesOrderNumber(order.id));
+}
+
+// Batch numbers are auto-generated from the production row's own id, so they are
+// unique without a counter and never need to be typed in.
+export function formatBatchNumber(id) {
+  const numeric = Number(id);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return "";
+  }
+  return `BATCH_${padId(numeric, 4)}`;
 }
 
 export function formatPONumber(id) {

@@ -30,6 +30,7 @@ export function getStatusLabel(status) {
   if (status === "IN_PROGRESS") return "In Progress";
   if (status === "PARTIALLY_PRODUCED") return "Partially Produced";
   if (status === "HOLD") return "Hold";
+  if (status === "REWORK") return "Rework";
   if (status === "COMPLETED") return "Completed";
   return status || "-";
 }
@@ -39,8 +40,26 @@ export function getStatusClass(status) {
   if (status === "IN_PROGRESS") return "in-production";
   if (status === "PARTIALLY_PRODUCED") return "partial";
   if (status === "HOLD") return "partial";
+  if (status === "REWORK") return "rework";
   if (status === "COMPLETED") return "dispatched";
   return "created";
+}
+
+// The machine-speed fields can be recorded either as RPM (fixed-speed drives)
+// or Hz (VFD/frequency-driven machines). The unit is stored per machine in the
+// mfg blob so no schema change is needed; RPM stays the default for older
+// records that never carried a unit.
+export const SPEED_UNITS = ["RPM", "Hz"];
+
+function normalizeSpeedUnit(value) {
+  return SPEED_UNITS.includes(value) ? value : "RPM";
+}
+
+// "1500 RPM" / "50 Hz" — blank when there is no value to qualify.
+export function formatSpeed(value, unit) {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  return `${text} ${normalizeSpeedUnit(unit)}`;
 }
 
 export function parseMfgData(rawMaterials) {
@@ -51,12 +70,15 @@ export function parseMfgData(rawMaterials) {
       additives:     Array.isArray(parsed.additives)     ? parsed.additives     : [],
       catalysts:     Array.isArray(parsed.catalysts)     ? parsed.catalysts     : [],
       pulveriserRpm: parsed.pulveriserRpm || "",
+      acmRpmUnit:       normalizeSpeedUnit(parsed.acmRpmUnit),
+      pulveriserRpmUnit: normalizeSpeedUnit(parsed.pulveriserRpmUnit),
+      blowerRpmUnit:    normalizeSpeedUnit(parsed.blowerRpmUnit),
       equipment:     Array.isArray(parsed.equipment)     ? parsed.equipment     : [],
       processParams: Array.isArray(parsed.processParams) ? parsed.processParams : [],
       batchLogs:     Array.isArray(parsed.batchLogs)     ? parsed.batchLogs     : []
     };
   } catch {
-    return { rm: [], additives: [], catalysts: [], pulveriserRpm: "", equipment: [], processParams: [], batchLogs: [] };
+    return { rm: [], additives: [], catalysts: [], pulveriserRpm: "", acmRpmUnit: "RPM", pulveriserRpmUnit: "RPM", blowerRpmUnit: "RPM", equipment: [], processParams: [], batchLogs: [] };
   }
 }
 
@@ -133,17 +155,6 @@ export function getOperationMaterialNames(rawMaterials) {
   return [rmNames[0] || "Material 1", rmNames[1] || "Material 2"];
 }
 
-export function defaultEquipment() {
-  return [
-    { name: "Stainless Steel Reactor", equipId: "", capacity: "" },
-    { name: "Screw Conveyor No", equipId: "", capacity: "" },
-    { name: "Grinding Mill, No", equipId: "", capacity: "" },
-    { name: "Classifier No", equipId: "", capacity: "" },
-    { name: "Dust Collector No", equipId: "", capacity: "" },
-    { name: "Storage Silo", equipId: "", capacity: "" }
-  ];
-}
-
 export function defaultProcessParams() {
   return [
     { parameter: "Initial Temperature", range: "70 to 120 C", doneBy: "", reviewedBy: "", remark: "" },
@@ -158,7 +169,14 @@ export function defaultProcessParams() {
 // section (and the batch/machine settings fields) exactly as they were.
 export function buildSectionPatchPayload(record, sectionKey, sectionValue, extraFields = {}) {
   const mfg = parseMfgData(record?.rawMaterials);
-  const merged = { ...mfg, [sectionKey]: sectionValue };
+
+  // sectionKey is normally a single blob key (with sectionValue), but may also
+  // be an object of several blob overrides at once — in that form sectionValue
+  // carries the extra top-level fields instead.
+  const isMulti = sectionKey !== null && typeof sectionKey === "object";
+  const overrides = isMulti ? sectionKey : { [sectionKey]: sectionValue };
+  const extras = isMulti ? (sectionValue || {}) : extraFields;
+  const merged = { ...mfg, ...overrides };
 
   return {
     status: record?.status === "PENDING" ? "IN_PROGRESS" : record?.status,
@@ -167,10 +185,13 @@ export function buildSectionPatchPayload(record, sectionKey, sectionValue, extra
       additives: merged.additives,
       catalysts: merged.catalysts,
       pulveriserRpm: merged.pulveriserRpm,
+      acmRpmUnit: merged.acmRpmUnit,
+      pulveriserRpmUnit: merged.pulveriserRpmUnit,
+      blowerRpmUnit: merged.blowerRpmUnit,
       equipment: merged.equipment,
       processParams: merged.processParams,
       batchLogs: merged.batchLogs
     }),
-    ...extraFields
+    ...extras
   };
 }

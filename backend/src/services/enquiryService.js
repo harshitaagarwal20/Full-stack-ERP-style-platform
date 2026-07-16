@@ -1,11 +1,12 @@
 import prisma from "../config/prisma.js";
-import { recordAuditEvent } from "./auditService.js";
 import { buildPagination } from "../utils/pagination.js";
+import { buildMonthRange, recentDaysWhere } from "../utils/dateFilters.js";
 import { buildCacheKey, getOrLoadCached, invalidateCacheByPrefix } from "../utils/responseCache.js";
 import { ENQUIRY_LIST_SELECT } from "../utils/selects.js";
 import { formatEnquiryProducts, normalizeEnquiryProductRows } from "../utils/enquiryProducts.js";
 import { ensureProductsExist } from "../utils/productCatalog.js";
-import { formatEnquiryNumber } from "../utils/businessNumbers.js";
+import { formatBatchNumber, formatEnquiryNumber } from "../utils/businessNumbers.js";
+import { assertEntryDate } from "../utils/dateRules.js";
 import { normalizeCurrencyInput, normalizePriceInput } from "../utils/commerce.js";
 import { createOrderFromEnquiry } from "./dispatchService.js";
 import { buildProductionCreateData } from "./productionService.js";
@@ -64,6 +65,14 @@ function parseRowQuantity(value) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }
 
+// Each enquiry row is one product, and the only price the form collects is that
+// product's price per UOM — so it is the row's price. Falls back to any explicit
+// top-level price for callers (imports, older clients) that still send one.
+function deriveRowPrice(row, fallback = null) {
+  const price = normalizePriceInput(row?.price_per_uom ?? "");
+  return price === null || price === undefined ? fallback ?? null : price;
+}
+
 function deriveUnitOfMeasurement(rows, fallback = null) {
   const units = rows
     .map((row) => String(row.unit_of_measurement || "").trim())
@@ -87,10 +96,16 @@ export function buildEnquiryRowData({
     enquiryDate: sharedData.enquiryDate,
     modeOfEnquiry: sharedData.modeOfEnquiry,
     companyName: sharedData.companyName,
+    customerType: sharedData.customerType,
+    enquiryType: sharedData.enquiryType,
+    incoTerm: sharedData.incoTerm,
+    country: sharedData.country,
+    port: sharedData.port,
+    lastTransaction: sharedData.lastTransaction,
     product: formatEnquiryProducts([row]),
     products: [row],
     quantity: parseRowQuantity(row.quantity),
-    price: sharedData.price,
+    price: deriveRowPrice(row, sharedData.price),
     currency: sharedData.currency,
     unitOfMeasurement: row.unit_of_measurement || deriveUnitOfMeasurement([row], sharedData.unitOfMeasurement || null),
     expectedTimeline: sharedData.expectedTimeline,
@@ -126,29 +141,22 @@ async function createUrgentDownstreamRecords(enquiry, actorUser, tx) {
     select: { id: true }
   });
 
+  await tx.production.update({
+    where: { id: production.id },
+    data: { batchNo: formatBatchNumber(production.id) }
+  });
+
   await tx.order.update({
     where: { id: orderForProduction.id },
     data: { status: "IN_PRODUCTION" }
-  });
-
-  await recordAuditEvent({
-    tx,
-    action: "START_PRODUCTION",
-    entityType: "Production",
-    entityId: production.id,
-    user: actorUser,
-    newValue: {
-      enquiryId: enquiry.id,
-      orderId: orderForProduction.id,
-      isUrgent: true
-    },
-    note: `Urgent enquiry #${enquiry.id} auto-created order #${orderForProduction.id} and production #${production.id}`
   });
 
   return { order: orderForProduction, production };
 }
 
 export async function createEnquiry(payload, user) {
+  assertEntryDate(payload.enquiry_date, "Enquiry date");
+
   const userId = user.id;
   const assignedPerson = user.name || payload.assigned_person;
   const productRows = normalizeEnquiryProductRows(payload.products ?? payload.product);
@@ -164,7 +172,10 @@ export async function createEnquiry(payload, user) {
     product,
     grade: productRows[index]?.grade || "",
     quantity: parseRowQuantity(productRows[index]?.quantity),
-    unit_of_measurement: String(productRows[index]?.unit_of_measurement || "").trim()
+    unit_of_measurement: String(productRows[index]?.unit_of_measurement || "").trim(),
+    price_per_uom: String(productRows[index]?.price_per_uom ?? "").trim(),
+    packaging_requirement: String(productRows[index]?.packaging_requirement || "").trim(),
+    remark: String(productRows[index]?.remark || "").trim()
   }));
   const created = await prisma.$transaction(async (tx) => {
     const createdRows = [];
@@ -178,10 +189,16 @@ export async function createEnquiry(payload, user) {
           enquiryDate: parseDateInput(payload.enquiry_date),
           modeOfEnquiry: payload.mode_of_enquiry || null,
           companyName: payload.company_name,
+          customerType: payload.customer_type || null,
+          enquiryType: payload.enquiry_type || null,
+          incoTerm: payload.inco_term || null,
+          country: payload.country || null,
+          port: payload.port || null,
+          lastTransaction: payload.last_transaction || null,
           product: rowSummary,
           products: [row],
           quantity: parseRowQuantity(row.quantity),
-          price,
+          price: deriveRowPrice(row, price),
           currency,
           unitOfMeasurement: row.unit_of_measurement || deriveUnitOfMeasurement([row], payload.unit_of_measurement || null),
           expectedTimeline: parseDateInput(payload.expected_timeline),
@@ -236,8 +253,8 @@ export async function createEnquiry(payload, user) {
 }
 
 export async function listEnquiries(filters = {}) {
-  const { status, q, assigned, date, stage } = filters;
-  const { page, take, skip } = buildPagination(filters, { defaultLimit: 0, maxLimit: 100 });
+  const { status, q, assigned, date, month, stage, recent_days: recentDays } = filters;
+  const { page, take, skip } = buildPagination(filters, { defaultLimit: 20, maxLimit: 100 });
   const normalizedAssigned = String(assigned || "").trim();
   const normalizedDate = String(date || "").trim();
   const normalizedStage = ENQUIRY_STAGES.includes(String(stage || "").trim().toUpperCase())
@@ -246,11 +263,33 @@ export async function listEnquiries(filters = {}) {
   const dateFrom = normalizedDate ? new Date(`${normalizedDate}T00:00:00.000Z`) : null;
   const dateTo = normalizedDate ? new Date(`${normalizedDate}T23:59:59.999Z`) : null;
 
+  // Month filters on when the enquiry was raised. enquiryDate is what the user
+  // typed and can be null on older rows, so fall back to createdAt rather than
+  // silently dropping those from the results.
+  const monthRange = buildMonthRange(month);
+
   const where = {
     ...(status ? { status } : {}),
+    // Mobile sends recent_days=45 so a phone never drags years of history over
+    // a mobile connection. Desktop omits it and sees everything.
+    ...recentDaysWhere("createdAt", recentDays),
     ...(normalizedStage ? { stage: normalizedStage } : {}),
     ...(normalizedAssigned ? { assignedPerson: { contains: normalizedAssigned } } : {}),
     ...(normalizedDate && dateFrom && dateTo ? { expectedTimeline: { gte: dateFrom, lte: dateTo } } : {}),
+    // Wrapped in AND, not a bare OR: the search box below also sets `OR`, and a
+    // second OR key would silently overwrite it.
+    ...(monthRange
+      ? {
+          AND: [
+            {
+              OR: [
+                { enquiryDate: monthRange },
+                { AND: [{ enquiryDate: null }, { createdAt: monthRange }] }
+              ]
+            }
+          ]
+        }
+      : {}),
     ...(q
       ? {
           OR: [
@@ -273,6 +312,9 @@ export async function listEnquiries(filters = {}) {
     status: status || null,
     stage: normalizedStage || null,
     q: q || null,
+    // Must be part of the key, or a cached response would ignore the month.
+    month: String(month || "") || null,
+    recentDays: String(recentDays || "") || null,
     assigned: normalizedAssigned || null,
     date: normalizedDate || null,
     page,
@@ -371,26 +413,6 @@ export async function updateEnquiryStatus(enquiryId, status, approvedByUser, rej
       createdOrder = await createOrderFromEnquiry(enquiry, dispatchDate, approvedByUser, tx);
     }
 
-    await recordAuditEvent({
-      tx,
-      action: status === "ACCEPTED" ? "APPROVE_ENQUIRY" : "REJECT_ENQUIRY",
-      entityType: "Enquiry",
-      entityId: enquiryId,
-      user: approvedByUser,
-      oldValue: {
-        status: "PENDING",
-        approvedById: enquiry.approvedById
-      },
-      newValue: {
-        status,
-        approvedById: approvedByUser.id,
-        orderCreated: Boolean(createdOrder),
-        orderId: createdOrder?.id ?? null,
-        rejectionReason: reason
-      },
-      note: `${status === "ACCEPTED" ? "Approved" : "Rejected"} enquiry #${enquiryId}${createdOrder ? ` and created order #${createdOrder.id}` : ""}${reason ? ` — reason: ${reason}` : ""}`
-    });
-
     return tx.enquiry.findUnique({
       where: { id: enquiryId },
       select: ENQUIRY_LIST_SELECT
@@ -416,6 +438,12 @@ export async function updateEnquiry(enquiryId, payload) {
       unitOfMeasurement: true,
       enquiryDate: true,
       modeOfEnquiry: true,
+      customerType: true,
+      enquiryType: true,
+      incoTerm: true,
+      country: true,
+      port: true,
+      lastTransaction: true,
       expectedTimeline: true,
       assignedPerson: true,
       notesForProduction: true,
@@ -437,6 +465,8 @@ export async function updateEnquiry(enquiryId, payload) {
     throw error;
   }
 
+  assertEntryDate(payload.enquiry_date, "Enquiry date", { grandfathered: enquiry.enquiryDate });
+
   const products = payload.products !== undefined || payload.product !== undefined
     ? normalizeEnquiryProductRows(payload.products ?? payload.product)
     : undefined;
@@ -446,7 +476,10 @@ export async function updateEnquiry(enquiryId, payload) {
         product,
         grade: products[index]?.grade || "",
         quantity: parseRowQuantity(products[index]?.quantity),
-        unit_of_measurement: String(products[index]?.unit_of_measurement || "").trim()
+        unit_of_measurement: String(products[index]?.unit_of_measurement || "").trim(),
+        price_per_uom: String(products[index]?.price_per_uom ?? "").trim(),
+        packaging_requirement: String(products[index]?.packaging_requirement || "").trim(),
+        remark: String(products[index]?.remark || "").trim()
       }))
     : undefined;
   const totalQuantity = normalizedProducts?.reduce((sum, row) => sum + parseRowQuantity(row.quantity), 0);
@@ -462,6 +495,12 @@ export async function updateEnquiry(enquiryId, payload) {
       enquiryDate: payload.enquiry_date ? parseDateInput(payload.enquiry_date) : enquiry.enquiryDate || null,
       modeOfEnquiry: payload.mode_of_enquiry !== undefined ? (payload.mode_of_enquiry || null) : enquiry.modeOfEnquiry || null,
       companyName: payload.company_name || enquiry.companyName,
+      customerType: payload.customer_type !== undefined ? (payload.customer_type || null) : enquiry.customerType || null,
+      enquiryType: payload.enquiry_type !== undefined ? (payload.enquiry_type || null) : enquiry.enquiryType || null,
+      incoTerm: payload.inco_term !== undefined ? (payload.inco_term || null) : enquiry.incoTerm || null,
+      country: payload.country !== undefined ? (payload.country || null) : enquiry.country || null,
+      port: payload.port !== undefined ? (payload.port || null) : enquiry.port || null,
+      lastTransaction: payload.last_transaction !== undefined ? (payload.last_transaction || null) : enquiry.lastTransaction || null,
       price: payload.price !== undefined ? normalizePriceInput(payload.price) : enquiry.price ?? null,
       currency: payload.currency !== undefined ? normalizeCurrencyInput(payload.currency) : enquiry.currency ?? null,
       expectedTimeline: payload.expected_timeline ? parseDateInput(payload.expected_timeline) : enquiry.expectedTimeline || null,
@@ -513,10 +552,18 @@ export async function updateEnquiry(enquiryId, payload) {
       enquiryDate: payload.enquiry_date ? parseDateInput(payload.enquiry_date) : undefined,
       modeOfEnquiry: payload.mode_of_enquiry,
       companyName: payload.company_name,
+      customerType: payload.customer_type,
+      enquiryType: payload.enquiry_type,
+      incoTerm: payload.inco_term,
+      country: payload.country,
+      port: payload.port,
+      lastTransaction: payload.last_transaction,
       product: normalizedProducts ? formatEnquiryProducts(normalizedProducts) : payload.product,
       products: normalizedProducts,
       quantity: totalQuantity || payload.quantity,
-      price: payload.price !== undefined ? normalizePriceInput(payload.price) : undefined,
+      price: normalizedProducts
+        ? deriveRowPrice(normalizedProducts[0], payload.price !== undefined ? normalizePriceInput(payload.price) : null)
+        : payload.price !== undefined ? normalizePriceInput(payload.price) : undefined,
       currency: payload.currency !== undefined ? normalizeCurrencyInput(payload.currency) : undefined,
       unitOfMeasurement: normalizedProducts ? deriveUnitOfMeasurement(normalizedProducts, payload.unit_of_measurement || null) : payload.unit_of_measurement,
       expectedTimeline: payload.expected_timeline ? parseDateInput(payload.expected_timeline) : undefined,
@@ -556,15 +603,6 @@ export async function deleteEnquiry(enquiryId, actorUser) {
   }
 
   const result = await prisma.$transaction(async (tx) => {
-    await recordAuditEvent({
-      tx,
-      action: "DELETE_ENQUIRY",
-      entityType: "Enquiry",
-      entityId: enquiryId,
-      user: actorUser,
-      oldValue: enquiry,
-      note: `Deleted enquiry #${enquiryId}`
-    });
 
     await tx.enquiry.delete({ where: { id: enquiryId } });
     return { id: enquiryId };

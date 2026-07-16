@@ -38,7 +38,7 @@ function ProductionBatchPicker({ records, title, onPick, onClose }) {
 
         <div className="unified-search-box">
           <SearchIcon />
-          <input
+          <input autoComplete="off"
             autoFocus
             placeholder="Search batch, order, client or product..."
             value={query}

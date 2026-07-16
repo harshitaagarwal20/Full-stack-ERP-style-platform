@@ -2,9 +2,10 @@ import bcrypt from "bcryptjs";
 import prisma from "../config/prisma.js";
 import { buildPagination } from "../utils/pagination.js";
 import { USER_PUBLIC_SELECT } from "../utils/selects.js";
+import { invalidateCachedUser } from "../utils/authUserCache.js";
 
 export async function listUsers(query = {}) {
-  const { page, take, skip } = buildPagination(query, { defaultLimit: 0, maxLimit: 100 });
+  const { page, take, skip } = buildPagination(query, { defaultLimit: 20, maxLimit: 100 });
 
   if (take > 0) {
     const [items, total] = await Promise.all([
@@ -71,11 +72,15 @@ export async function updateUser(userId, payload) {
   }
 
   try {
-    return await prisma.user.update({
+    const updated = await prisma.user.update({
       where: { id: userId },
       data,
       select: USER_PUBLIC_SELECT
     });
+    // Role/profile (or password) just changed — drop the cached auth record so
+    // the next request re-reads it rather than authorizing on stale data.
+    invalidateCachedUser(userId);
+    return updated;
   } catch (error) {
     if (error.code === "P2025") {
       const notFoundError = new Error("User not found.");
@@ -109,19 +114,26 @@ export async function changePassword(userId, currentPassword, newPassword) {
   }
 
   const hashed = await bcrypt.hash(newPassword, 10);
-  return prisma.user.update({
+  const result = await prisma.user.update({
     where: { id: userId },
     data: { password: hashed, passwordChangedAt: new Date() },
     select: { id: true }
   });
+  // The token check keys on passwordChangedAt; clear the cache so old tokens are
+  // rejected on the very next request, not up to a TTL later.
+  invalidateCachedUser(userId);
+  return result;
 }
 
 export async function deleteUser(userId) {
   try {
-    return await prisma.user.delete({
+    const deleted = await prisma.user.delete({
       where: { id: userId },
       select: { id: true }
     });
+    // Reject any in-flight token for this account on the next request.
+    invalidateCachedUser(userId);
+    return deleted;
   } catch (error) {
     if (error.code === "P2025") {
       const notFoundError = new Error("User not found.");

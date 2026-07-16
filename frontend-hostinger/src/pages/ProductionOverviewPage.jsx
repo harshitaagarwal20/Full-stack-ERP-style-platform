@@ -1,13 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
-import api from "../api/axiosClient";
 import useProductionRecord from "../hooks/useProductionRecord";
 import ProductionStepNav from "../components/production/ProductionStepNav";
-import SearchableSelect from "../components/common/SearchableSelect";
-import { buildSectionPatchPayload, parseMfgData } from "../utils/productionMfg";
-import { logApiError } from "../utils/apiError";
-import { dispatchUserMessage } from "../utils/errorMessages";
+import ManufacturingOrderPrint from "../components/production/ManufacturingOrderPrint";
+import { parseMfgData } from "../utils/productionMfg";
+import printSheet from "../utils/printSheet";
 
 function SectionTitle({ children }) {
   return (
@@ -16,15 +13,6 @@ function SectionTitle({ children }) {
     </h3>
   );
 }
-
-// COMPLETED is intentionally excluded — completing a job runs separate logic on
-// the Complete page (PUT /production/:id), so this quick edit only covers the
-// in-flight statuses.
-const STATUS_OPTIONS = [
-  { value: "PENDING", label: "Not Started" },
-  { value: "IN_PROGRESS", label: "In Progress" },
-  { value: "HOLD", label: "Hold" }
-];
 
 const STEP_CARDS = [
   { suffix: "/batch-setup", label: "Batch Setup", describe: (mfg, record) => (record.batchNo ? `Batch ${record.batchNo}` : "Not started") },
@@ -41,46 +29,8 @@ const STEP_CARDS = [
 function ProductionOverviewPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const canManageProduction = ["admin", "production"].includes(user?.role);
-  const { record, loading, reload } = useProductionRecord(id);
+  const { record, loading } = useProductionRecord(id);
   const mfg = useMemo(() => (record ? parseMfgData(record.rawMaterials) : null), [record]);
-
-  const [form, setForm] = useState({ batch_no: "", status: "PENDING", remarks: "" });
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (!record) return;
-    setForm({
-      batch_no: record.batchNo || "",
-      status: record.status === "COMPLETED" ? "IN_PROGRESS" : (record.status || "PENDING"),
-      remarks: record.remarks || ""
-    });
-  }, [record]);
-
-  const setField = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
-
-  const onSave = async (event) => {
-    event.preventDefault();
-    if (!record || !canManageProduction || saving) return;
-    setSaving(true);
-    try {
-      // Preserve the existing manufacturing JSON (pass the current pulveriserRpm
-      // section unchanged) and only patch the top-level fields edited here.
-      const payload = buildSectionPatchPayload(record, "pulveriserRpm", mfg?.pulveriserRpm ?? "", {
-        batch_no: form.batch_no || undefined,
-        remarks: form.remarks || undefined,
-        status: form.status || undefined
-      });
-      await api.put(`/production/${record.id}/edit`, payload);
-      dispatchUserMessage("Production details saved.", { title: "Saved", variant: "success" });
-      await reload(false);
-    } catch (error) {
-      logApiError(error, "Failed to save production details");
-    } finally {
-      setSaving(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -100,46 +50,17 @@ function ProductionOverviewPage() {
     <div className="order-page">
       <ProductionStepNav record={record} activeStep="overview" />
 
-      {canManageProduction && (
-        <section className="order-card">
-          <SectionTitle>Quick Edit</SectionTitle>
-          <form onSubmit={onSave} className="order-form-grid">
-            <div>
-              <label>Batch No.</label>
-              <input
-                className="input"
-                value={form.batch_no}
-                placeholder="e.g. BATCH-1"
-                onChange={(e) => setField("batch_no", e.target.value)}
-              />
-            </div>
-            <div>
-              <label>Status</label>
-              <SearchableSelect
-                options={STATUS_OPTIONS}
-                value={form.status}
-                onChange={(value) => setField("status", value)}
-                placeholder="Select status"
-              />
-            </div>
-            <div className="full-row">
-              <label>Remarks / Order By</label>
-              <textarea
-                className="input"
-                rows={3}
-                value={form.remarks}
-                placeholder="Additional instructions..."
-                onChange={(e) => setField("remarks", e.target.value)}
-              />
-            </div>
-            <div className="full-row">
-              <button type="submit" className="order-btn-primary" disabled={saving}>
-                {saving ? "Saving..." : "Save Details"}
-              </button>
-            </div>
-          </form>
-        </section>
-      )}
+      {/* The Step 1 modal prints itself, but only exists while the batch is being
+          filled in. This prints the saved sheet in the same format, any time. */}
+      <section className="order-card sheet-action-bar">
+        <div className="sheet-action-text">
+          <h3>Manufacturing Order</h3>
+        </div>
+        <button type="button" className="order-btn-secondary" onClick={() => printSheet()}>
+          Print Manufacturing Order
+        </button>
+      </section>
+      <ManufacturingOrderPrint record={record} />
 
       <section className="order-card">
         <SectionTitle>Production Steps</SectionTitle>

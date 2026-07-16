@@ -7,12 +7,8 @@ import { logApiError } from "../utils/apiError";
 import { dispatchUserMessage } from "../utils/errorMessages";
 import useMasterData from "../hooks/useMasterData";
 import SearchableSelect from "../components/common/SearchableSelect";
-import { CURRENCY_OPTIONS } from "../utils/commerce";
 import { SHIP_TO_OPTIONS } from "../config/shipToLocations";
-
-// The line-items table is dense, so show just the currency code (INR, USD…)
-// instead of the full "INR - Indian Rupee" label to keep the column narrow.
-const CURRENCY_COMPACT_OPTIONS = CURRENCY_OPTIONS.map((option) => ({ value: option.value, label: option.value }));
+import { minEntryDateFor } from "../utils/dateRules";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -67,14 +63,13 @@ function formatCurrency(val) {
   return new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 }).format(val);
 }
 
+// Finished goods are produced, not purchased — a PO only ever buys inputs.
 const CATEGORY_OPTIONS = [
-  { value: "FINISHED_GOODS", label: "Finished Goods" },
   { value: "RAW_MATERIAL", label: "Raw Materials" },
   { value: "PACKING_MATERIAL", label: "Packing Material" }
 ];
 
 const CATALOG_KEY_BY_CATEGORY = {
-  FINISHED_GOODS: "finishedGoodsCatalog",
   RAW_MATERIAL: "rawMaterialsCatalog",
   PACKING_MATERIAL: "packingMaterialsCatalog"
 };
@@ -84,7 +79,10 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
   const isEdit = Boolean(id);
   const navigate = useNavigate();
   const { user } = useAuth();
-  const canEditPricing = user?.role === "admin";
+  // Pricing belongs to admin and accounts; the purchase role raises the
+  // requisition without ever seeing money. The backend strips pricing from
+  // anyone else regardless, so this only keeps the UI honest.
+  const canEditPricing = user?.role === "admin" || user?.role === "accounts";
 
   const masterData = useMasterData();
   const supplierMaster = useMemo(() => {
@@ -295,9 +293,10 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
         <div className="order-form-grid">
           <div>
             <label className="label">Order Date</label>
-            <input
+            <input autoComplete="off"
               className="input"
               type="date"
+              min={minEntryDateFor(form.order_date)}
               value={form.order_date}
               onChange={(e) => setField("order_date", e.target.value)}
             />
@@ -318,15 +317,6 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
               value={form.ship_to}
               onChange={(value) => setField("ship_to", value)}
               placeholder="Select ship to address"
-            />
-          </div>
-          <div>
-            <label className="label">Expected Delivery Date</label>
-            <input
-              className="input"
-              type="date"
-              value={form.expected_delivery_date}
-              onChange={(e) => setField("expected_delivery_date", e.target.value)}
             />
           </div>
           <div className="full-row">
@@ -357,7 +347,7 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
           </div>
           <div>
             <label className="label">Pincode</label>
-            <input
+            <input autoComplete="off"
               className="input"
               placeholder="Pincode"
               value={form.supplier_pincode}
@@ -366,7 +356,7 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
           </div>
           <div className="full-row">
             <label className="label">Address</label>
-            <input
+            <input autoComplete="off"
               className="input"
               placeholder="Supplier address"
               value={form.supplier_address}
@@ -397,7 +387,6 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
                 <th>Item *</th>
                 <th>UoM</th>
                 <th>Grade</th>
-                {canEditPricing && <th>Currency</th>}
                 <th>Qty *</th>
                 {canEditPricing && <th>Price/Unit</th>}
                 {canEditPricing && <th>Total</th>}
@@ -438,7 +427,7 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
                     </div>
                   </td>
                   <td data-label="Grade">
-                    <input
+                    <input autoComplete="off"
                       className="input"
                       style={{ minWidth: 70 }}
                       placeholder="Grade"
@@ -446,20 +435,8 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
                       onChange={(e) => setItem(index, "grade", e.target.value)}
                     />
                   </td>
-                  {canEditPricing && (
-                    <td data-label="Currency">
-                      <div style={{ minWidth: 72 }}>
-                        <SearchableSelect
-                          options={CURRENCY_COMPACT_OPTIONS}
-                          value={item.currency}
-                          onChange={(value) => setItem(index, "currency", value)}
-                          placeholder="Currency"
-                        />
-                      </div>
-                    </td>
-                  )}
                   <td data-label="Qty">
-                    <input
+                    <input autoComplete="off"
                       className="input"
                       style={{ minWidth: 72 }}
                       type="number"
@@ -473,7 +450,7 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
                   </td>
                   {canEditPricing && (
                     <td data-label="Price/Unit">
-                      <input
+                      <input autoComplete="off"
                         className="input"
                         style={{ minWidth: 88 }}
                         type="number"
@@ -492,7 +469,7 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
                   )}
                   {canEditPricing && (
                     <td data-label="Tax %">
-                      <input
+                      <input autoComplete="off"
                         className="input"
                         style={{ minWidth: 58 }}
                         type="number"
@@ -526,7 +503,7 @@ function PurchaseOrderFormPage({ isModal = false, onClose, onSuccess }) {
                 <tr className="po-item-remark-row">
                   <td />
                   <td colSpan={canEditPricing ? 10 : 5}>
-                    <input
+                    <input autoComplete="off"
                       className="input"
                       placeholder="Remark for this item (optional)"
                       value={item.remark}

@@ -12,6 +12,7 @@ import { formatPriceValue } from "../utils/commerce";
 import { getDisplaySalesNumber } from "../utils/businessNumbers";
 import { sortByNewestFirst } from "../utils/recordOrdering";
 import { exportRowsToExcel } from "../utils/exportExcel";
+import { minEntryDateFor } from "../utils/dateRules";
 
 function formatDate(dateValue) {
   if (!dateValue) return "-";
@@ -288,8 +289,9 @@ function PendingExportDatePage() {
               )}
               <div>
                 <label>Dispatch Date</label>
-                <input
+                <input autoComplete="off"
                   type="date"
+                  min={minEntryDateFor(dispatchDateValue)}
                   value={dispatchDateValue}
                   onChange={(event) => setDispatchDateValue(event.target.value)}
                   required

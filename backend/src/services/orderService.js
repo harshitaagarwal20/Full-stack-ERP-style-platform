@@ -1,7 +1,7 @@
 import prisma from "../config/prisma.js";
-import { recordAuditEvent } from "./auditService.js";
 import { startProductionFromOrder } from "./productionService.js";
 import { buildPagination } from "../utils/pagination.js";
+import { buildMonthRange, recentDaysWhere } from "../utils/dateFilters.js";
 import { buildCacheKey, getOrLoadCached, invalidateCacheByPrefix } from "../utils/responseCache.js";
 import { ORDER_LIST_SELECT } from "../utils/selects.js";
 import { getPrimaryEnquiryProduct } from "../utils/enquiryProducts.js";
@@ -38,13 +38,18 @@ function invalidateOrderReadCaches() {
   invalidateCacheByPrefix("dashboard:");
 }
 
+// Same rule as the copy in dispatchService: resolve the highest sequence in the
+// database rather than pulling every Order row back, and lock it so two orders
+// created at once cannot both read the same max and be handed the same group
+// number (salesGroupNumber has no unique constraint to catch that).
 async function getNextSalesGroupNumber() {
-  const existing = await prisma.order.findMany({
-    select: {
-      salesGroupNumber: true
-    }
-  });
-  const maxSequence = existing.reduce((max, row) => Math.max(max, extractSalesGroupSequence(row.salesGroupNumber)), 0);
+  const rows = await prisma.$queryRawUnsafe(
+    "SELECT `salesGroupNumber` FROM `Order` " +
+    "WHERE `salesGroupNumber` REGEXP '^SO[_-][0-9]+$' " +
+    "ORDER BY CAST(SUBSTRING(`salesGroupNumber`, 4) AS UNSIGNED) DESC LIMIT 1 FOR UPDATE"
+  );
+
+  const maxSequence = extractSalesGroupSequence(rows?.[0]?.salesGroupNumber);
   return formatSalesGroupNumber(maxSequence + 1);
 }
 
@@ -205,33 +210,39 @@ export async function createOrder(payload, createdByUser) {
     throw error;
   }
 
-  await recordAuditEvent({
-    action: "CREATE_ORDER",
-    entityType: "Order",
-    entityId: finalOrder.id,
-    user: createdByUser,
-    newValue: finalOrder,
-    note: enquiryId
-      ? `Created order #${finalOrder.id} from enquiry #${enquiryId}`
-      : `Created manual order #${finalOrder.id}`
-  });
-
   invalidateOrderReadCaches();
   return finalOrder;
 }
 
 export async function listOrders(filters = {}) {
-  const { status, q, client, date } = filters;
-  const { page, take, skip } = buildPagination(filters, { defaultLimit: 0, maxLimit: 100 });
+  const { status, payment_status: paymentStatus, q, client, date, month, recent_days: recentDays } = filters;
+  const { page, take, skip } = buildPagination(filters, { defaultLimit: 20, maxLimit: 100 });
   const normalizedClient = String(client || "").trim();
   const normalizedDate = String(date || "").trim();
   const dateFrom = normalizedDate ? new Date(`${normalizedDate}T00:00:00.000Z`) : null;
   const dateTo = normalizedDate ? new Date(`${normalizedDate}T23:59:59.999Z`) : null;
 
+  // `status` accepts one value (equals) or a comma-separated list (IN) — the
+  // Payments worklist needs the three dispatched states at once, and a single
+  // caller passing one status still works unchanged.
+  const statusList = String(status || "").split(",").map((s) => s.trim()).filter(Boolean);
+  const statusWhere = statusList.length > 1
+    ? { status: { in: statusList } }
+    : statusList.length === 1
+      ? { status: statusList[0] }
+      : {};
+  const normalizedPaymentStatus = String(paymentStatus || "").trim();
+
   const where = {
-    ...(status ? { status } : {}),
+    ...statusWhere,
+    ...(normalizedPaymentStatus ? { paymentStatus: normalizedPaymentStatus } : {}),
+    // Mobile sends recent_days=45; desktop omits it and sees full history.
+    ...recentDaysWhere("createdAt", recentDays),
     ...(normalizedClient ? { clientName: { contains: normalizedClient } } : {}),
     ...(normalizedDate && dateFrom && dateTo ? { deliveryDate: { gte: dateFrom, lte: dateTo } } : {}),
+    // Month = when the order was placed. AND-wrapped so it can't clobber the
+    // search box's OR below.
+    ...(buildMonthRange(month) ? { AND: [{ orderDate: buildMonthRange(month) }] } : {}),
     ...(q
       ? {
           OR: [
@@ -251,11 +262,21 @@ export async function listOrders(filters = {}) {
   const query = {
     where,
     select: ORDER_LIST_SELECT,
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }]
+    // Finished orders sink to the bottom, newest-first within each group. This
+    // has to happen in the query, not on the client: the list is paginated
+    // server-side, so a completed order would otherwise still occupy page 1.
+    //
+    // MySQL sorts an ENUM by its declared position, and OrderStatus is declared
+    // CREATED, IN_PRODUCTION, READY_FOR_DISPATCH, PARTIALLY_DISPATCHED,
+    // COMPLETED, DISPATCHED — so ascending puts the two finished states last.
+    orderBy: [{ status: "asc" }, { createdAt: "desc" }, { id: "desc" }]
   };
 
   const cacheKey = buildCacheKey(ORDER_CACHE_PREFIX, {
     status: status || null,
+    paymentStatus: normalizedPaymentStatus || null,
+    month: String(month || "") || null,
+    recentDays: String(recentDays || "") || null,
     q: q || null,
     client: normalizedClient || null,
     date: normalizedDate || null,
@@ -336,17 +357,6 @@ export async function moveOrderToProduction(orderId, actorUser, client = prisma)
 
   const { order: updatedOrder } = await startProductionFromOrder(order, actorUser, {}, client);
 
-  await recordAuditEvent({
-    action: "START_PRODUCTION",
-    entityType: "Order",
-    entityId: orderId,
-    user: actorUser,
-    oldValue: { status: order.status },
-    newValue: { status: "IN_PRODUCTION" },
-    note: `Moved order #${orderId} to production`,
-    tx: client
-  });
-
   invalidateOrderReadCaches();
   return updatedOrder;
 }
@@ -396,18 +406,79 @@ export async function updateOrder(orderId, payload, actorUser) {
     select: ORDER_LIST_SELECT
   });
 
-  await recordAuditEvent({
-    action: "UPDATE_ORDER",
-    entityType: "Order",
-    entityId: orderId,
-    user: actorUser,
-    oldValue: order,
-    newValue: updatedOrder,
-    note: `Updated order #${orderId}`
+  invalidateOrderReadCaches();
+  return updatedOrder;
+}
+
+// The accounts step at the end of the approved flow. Only accounts (and admin)
+// may record payment — the same business rule that governs PO pricing, kept in
+// code rather than in the module matrix, because module access decides whether
+// you can open the screen, not whether you can settle an order.
+//
+// Recording payment in full is what finally completes a shipped order: dispatch
+// leaves it DISPATCHED, and only the money moves it to COMPLETED.
+export async function updateOrderPayment(orderId, payload, actorUser) {
+  if (!["admin", "accounts"].includes(actorUser?.role)) {
+    const error = new Error("Only the accounts department can record payment.");
+    error.statusCode = 403;
+    throw error;
+  }
+
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    select: {
+      id: true,
+      quantity: true,
+      status: true,
+      dispatches: { select: { dispatchedQuantity: true } }
+    }
+  });
+
+  if (!order) {
+    const error = new Error("Order not found.");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const paymentStatus = payload.payment_status;
+  const delivered = order.dispatches.reduce(
+    (total, dispatch) => total + Number(dispatch.dispatchedQuantity || 0),
+    0
+  );
+  const fullyDispatched = delivered >= Number(order.quantity);
+
+  // Payment is only meaningful once something has actually shipped — otherwise
+  // an order could be marked paid and completed before it was ever made.
+  if (paymentStatus !== "PENDING" && delivered <= 0) {
+    const error = new Error("Payment can only be recorded once the order has been dispatched.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const data = {
+    paymentStatus,
+    amountReceived: payload.amount_received === undefined || payload.amount_received === null
+      ? null
+      : Number(payload.amount_received),
+    paymentRemarks: payload.remarks?.trim() || null,
+    paymentReceivedAt: paymentStatus === "RECEIVED" ? new Date() : null
+  };
+
+  // Completing the order is the whole point of this step; a payment reversal
+  // (RECEIVED → PARTIAL/PENDING) has to walk it back out of COMPLETED too.
+  if (paymentStatus === "RECEIVED" && fullyDispatched) {
+    data.status = "COMPLETED";
+  } else if (order.status === "COMPLETED" && paymentStatus !== "RECEIVED") {
+    data.status = fullyDispatched ? "DISPATCHED" : "PARTIALLY_DISPATCHED";
+  }
+
+  const updated = await prisma.order.update({
+    where: { id: orderId },
+    data
   });
 
   invalidateOrderReadCaches();
-  return updatedOrder;
+  return updated;
 }
 
 export async function deleteOrder(orderId, actorUser) {
@@ -441,15 +512,6 @@ export async function deleteOrder(orderId, actorUser) {
   }
 
   const result = await prisma.$transaction(async (tx) => {
-    await recordAuditEvent({
-      tx,
-      action: "DELETE_ORDER",
-      entityType: "Order",
-      entityId: orderId,
-      user: actorUser,
-      oldValue: order,
-      note: `Deleted order #${orderId}`
-    });
 
     await tx.order.delete({
       where: { id: orderId }

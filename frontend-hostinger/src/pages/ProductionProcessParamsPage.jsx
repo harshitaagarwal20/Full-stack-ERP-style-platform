@@ -71,8 +71,8 @@ function ProductionProcessParamsPage() {
           )}
         </div>
 
-        <div className="order-table-wrap">
-          <table className="order-table">
+        <div className="responsive-table-wrap">
+          <table className="order-table responsive-table">
             <thead>
               <tr>
                 <th>#</th>
@@ -87,15 +87,15 @@ function ProductionProcessParamsPage() {
             <tbody>
               {rows.map((row, index) => (
                 <tr key={index}>
-                  <td style={{ color: "#94a3b8", fontSize: 12 }}>{index + 1}</td>
+                  <td data-label="#" style={{ color: "#94a3b8", fontSize: 12 }}>{index + 1}</td>
                   {canManageProduction ? (
                     <>
-                      <td><input className="mfg-cell-input" value={row.parameter} onChange={(e) => setRowField(index, "parameter", e.target.value)} /></td>
-                      <td><input className="mfg-cell-input" value={row.range} onChange={(e) => setRowField(index, "range", e.target.value)} /></td>
-                      <td><input className="mfg-cell-input" value={row.doneBy} onChange={(e) => setRowField(index, "doneBy", e.target.value)} /></td>
-                      <td><input className="mfg-cell-input" value={row.reviewedBy} onChange={(e) => setRowField(index, "reviewedBy", e.target.value)} /></td>
-                      <td><input className="mfg-cell-input" value={row.remark} onChange={(e) => setRowField(index, "remark", e.target.value)} /></td>
-                      <td>
+                      <td data-label="Parameter"><input className="mfg-cell-input" autoComplete="off" value={row.parameter} onChange={(e) => setRowField(index, "parameter", e.target.value)} /></td>
+                      <td data-label="Range"><input className="mfg-cell-input" autoComplete="off" value={row.range} onChange={(e) => setRowField(index, "range", e.target.value)} /></td>
+                      <td data-label="Done By"><input className="mfg-cell-input" autoComplete="off" value={row.doneBy} onChange={(e) => setRowField(index, "doneBy", e.target.value)} /></td>
+                      <td data-label="Reviewed By"><input className="mfg-cell-input" autoComplete="off" value={row.reviewedBy} onChange={(e) => setRowField(index, "reviewedBy", e.target.value)} /></td>
+                      <td data-label="Remark"><input className="mfg-cell-input" autoComplete="off" value={row.remark} onChange={(e) => setRowField(index, "remark", e.target.value)} /></td>
+                      <td data-label="">
                         {rows.length > 1 && (
                           <button type="button" className="order-btn-secondary" style={{ padding: "2px 8px" }} onClick={() => removeRow(index)}>×</button>
                         )}
@@ -103,11 +103,11 @@ function ProductionProcessParamsPage() {
                     </>
                   ) : (
                     <>
-                      <td>{row.parameter || "-"}</td>
-                      <td>{row.range || "-"}</td>
-                      <td>{row.doneBy || "-"}</td>
-                      <td>{row.reviewedBy || "-"}</td>
-                      <td>{row.remark || "-"}</td>
+                      <td data-label="Parameter">{row.parameter || "-"}</td>
+                      <td data-label="Range">{row.range || "-"}</td>
+                      <td data-label="Done By">{row.doneBy || "-"}</td>
+                      <td data-label="Reviewed By">{row.reviewedBy || "-"}</td>
+                      <td data-label="Remark">{row.remark || "-"}</td>
                     </>
                   )}
                 </tr>

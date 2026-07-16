@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import api from "../api/axiosClient";
 import { useAuth } from "../context/AuthContext";
 import ErpCard from "../components/erp/ErpCard";
-import { BoxesIcon, CheckIcon, ClipboardIcon, FactoryIcon, HomeIcon, HourglassIcon, InboxIcon, TruckIcon } from "../components/erp/ErpIcons";
+import { BoxesIcon, CheckIcon, ClipboardIcon, FactoryIcon, HourglassIcon, InboxIcon, TruckIcon } from "../components/erp/ErpIcons";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { logApiError } from "../utils/apiError";
 import { getFollowUpEnquiries } from "../utils/followUps";
@@ -37,9 +37,12 @@ function normalizeDashboardSummary(data) {
       completedOrders: Number(counts.completedOrders || 0),
       convertedEnquiries: Number(counts.convertedEnquiries || 0),
       conversionRate: Number(counts.conversionRate || 0),
+      approvedToOrderRate: Number(counts.approvedToOrderRate || 0),
     },
     trendData: Array.isArray(data?.trendData) ? data.trendData : [],
-    statusMix: Array.isArray(data?.statusMix) ? data.statusMix : []
+    statusMix: Array.isArray(data?.statusMix) ? data.statusMix : [],
+    stageFunnel: Array.isArray(data?.stageFunnel) ? data.stageFunnel : [],
+    outcomeMix: Array.isArray(data?.outcomeMix) ? data.outcomeMix : []
   };
 }
 
@@ -113,6 +116,11 @@ function buildSummaryFromLists(enquiries = [], orders = []) {
         : 0,
     },
     trendData: buckets,
+    // The conversion panels are server-computed (they need stage/sampledAt data
+    // this client-side fallback doesn't fetch), so they simply don't render
+    // when the dashboard is rebuilt from the raw lists.
+    stageFunnel: [],
+    outcomeMix: [],
     statusMix: [
       { label: "Created", value: orderStatusCounts.createdOrders, color: "#2563eb" },
       { label: "In Production", value: orderStatusCounts.inProductionOrders, color: "#ea580c" },
@@ -184,7 +192,7 @@ function DashboardPage() {
       { label: "In Production", value: counts.inProductionOrders, accent: "purple", icon: <FactoryIcon /> },
       { label: "Ready for Dispatch", value: counts.readyForDispatchOrders, accent: "green", icon: <TruckIcon /> },
       {
-        label: `Enquiry → Order Conversion (${counts.convertedEnquiries}/${counts.totalEnquiries})`,
+        label: "Conversion Ratio",
         value: `${counts.conversionRate}%`,
         accent: "blue",
         icon: <ClipboardIcon />
@@ -194,6 +202,8 @@ function DashboardPage() {
 
   const trendData = summary.trendData;
   const statusMix = summary.statusMix;
+  const stageFunnel = summary.stageFunnel;
+  const outcomeMix = summary.outcomeMix;
 
   const maxTrendValue = Math.max(1, ...trendData.flatMap((item) => [item.enquiries, item.orders]));
   const totalStatus = Math.max(1, statusMix.reduce((sum, item) => sum + item.value, 0));
@@ -339,6 +349,54 @@ function DashboardPage() {
           </div>
         </article>
       </section>
+
+      {stageFunnel.length > 0 && (
+        <section className="erp-chart-grid">
+          <article className="erp-panel">
+            <div className="erp-section-head">
+              <h3>Enquiry Conversion by Stage</h3>
+            </div>
+            <div className="erp-status-list">
+              {stageFunnel.map((step) => (
+                <div key={step.key} className="erp-status-row">
+                  <div className="erp-status-title">
+                    <i style={{ backgroundColor: "#2563eb" }} />
+                    <span>
+                      {step.label}
+                      {step.key !== "ENQUIRY" && ` — ${step.conversionFromPrevious}% of previous`}
+                    </span>
+                  </div>
+                  <strong>{step.count}</strong>
+                  <div className="erp-status-track">
+                    {/* Bar is the share of all enquiries, so the funnel narrows visually. */}
+                    <span style={{ width: `${step.conversionFromStart}%`, backgroundColor: "#2563eb" }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </article>
+
+          <article className="erp-panel">
+            <div className="erp-section-head">
+              <h3>Enquiry Outcome</h3>
+            </div>
+            <div className="erp-status-list">
+              {outcomeMix.map((item) => (
+                <div key={item.key} className="erp-status-row">
+                  <div className="erp-status-title">
+                    <i style={{ backgroundColor: item.color }} />
+                    <span>{item.label} — {item.share}%</span>
+                  </div>
+                  <strong>{item.count}</strong>
+                  <div className="erp-status-track">
+                    <span style={{ width: `${item.share}%`, backgroundColor: item.color }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </article>
+        </section>
+      )}
 
       <section className="erp-panel">
         <div className="erp-section-head">

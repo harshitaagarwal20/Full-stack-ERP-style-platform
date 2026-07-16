@@ -1,9 +1,10 @@
 import prisma from "../config/prisma.js";
-import { recordAuditEvent } from "./auditService.js";
 import { buildPagination } from "../utils/pagination.js";
+import { buildMonthRange, recentDaysWhere } from "../utils/dateFilters.js";
 import { buildCacheKey, getOrLoadCached, invalidateCacheByPrefix } from "../utils/responseCache.js";
 import { GRN_LIST_SELECT, GRN_DETAIL_SELECT } from "../utils/selects.js";
 import { formatGRNNumber } from "../utils/businessNumbers.js";
+import { assertEntryDate } from "../utils/dateRules.js";
 import { calculateReceivedTotal } from "./poService.js";
 
 const GRN_CACHE_PREFIX = "grns:list";
@@ -44,6 +45,8 @@ export async function createGRN(payload, user) {
     error.statusCode = 400;
     throw error;
   }
+
+  assertEntryDate(payload.received_date, "Received date");
 
   const poItemMap = new Map(po.items.map((i) => [i.id, i]));
 
@@ -97,14 +100,6 @@ export async function createGRN(payload, user) {
     }
   });
 
-  await recordAuditEvent({
-    action:     "CREATE",
-    entityType: "GoodsReceiptNote",
-    entityId:   grn.id,
-    user,
-    newValue:   { grnNumber, poId: po.id }
-  });
-
   invalidateGRNCaches();
   return getGRN(grn.id);
 }
@@ -112,7 +107,10 @@ export async function createGRN(payload, user) {
 export async function listGRNs(query = {}) {
   const { page, limit, skip, take } = buildPagination(query, { defaultLimit: 10, maxLimit: 100 });
 
-  const where = {};
+  const where = {
+    // Mobile sends recent_days=45; desktop omits it.
+    ...recentDaysWhere("createdAt", query.recent_days)
+  };
 
   if (query.status && query.status !== "all") {
     where.status = query.status;
@@ -120,6 +118,12 @@ export async function listGRNs(query = {}) {
 
   if (query.po_id) {
     where.poId = Number(query.po_id);
+  }
+
+  // Month = when the goods were received.
+  const grnMonth = buildMonthRange(query.month);
+  if (grnMonth) {
+    where.receivedDate = grnMonth;
   }
 
   if (query.q) {
@@ -173,7 +177,14 @@ export async function getGRN(id) {
 export async function saveQcTestSheet(grnId, payload, user) {
   const grn = await prisma.goodsReceiptNote.findUnique({
     where: { id: grnId },
-    select: { id: true, status: true }
+    select: {
+      id: true,
+      status: true,
+      items: { select: { itemId: true, quantityOrdered: true } },
+      qcTestSheet: {
+        select: { items: { select: { samplingDate: true, analysisDate: true } } }
+      }
+    }
   });
 
   if (!grn) {
@@ -186,6 +197,35 @@ export async function saveQcTestSheet(grnId, payload, user) {
     const error = new Error("QC test sheet can only be updated while the GRN is in Draft status.");
     error.statusCode = 400;
     throw error;
+  }
+
+  // Re-saving a sheet resends every row, so the dates already on it stay valid.
+  // Only a date that wasn't there before has to clear the backdating floor.
+  // Mfg. and expiry dates are the supplier's facts about the material, not a
+  // record of when we did something — they are left free to sit in the past.
+  const savedQcDates = (grn.qcTestSheet?.items || []).flatMap((item) => [item.samplingDate, item.analysisDate]);
+  for (const item of payload.items) {
+    assertEntryDate(item.sampling_date, "Date of sampling", { grandfathered: savedQcDates });
+    assertEntryDate(item.analysis_date, "Analysis date", { grandfathered: savedQcDates });
+  }
+
+  // You cannot draw a bigger sample than the consignment line it came from, so a
+  // sample quantity above the ordered quantity is a slipped decimal or the wrong
+  // unit — not a real reading.
+  const orderedByItemId = new Map(grn.items.map((item) => [item.itemId, Number(item.quantityOrdered || 0)]));
+  for (const item of payload.items) {
+    if (item.sample_qty == null || item.sample_qty === "") continue;
+
+    const ordered = orderedByItemId.get(item.product_name);
+    if (ordered === undefined) continue;
+
+    if (Number(item.sample_qty) > ordered) {
+      const error = new Error(
+        `Sample quantity for ${item.product_name} (${item.sample_qty}) cannot be more than the ordered quantity (${ordered}).`
+      );
+      error.statusCode = 400;
+      throw error;
+    }
   }
 
   const overallResult = payload.overall_result || "PENDING";
@@ -238,16 +278,65 @@ export async function saveQcTestSheet(grnId, payload, user) {
     });
   });
 
-  await recordAuditEvent({
-    action:     "SAVE_QC_TEST_SHEET",
-    entityType: "GoodsReceiptNote",
-    entityId:   grnId,
-    user,
-    newValue:   { overallResult }
-  });
-
   invalidateGRNCaches();
   return getGRN(grnId);
+}
+
+// The other half of the raw material test: a consignment that fails its sheet is
+// turned away rather than left sitting in draft forever. Rejecting is terminal —
+// confirmGRN() refuses a REJECTED GRN — so none of the material can ever reach
+// inventory, and the reason is kept as the record of the decision.
+export async function rejectGRN(id, payload, user) {
+  const grn = await prisma.goodsReceiptNote.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      status: true,
+      qcTestSheet: { select: { overallResult: true } }
+    }
+  });
+
+  if (!grn) {
+    const error = new Error("GRN not found.");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  if (grn.status === "CONFIRMED") {
+    const error = new Error("This GRN is already confirmed — its stock is in inventory and cannot be rejected.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (grn.status === "REJECTED") {
+    const error = new Error("This GRN is already rejected.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (grn.qcTestSheet?.overallResult === "PASS") {
+    const error = new Error("The raw material test sheet passed. Record a Fail result before rejecting the consignment.");
+    error.statusCode = 409;
+    throw error;
+  }
+
+  const reason = String(payload?.rejection_reason || "").trim();
+  if (!reason) {
+    const error = new Error("Please give a reason for rejecting this consignment.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const updated = await prisma.goodsReceiptNote.update({
+    where: { id },
+    data: {
+      status: "REJECTED",
+      rejectionReason: reason,
+      rejectedAt: new Date()
+    }
+  });
+
+  return updated;
 }
 
 export async function confirmGRN(id, user) {
@@ -280,6 +369,12 @@ export async function confirmGRN(id, user) {
       throw error;
     }
 
+    if (grn.status === "REJECTED") {
+      const error = new Error("This consignment was rejected on its raw material test and cannot be received.");
+      error.statusCode = 400;
+      throw error;
+    }
+
     if (grn.status !== "DRAFT") {
       const error = new Error("GRN is already confirmed.");
       error.statusCode = 400;
@@ -292,6 +387,14 @@ export async function confirmGRN(id, user) {
       throw error;
     }
 
+    // Fetch every PO item this GRN touches in one query rather than one per
+    // line — a 40-line GRN was doing 40 round-trips just to validate.
+    const poItems = await tx.purchaseOrderItem.findMany({
+      where: { id: { in: grn.items.map((item) => item.poItemId) } },
+      select: { id: true, qty: true, receivedQty: true }
+    });
+    const poItemById = new Map(poItems.map((item) => [item.id, item]));
+
     // Validate quantities
     for (const grnItem of grn.items) {
       if (grnItem.quantityReceived <= 0) {
@@ -300,10 +403,7 @@ export async function confirmGRN(id, user) {
         throw error;
       }
 
-      const poItem = await tx.purchaseOrderItem.findUnique({
-        where: { id: grnItem.poItemId },
-        select: { id: true, qty: true, receivedQty: true }
-      });
+      const poItem = poItemById.get(grnItem.poItemId);
 
       if (!poItem) {
         const error = new Error(`PO item ${grnItem.poItemId} not found.`);
@@ -326,16 +426,21 @@ export async function confirmGRN(id, user) {
       }
     }
 
-    // Increment receivedQty on each PO item
-    for (const grnItem of grn.items) {
-      await tx.purchaseOrderItem.update({
-        where: { id: grnItem.poItemId },
-        data: {
-          receivedQty: { increment: grnItem.quantityReceived },
-          receivedAt:  new Date()
-        }
-      });
-    }
+    // Increment receivedQty on each PO item. Each line needs its own increment,
+    // so these can't collapse into one updateMany — but they can at least be
+    // issued together instead of awaited one after another.
+    const receivedAt = new Date();
+    await Promise.all(
+      grn.items.map((grnItem) =>
+        tx.purchaseOrderItem.update({
+          where: { id: grnItem.poItemId },
+          data: {
+            receivedQty: { increment: grnItem.quantityReceived },
+            receivedAt
+          }
+        })
+      )
+    );
 
     // Determine new PO status by re-reading all items after increments
     const allPoItems = await tx.purchaseOrderItem.findMany({
@@ -372,14 +477,6 @@ export async function confirmGRN(id, user) {
       where: { id },
       data:  { status: "CONFIRMED" }
     });
-  });
-
-  await recordAuditEvent({
-    action:     "CONFIRM",
-    entityType: "GoodsReceiptNote",
-    entityId:   id,
-    user,
-    newValue:   { status: "CONFIRMED" }
   });
 
   invalidateGRNCaches();

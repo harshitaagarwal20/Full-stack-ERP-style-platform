@@ -1,5 +1,4 @@
 import prisma from "../config/prisma.js";
-import { recordAuditEvent } from "./auditService.js";
 import { buildPagination } from "../utils/pagination.js";
 import { buildCacheKey, getOrLoadCached, invalidateCacheByPrefix } from "../utils/responseCache.js";
 import { MANUAL_ORDER_REQUEST_SELECT, ORDER_LIST_SELECT } from "../utils/selects.js";
@@ -154,16 +153,6 @@ async function createOrderFromManualRequest(request, actorUser) {
       }
     });
 
-    await recordAuditEvent({
-      tx,
-      action: "CREATE_ORDER",
-      entityType: "Order",
-      entityId: finalOrder.id,
-      user: actorUser,
-      newValue: finalOrder,
-      note: `Created order #${finalOrder.id} from manual request #${request.requestNumber}`
-    });
-
     return finalOrder;
   });
 }
@@ -180,10 +169,11 @@ export async function createManualOrderRequest(payload, createdByUser) {
   const normalizedProducts = products.map((product, index) => ({
     product,
     grade: normalizeText(productRows[index]?.grade || payload.grade, "NA"),
-    // ManualOrderRequest.quantity is a whole-unit Int column; round up rather
-    // than let a fractional value (e.g. 7.5) truncate silently on insert.
-    quantity: Math.ceil(Number(productRows[index]?.quantity || payload.quantity || 0)) || 1,
-    unit: normalizeOrderUnit(productRows[index]?.unit_of_measurement || payload.unit)
+    // Quantity is a decimal column now, so a fractional request (7.5 MT) is
+    // carried through as asked rather than rounded up to 8.
+    quantity: Number(productRows[index]?.quantity || payload.quantity || 0) || 1,
+    unit: normalizeOrderUnit(productRows[index]?.unit_of_measurement || payload.unit),
+    remark: normalizeText(productRows[index]?.remark)
   }));
   const requestDispatchDate = parseDateInput(payload.delivery_date || payload.dispatch_date);
   if (!requestDispatchDate) {
@@ -215,7 +205,10 @@ export async function createManualOrderRequest(payload, createdByUser) {
           state: payload.state || null,
           countryCode: payload.country_code || null,
           dispatchDate: requestDispatchDate,
-          remarks: payload.remarks || (normalizedProducts.length > 1 ? `Created from manual request ${requestNumber}: ${formatEnquiryProducts([row])}` : null),
+          // The per-product remark is the natural note for this request (each
+          // product row becomes its own request/order); fall back to a shared
+          // payload remark, then the auto summary for multi-product requests.
+          remarks: row.remark || payload.remarks || (normalizedProducts.length > 1 ? `Created from manual request ${requestNumber}: ${formatEnquiryProducts([row])}` : null),
           status: "REQUESTED",
           createdById: createdByUser.id
         },
@@ -235,7 +228,7 @@ export { buildManualOrderCreateData };
 
 export async function listManualOrderRequests(filters = {}) {
   const { status, q } = filters;
-  const { page, take, skip } = buildPagination(filters, { defaultLimit: 0, maxLimit: 100 });
+  const { page, take, skip } = buildPagination(filters, { defaultLimit: 20, maxLimit: 100 });
   const normalizedStatus = String(status || "").trim();
 
   const where = {
@@ -336,17 +329,6 @@ export async function updateManualOrderRequestStatus(requestId, status, actorUse
         select: MANUAL_ORDER_REQUEST_SELECT
       });
 
-      await recordAuditEvent({
-        tx,
-        action: "REJECT_MANUAL_ORDER_REQUEST",
-        entityType: "ManualOrderRequest",
-        entityId: requestId,
-        user: actorUser,
-        oldValue: request,
-        newValue: next,
-        note: `Rejected manual order request #${requestId}`
-      });
-
       return next;
     });
 
@@ -358,16 +340,6 @@ export async function updateManualOrderRequestStatus(requestId, status, actorUse
     const updatedRequest = await prisma.manualOrderRequest.findUnique({
       where: { id: requestId },
       select: MANUAL_ORDER_REQUEST_SELECT
-    });
-
-    await recordAuditEvent({
-      action: "APPROVE_MANUAL_ORDER_REQUEST",
-      entityType: "ManualOrderRequest",
-      entityId: requestId,
-      user: actorUser,
-      oldValue: request,
-      newValue: updatedRequest,
-      note: `Approved manual order request #${requestId} and created order #${order.id}`
     });
 
     invalidateManualOrderRequestCaches();
@@ -429,16 +401,6 @@ export async function setManualOrderDispatchDate(requestId, payload, actorUser, 
   const updatedRequest = await client.manualOrderRequest.findUnique({
     where: { id: requestId },
     select: MANUAL_ORDER_REQUEST_SELECT
-  });
-
-  await recordAuditEvent({
-    action: "SET_MANUAL_ORDER_DISPATCH_DATE",
-    entityType: "ManualOrderRequest",
-    entityId: requestId,
-    user: actorUser,
-    oldValue: request,
-    newValue: updatedRequest,
-    note: `Created order #${order.id} from manual order request #${requestId}`
   });
 
   invalidateManualOrderRequestCaches();

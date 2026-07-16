@@ -4,9 +4,13 @@ import { useAuth } from "../context/AuthContext";
 import api from "../api/axiosClient";
 import useProductionRecord from "../hooks/useProductionRecord";
 import ProductionStepNav from "../components/production/ProductionStepNav";
+import SampleFormModal from "../components/production/SampleFormModal";
+import SampleList from "../components/production/SampleList";
 import { logApiError } from "../utils/apiError";
 import { dispatchUserMessage } from "../utils/errorMessages";
-import { buildSectionPatchPayload, cloneOperationLogRow, emptyOperationLogRow, ensureRows, getOperationMaterialNames, parseMfgData } from "../utils/productionMfg";
+import { buildSectionPatchPayload, cloneOperationLogRow, emptyOperationLogRow, getOperationMaterialNames, parseMfgData } from "../utils/productionMfg";
+import { nowDate } from "../utils/clock";
+import { minEntryDateFor } from "../utils/dateRules";
 
 function ProductionOperationLogPage() {
   const { id } = useParams();
@@ -14,35 +18,105 @@ function ProductionOperationLogPage() {
   const { user } = useAuth();
   const canManageProduction = ["admin", "production"].includes(user?.role);
   const { record, loading, reload } = useProductionRecord(id);
-  const [rows, setRows] = useState([emptyOperationLogRow()]);
+  const [rows, setRows] = useState([]);
   const [saving, setSaving] = useState(false);
   const materialNames = getOperationMaterialNames(record?.rawMaterials);
 
-  // Arriving from the list page's "+ Add Entry" picker: start on a fresh blank
-  // row. Only on the first load — a reload after saving must not re-append.
+  // Which lot the form is open on: an index to edit, or "new".
+  const [editing, setEditing] = useState(null);
+  const [draft, setDraft] = useState(null);
+
+  // Arriving from the list page's "+ Add Entry" picker: open straight onto a
+  // fresh lot. Only on the first load — a reload after saving must not reopen.
   const pendingAddRow = useRef(Boolean(state?.addRow));
 
   useEffect(() => {
     if (!record) return;
     const mfg = parseMfgData(record.rawMaterials);
-    const saved = ensureRows(mfg.batchLogs.map(cloneOperationLogRow), emptyOperationLogRow);
+    setRows(mfg.batchLogs.map(cloneOperationLogRow));
+
     if (pendingAddRow.current) {
       pendingAddRow.current = false;
-      setRows([...saved, emptyOperationLogRow()]);
-      return;
+      setDraft({ ...emptyOperationLogRow(), date: nowDate() });
+      setEditing("new");
     }
-    setRows(saved);
   }, [record]);
 
-  const setRowField = (index, key, value) => {
-    setRows((prev) => prev.map((row, i) => (i === index ? { ...row, [key]: value } : row)));
+  // The log's nine columns, grouped into what happens at the reactor: which lot,
+  // what went in, how it ran, who ran it.
+  const SECTIONS = [
+    {
+      title: "Lot",
+      fields: [
+        { key: "lotNo", label: "Lot No." },
+        { key: "date",  label: "Date", type: "date", min: minEntryDateFor }
+      ]
+    },
+    {
+      title: "Charge",
+      fields: [
+        { key: "material1Qty", label: `${materialNames[0]} (kg)`, type: "decimal" },
+        { key: "material2Qty", label: `${materialNames[1]} (kg)`, type: "decimal" }
+      ]
+    },
+    {
+      title: "Temperatures",
+      fields: [
+        { key: "initialTemp",    label: "Initial Temp" },
+        { key: "reactionTemp",   label: "Reaction Temp" },
+        { key: "chopperTemp",    label: "Chopper Temp" },
+        { key: "completionTemp", label: "Completion Temp" }
+      ]
+    },
+    {
+      title: "Sign-off",
+      fields: [
+        { key: "doneBy", label: "Done By", wide: true }
+      ]
+    }
+  ];
+
+  const summarize = (row) => {
+    const primary = [
+      row.lotNo ? `Lot ${row.lotNo}` : "Lot —",
+      row.date || null
+    ].filter(Boolean).join(" · ");
+
+    const charge = [
+      row.material1Qty ? `${materialNames[0]} ${row.material1Qty}kg` : null,
+      row.material2Qty ? `${materialNames[1]} ${row.material2Qty}kg` : null
+    ].filter(Boolean);
+
+    return { primary, secondary: charge.length ? charge.join(" · ") : "Nothing charged yet" };
   };
 
-  const addRow = () => setRows((prev) => [...prev, emptyOperationLogRow()]);
-  const removeRow = (index) => setRows((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== index) : prev));
+  const openNew = () => {
+    setDraft({ ...emptyOperationLogRow(), date: nowDate() });
+    setEditing("new");
+  };
 
-  const onSubmit = async (event) => {
-    event.preventDefault();
+  const openEdit = (index) => {
+    setDraft(rows[index]);
+    setEditing(index);
+  };
+
+  const closeForm = () => {
+    setEditing(null);
+    setDraft(null);
+  };
+
+  const commitRow = (row) => {
+    setRows((prev) => (
+      editing === "new"
+        ? [...prev, row]
+        : prev.map((existing, i) => (i === editing ? row : existing))
+    ));
+    closeForm();
+  };
+
+  const removeRow = (index) => setRows((prev) => prev.filter((_, i) => i !== index));
+
+  const onSubmit = async () => {
     if (!record || !canManageProduction || saving) return;
     setSaving(true);
     try {
@@ -74,76 +148,73 @@ function ProductionOperationLogPage() {
       <ProductionStepNav record={record} activeStep="operation-log" />
 
       <section className="order-card">
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-          <h3 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-            Manufacturing Operation Log — Lot-wise Batch Record
-          </h3>
-          {canManageProduction && (
-            <button type="button" className="order-btn-secondary" onClick={addRow}>+ Add Row</button>
-          )}
-        </div>
+        <h3 className="sample-heading">
+          Manufacturing Operation Log — Lot-wise Batch Record
+        </h3>
 
-        <div className="order-table-wrap">
-          <table className="order-table">
-            <thead>
-              <tr>
-                <th>Lot No.</th>
-                <th>Date</th>
-                <th>{materialNames[0]} (kg)</th>
-                <th>{materialNames[1]} (kg)</th>
-                <th>Initial Temp</th>
-                <th>Reaction Temp</th>
-                <th>Chopper Temp</th>
-                <th>Completion Temp</th>
-                <th>Done By</th>
-                {canManageProduction && <th />}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, index) => (
-                <tr key={index}>
-                  {canManageProduction ? (
-                    <>
-                      <td><input className="mfg-cell-input" value={row.lotNo} placeholder={String(index + 1)} onChange={(e) => setRowField(index, "lotNo", e.target.value)} /></td>
-                      <td><input className="mfg-cell-input" type="date" value={row.date} onChange={(e) => setRowField(index, "date", e.target.value)} /></td>
-                      <td><input className="mfg-cell-input" value={row.material1Qty} onChange={(e) => setRowField(index, "material1Qty", e.target.value)} /></td>
-                      <td><input className="mfg-cell-input" value={row.material2Qty} onChange={(e) => setRowField(index, "material2Qty", e.target.value)} /></td>
-                      <td><input className="mfg-cell-input" value={row.initialTemp} onChange={(e) => setRowField(index, "initialTemp", e.target.value)} /></td>
-                      <td><input className="mfg-cell-input" value={row.reactionTemp} onChange={(e) => setRowField(index, "reactionTemp", e.target.value)} /></td>
-                      <td><input className="mfg-cell-input" value={row.chopperTemp} onChange={(e) => setRowField(index, "chopperTemp", e.target.value)} /></td>
-                      <td><input className="mfg-cell-input" value={row.completionTemp} onChange={(e) => setRowField(index, "completionTemp", e.target.value)} /></td>
-                      <td><input className="mfg-cell-input" value={row.doneBy} onChange={(e) => setRowField(index, "doneBy", e.target.value)} /></td>
-                      <td>
-                        {rows.length > 1 && (
-                          <button type="button" className="order-btn-secondary" style={{ padding: "2px 8px" }} onClick={() => removeRow(index)}>×</button>
-                        )}
-                      </td>
-                    </>
-                  ) : (
-                    <>
-                      <td>{row.lotNo || index + 1}</td>
-                      <td>{row.date || "-"}</td>
-                      <td>{row.material1Qty || "-"}</td>
-                      <td>{row.material2Qty || "-"}</td>
-                      <td>{row.initialTemp || "-"}</td>
-                      <td>{row.reactionTemp || "-"}</td>
-                      <td>{row.chopperTemp || "-"}</td>
-                      <td>{row.completionTemp || "-"}</td>
-                      <td>{row.doneBy || "-"}</td>
-                    </>
-                  )}
+        {/* Read-only for anyone who cannot edit: the full record, stacked into a
+            card per lot on a phone. */}
+        {canManageProduction ? (
+          <SampleList
+            rows={rows}
+            summarize={summarize}
+            onAdd={openNew}
+            onEdit={openEdit}
+            onRemove={removeRow}
+          />
+        ) : (
+          <div className="responsive-table-wrap">
+            <table className="order-table responsive-table">
+              <thead>
+                <tr>
+                  <th>Lot No.</th>
+                  <th>Date</th>
+                  <th>{materialNames[0]} (kg)</th>
+                  <th>{materialNames[1]} (kg)</th>
+                  <th>Initial Temp</th>
+                  <th>Reaction Temp</th>
+                  <th>Chopper Temp</th>
+                  <th>Completion Temp</th>
+                  <th>Done By</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {rows.map((row, index) => (
+                  <tr key={index}>
+                    <td data-label="Lot No.">{row.lotNo || index + 1}</td>
+                    <td data-label="Date">{row.date || "-"}</td>
+                    <td data-label={`${materialNames[0]} (kg)`}>{row.material1Qty || "-"}</td>
+                    <td data-label={`${materialNames[1]} (kg)`}>{row.material2Qty || "-"}</td>
+                    <td data-label="Initial Temp">{row.initialTemp || "-"}</td>
+                    <td data-label="Reaction Temp">{row.reactionTemp || "-"}</td>
+                    <td data-label="Chopper Temp">{row.chopperTemp || "-"}</td>
+                    <td data-label="Completion Temp">{row.completionTemp || "-"}</td>
+                    <td data-label="Done By">{row.doneBy || "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {canManageProduction && (
-          <button className="order-btn-primary" style={{ marginTop: 16 }} disabled={saving} onClick={onSubmit}>
-            {saving ? "Saving..." : "Save Operation Log"}
-          </button>
+          <div className="sample-actions">
+            <button className="order-btn-primary" disabled={saving} onClick={onSubmit}>
+              {saving ? "Saving..." : "Save Operation Log"}
+            </button>
+          </div>
         )}
       </section>
+
+      {editing !== null && (
+        <SampleFormModal
+          title={editing === "new" ? "Add Lot" : `Edit Lot #${editing + 1}`}
+          sections={SECTIONS}
+          value={draft}
+          onSave={commitRow}
+          onCancel={closeForm}
+        />
+      )}
     </div>
   );
 }

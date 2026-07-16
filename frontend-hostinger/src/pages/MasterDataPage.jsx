@@ -296,7 +296,10 @@ function MasterDataPage() {
   const fetchMasterData = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await api.get("/master-data");
+      // `force` bypasses the server's 30s master-data cache, so a value the
+      // admin just added or removed shows up immediately rather than after the
+      // cache expires.
+      const { data } = await api.get("/master-data", { params: { force: true } });
       setMasterData(data && typeof data === "object" ? data : {});
     } catch (error) {
       logApiError(error, "Failed to load master data");

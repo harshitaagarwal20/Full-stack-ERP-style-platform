@@ -4,7 +4,6 @@ import api from "../api/axiosClient";
 import { BoxesIcon, SearchIcon } from "../components/erp/ErpIcons";
 import { logApiError } from "../utils/apiError";
 import { formatDate, getStatusClass, getStatusLabel } from "../utils/productionMfg";
-import Toolbar from "../components/common/Toolbar";
 import SearchableSelect from "../components/common/SearchableSelect";
 import ProductionBatchPicker from "../components/production/ProductionBatchPicker";
 import useMasterData from "../hooks/useMasterData";
@@ -19,6 +18,8 @@ function statusBadgeColor(status) {
   if (status === "HOLD") return "orange";
   return "default";
 }
+
+const entryCount = (record) => Number(record.inProcessTestSheet?._count?.items || 0);
 
 function InProcessTestingListPage() {
   const navigate = useNavigate();
@@ -98,44 +99,49 @@ function InProcessTestingListPage() {
 
   return (
     <div className="order-page">
-      <Toolbar
-        title="In-Process Testing"
-        search={
-          <div className="ui-toolbar-search">
-            <SearchIcon />
-            <input
-              placeholder="Search batch, client or product..."
-              value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") onSearchSubmit();
-              }}
-            />
+      {/* HEADER */}
+      <section className="order-card">
+        <div className="order-header-card">
+          <div className="order-header-left">
+            <h2>In-Process Testing</h2>
           </div>
-        }
-        actions={
-          <>
-            <button className="order-btn-secondary" onClick={exportToExcel}>Export to Excel</button>
-            <button className="order-btn-primary ghost" onClick={onSearchSubmit}>Search</button>
+          <div className="order-header-right">
             <button className="order-btn-primary" onClick={() => setPickerOpen(true)}>+ Add Entry</button>
-          </>
-        }
-        filters={
-          <>
-            <SearchableSelect
-              options={statusOptions}
-              value={statusFilter}
-              onChange={(value) => setStatusFilter(value)}
-              placeholder="All Statuses"
-            />
-            {activeFilterCount > 0 && (
-              <button className="order-btn-secondary" onClick={clearFilters}>
-                Clear filters
-              </button>
-            )}
-          </>
-        }
-      />
+          </div>
+        </div>
+      </section>
+
+      {/* SEARCH + FILTERS + ACTIONS */}
+      <section className="order-card">
+        <div className="unified-search-box">
+          <SearchIcon />
+          <input autoComplete="off"
+            placeholder="Search batch, client or product..."
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") onSearchSubmit();
+            }}
+          />
+        </div>
+
+        <div className="unified-filter-row">
+          <SearchableSelect
+            options={statusOptions}
+            value={statusFilter}
+            onChange={(value) => setStatusFilter(value)}
+            placeholder="All Statuses"
+          />
+        </div>
+
+        <div className="unified-actions">
+          <button className="order-btn-primary ghost" onClick={onSearchSubmit}>Search</button>
+          {activeFilterCount > 0 && (
+            <button className="order-btn-secondary" onClick={clearFilters}>Clear filters</button>
+          )}
+          <button className="order-btn-secondary" onClick={exportToExcel}>Export to Excel</button>
+        </div>
+      </section>
 
       {pickerOpen && (
         <ProductionBatchPicker
@@ -171,35 +177,46 @@ function InProcessTestingListPage() {
                   <th style={{ width: 44 }}>#</th>
                   <th>Batch No.</th>
                   <th>Product</th>
-                  <th>Grade</th>
                   <th>Client</th>
-                  <th>Status</th>
-                  <th style={{ textAlign: "right" }}>Entries Logged</th>
-                  <th>Last Updated</th>
+                  <th>Batch Status</th>
+                  <th>Testing</th>
                   <th />
                 </tr>
               </thead>
               <tbody>
-                {displayRecords.map((record, idx) => (
-                  <tr key={record.id}>
-                    <td style={{ color: "#94a3b8", fontSize: 12 }}>{idx + 1}</td>
-                    <td style={{ fontWeight: 600, color: "#1d4ed8" }}>{record.batchNo || "-"}</td>
-                    <td>{record.order?.product || "-"}</td>
-                    <td>{record.order?.grade || "-"}</td>
-                    <td>{record.order?.clientName || "-"}</td>
-                    <td><span className={`order-status ${getStatusClass(record.status)}`}>{getStatusLabel(record.status)}</span></td>
-                    <td style={{ textAlign: "right" }}>{record.inProcessTestSheet?._count?.items || 0}</td>
-                    <td>{formatDate(record.inProcessTestSheet?.updatedAt)}</td>
-                    <td>
-                      <button
-                        className="order-sort-btn"
-                        onClick={() => navigate(`/production/${record.id}/in-process-testing`)}
-                      >
-                        Open In-Process Test Sheet
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {displayRecords.map((record, idx) => {
+                  const entries = entryCount(record);
+                  return (
+                    <tr key={record.id}>
+                      <td style={{ color: "#94a3b8", fontSize: 12 }}>{idx + 1}</td>
+                      <td style={{ fontWeight: 600, color: "#1d4ed8" }}>{record.batchNo || "-"}</td>
+                      <td>
+                        <div>{record.order?.product || "-"}</div>
+                        {record.order?.grade && <div className="pack-cell-sub">{record.order.grade}</div>}
+                      </td>
+                      <td>{record.order?.clientName || "-"}</td>
+                      <td><span className={`order-status ${getStatusClass(record.status)}`}>{getStatusLabel(record.status)}</span></td>
+                      <td>
+                        {entries === 0 ? (
+                          <span className="pack-cell-sub">No entries yet</span>
+                        ) : (
+                          <>
+                            <div style={{ fontWeight: 600 }}>{entries} entr{entries === 1 ? "y" : "ies"}</div>
+                            <div className="pack-cell-sub">Last {formatDate(record.inProcessTestSheet?.updatedAt)}</div>
+                          </>
+                        )}
+                      </td>
+                      <td>
+                        <button
+                          className="order-btn-secondary"
+                          onClick={() => navigate(`/production/${record.id}/in-process-testing`)}
+                        >
+                          {entries === 0 ? "Start Testing" : "Open Sheet"}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -207,23 +224,26 @@ function InProcessTestingListPage() {
 
         {isMobile && !loading && records.length > 0 && (
           <div className="order-mobile-list">
-            {displayRecords.map((record) => (
-              <MobileListCard
-                key={record.id}
-                title={record.batchNo || "—"}
-                subtitle={record.order?.product || "-"}
-                badge={getStatusLabel(record.status)}
-                badgeColor={statusBadgeColor(record.status)}
-                fields={[
-                  { label: "Client", value: record.order?.clientName || "-" },
-                  { label: "Grade", value: record.order?.grade || "-" },
-                  { label: "Entries Logged", value: record.inProcessTestSheet?._count?.items || 0 },
-                  { label: "Last Updated", value: formatDate(record.inProcessTestSheet?.updatedAt) }
-                ]}
-                onActionClick={() => navigate(`/production/${record.id}/in-process-testing`)}
-                actionLabel="Open In-Process Test Sheet"
-              />
-            ))}
+            {displayRecords.map((record) => {
+              const entries = entryCount(record);
+              return (
+                <MobileListCard
+                  key={record.id}
+                  title={record.batchNo || "—"}
+                  subtitle={record.order?.product || "-"}
+                  badge={getStatusLabel(record.status)}
+                  badgeColor={statusBadgeColor(record.status)}
+                  fields={[
+                    { label: "Client", value: record.order?.clientName || "-" },
+                    { label: "Grade", value: record.order?.grade || "-" },
+                    { label: "Entries Logged", value: entries },
+                    { label: "Last Updated", value: formatDate(record.inProcessTestSheet?.updatedAt) }
+                  ]}
+                  onActionClick={() => navigate(`/production/${record.id}/in-process-testing`)}
+                  actionLabel={entries === 0 ? "Start Testing" : "Open Sheet"}
+                />
+              );
+            })}
             {showingRecentOnly && (
               <div className="mobile-recent-hint">
                 Showing the 5 most recent. Search to find any batch.

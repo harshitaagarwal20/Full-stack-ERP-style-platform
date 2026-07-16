@@ -1,5 +1,28 @@
-import { addCustomerMasterRow, addEnquiryMasterRow, addMasterDataValue, addSupplierMasterRow, deleteCustomerMasterRow, deleteSupplierMasterRow, getMasterData, importCustomerMasterRows, importSupplierMasterRows } from "../services/masterDataService.js";
+import { EDITABLE_MASTER_DATA_CATEGORIES, addCustomerMasterRow, addEnquiryMasterRow, addMasterDataValue, addProductMasterRow, addSupplierMasterRow, deleteCustomerMasterRow, deleteProductMasterRow, deleteSupplierMasterRow, getMasterData, importCustomerMasterRows, importProductMasterRows, importSupplierMasterRows, removeMasterDataValue, updateProductMasterRow } from "../services/masterDataService.js";
 import { toPositiveIntOrThrow } from "../utils/routeParams.js";
+
+// Lets the admin screen render exactly the lists it is allowed to edit, instead
+// of hard-coding a second copy of that list in the frontend and drifting from it.
+export async function listEditableCategories(req, res, next) {
+  try {
+    return res.json({ items: EDITABLE_MASTER_DATA_CATEGORIES });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function deleteMasterDataValue(req, res, next) {
+  try {
+    const result = await removeMasterDataValue(
+      req.params.category,
+      decodeURIComponent(req.params.value),
+      req.user
+    );
+    return res.json(result);
+  } catch (error) {
+    return next(error);
+  }
+}
 
 export async function listMasterData(req, res, next) {
   try {
@@ -71,6 +94,44 @@ export async function importSupplierMaster(req, res, next) {
   try {
     const result = await importSupplierMasterRows(req.validatedBody.rows, req.user);
     return res.status(200).json(result);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function createProductMaster(req, res, next) {
+  try {
+    const item = await addProductMasterRow(req.validatedBody, req.user);
+    return res.status(201).json(item);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function importProductMaster(req, res, next) {
+  try {
+    const result = await importProductMasterRows(req.validatedBody.rows, req.user);
+    return res.status(200).json(result);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function editProductMaster(req, res, next) {
+  try {
+    const productId = toPositiveIntOrThrow(req.params.id, "id");
+    const item = await updateProductMasterRow(productId, req.validatedBody, req.user);
+    return res.json(item);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function removeProductMaster(req, res, next) {
+  try {
+    const productId = toPositiveIntOrThrow(req.params.id, "id");
+    const item = await deleteProductMasterRow(productId, req.user);
+    return res.json(item);
   } catch (error) {
     return next(error);
   }

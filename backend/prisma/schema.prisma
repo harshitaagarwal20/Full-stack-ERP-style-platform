@@ -12,6 +12,12 @@ enum Role {
   sales
   production
   dispatch
+  // Raises purchase orders (supplier, items, quantities) but never sees or
+  // sets pricing, and cannot release a PO to the supplier.
+  purchase
+  // Owns the money side of a PO: unit price, tax, currency, discount and
+  // freight — and releases the priced PO to the supplier.
+  accounts
 }
 
 enum EnquiryStatus {
@@ -50,6 +56,9 @@ enum ProductionStatus {
   IN_PROGRESS
   PARTIALLY_PRODUCED
   HOLD
+  // A batch whose finished-goods QC failed. It holds no sellable stock (the
+  // inward sync zeroes it), and stays here until production resumes work on it.
+  REWORK
   COMPLETED
 }
 
@@ -78,6 +87,9 @@ enum PurchaseOrderStatus {
 enum GrnStatus {
   DRAFT
   CONFIRMED
+  // The raw material failed its test sheet and the consignment was turned away.
+  // A rejected GRN can never be confirmed, so none of it reaches inventory.
+  REJECTED
 }
 
 enum QcResult {
@@ -90,6 +102,14 @@ enum FgQcResult {
   PENDING
   PASS
   FAIL
+}
+
+// Accounts tracks payment after the goods ship. An order is only COMPLETED once
+// it is both fully dispatched and paid — dispatch alone leaves it DISPATCHED.
+enum PaymentStatus {
+  PENDING
+  PARTIAL
+  RECEIVED
 }
 
 model User {
@@ -111,6 +131,26 @@ model User {
 
   @@index([createdAt, id])
   @@index([role, createdAt])
+}
+
+enum PermissionLevel {
+  NONE
+  VIEW
+  FULL
+}
+
+// Admin-editable module access per role. Admin itself is never stored here —
+// it always has full access, so that no admin can lock every admin out of the
+// permissions screen.
+model RolePermission {
+  id        Int             @id @default(autoincrement())
+  role      Role
+  module    String
+  level     PermissionLevel @default(NONE)
+  updatedAt DateTime        @updatedAt
+
+  @@unique([role, module])
+  @@index([role])
 }
 
 model Customer {
@@ -210,6 +250,10 @@ model Enquiry {
   order            Order?
 
   @@index([customerId])
+  @@index([status, createdAt])
+  @@index([stage])
+  @@index([enquiryDate])
+  @@index([expectedTimeline])
 }
 
 model BillOfMaterial {
@@ -250,7 +294,7 @@ model Order {
   orderNo          String      @unique
   product          String
   grade            String
-  quantity         Int
+  quantity         Float
   price            Float?
   currency         String?
   unit             Unit
@@ -265,6 +309,10 @@ model Order {
   countryCode      String?
   dispatchDate     DateTime?
   status           OrderStatus @default(CREATED)
+  paymentStatus    PaymentStatus @default(PENDING)
+  amountReceived   Float?
+  paymentReceivedAt DateTime?
+  paymentRemarks   String?
   // Propagated from the source enquiry. Urgent orders are pulled to the front
   // of the production queue; everything else is FIFO by creation date.
   isUrgent         Boolean     @default(false)
@@ -282,6 +330,11 @@ model Order {
   manualOrderRequest ManualOrderRequest? @relation("ManualOrderRequestToOrder")
 
   @@index([customerId])
+  // The list filters on status and sorts by status then createdAt — without this
+  // every page load is a full table scan plus a filesort.
+  @@index([status, createdAt])
+  @@index([orderDate])
+  @@index([deliveryDate])
 }
 
 model ManualOrderRequest {
@@ -291,7 +344,7 @@ model ManualOrderRequest {
   customerAddressId Int?
   product        String
   grade          String
-  quantity       Int
+  quantity       Float
   unit           String
   packingType    String
   packingSize    String
@@ -328,17 +381,18 @@ model Production {
   assignedPersonnel        String
   deliveryDate             DateTime
   productSpecs             String
-  capacity                 Int
+  capacity                 Float
   batchNo                  String?
   particleSize             String
   acmRpm                   Int
   classifierRpm            Int
   blowerRpm                Int
   rawMaterials             String?          @db.LongText
+  productRemark            String?
   remarks                  String?          @db.LongText
   productionStartedDate    DateTime?
   productionCompletionDate DateTime?
-  producedQuantity         Int              @default(0)
+  producedQuantity         Float              @default(0)
   createdAt                DateTime         @default(now())
   updatedAt                DateTime         @updatedAt
   order                    Order            @relation(fields: [orderId], references: [id], onDelete: Restrict)
@@ -347,6 +401,8 @@ model Production {
   batchSubstitutions       BatchSubstitution[]
 
   @@index([orderId])
+  @@index([status, createdAt])
+  @@index([createdAt])
 }
 
 model InProcessTestSheet {
@@ -355,6 +411,11 @@ model InProcessTestSheet {
   productName  String?
   grade        String?
   batchNo      String?
+  // The "quality check in between project" gate: a FAIL sends the batch to
+  // REWORK before it ever reaches packing.
+  overallResult FgQcResult @default(PENDING)
+  approvedBy   String?
+  approvedAt   DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -413,6 +474,7 @@ model FinishedGoodsTestSheetItem {
   bulkDensity   String?
   sieveResidue  String?
   analysisBy    String?
+  approvedBy    String?
   remarks       String?
 
   sheet FinishedGoodsTestSheet @relation(fields: [sheetId], references: [id], onDelete: Cascade)
@@ -423,13 +485,19 @@ model FinishedGoodsTestSheetItem {
 model Dispatch {
   id             Int            @id @default(autoincrement())
   orderId        Int
-  dispatchedQuantity Int
+  dispatchedQuantity Float
   dispatchDate   DateTime       @default(now())
   packingDone    Boolean
   shipmentStatus ShipmentStatus
   remarks        String?
   createdAt      DateTime       @default(now())
   order          Order          @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  // Every other list model carries these; Dispatch was the one gap. The list
+  // sorts by createdAt, and orderId is joined on constantly (dispatch history
+  // per order), so both want an index rather than a scan.
+  @@index([orderId])
+  @@index([createdAt, id])
 }
 
 // Records finished goods being packed for an order, consuming packing
@@ -497,6 +565,7 @@ model PurchaseOrder {
 
   @@index([status, createdAt])
   @@index([supplierId])
+  @@index([orderDate])
 }
 
 model PurchaseOrderItem {
@@ -536,6 +605,9 @@ model GoodsReceiptNote {
   vehicleRef        String?
   warehouseLocation String?
   status            GrnStatus @default(DRAFT)
+  // Why the consignment was turned away — the only record of the decision.
+  rejectionReason   String?
+  rejectedAt        DateTime?
   remarks           String?   @db.Text
   notes             String?
   createdAt         DateTime  @default(now())
@@ -634,6 +706,9 @@ model InventoryTransaction {
   @@index([itemId])
   @@index([itemId, batchNo])
   @@index([grnId])
+  @@index([reference])
+  @@index([createdAt])
+  @@index([type, createdAt])
 }
 
 model BatchSubstitution {
@@ -644,7 +719,7 @@ model BatchSubstitution {
   originalBatchNo           String
   originalVendor            String?
   originalGrade             String?
-  quantity                  Int
+  quantity                  Float
   substituteItemId          String
   substituteBatchNo         String
   substituteVendor          String?
@@ -663,52 +738,102 @@ model BatchSubstitution {
   @@index([productionId])
 }
 
-// Legacy master data tables - kept for backward compatibility
-model CustomerMaster {
-  id          Int       @id @default(autoincrement())
-  customerName String?
-  address     String?
-  city        String?
-  pincode     String?
-  state       String?
-  country     String?
-  createdAt   DateTime? @default(now())
-  updatedAt   DateTime? @updatedAt
+// ---------------------------------------------------------------------------
+// Master tables.
+//
+// These five were created at runtime by raw DDL in masterDataService rather than
+// by Prisma, which left the schema with two sources of truth: Prisma did not
+// know they existed, so `prisma migrate dev` would have generated a migration
+// that DROPPED all five — taking the customer, supplier and product masters and
+// every dropdown list in the app with them. Declaring them here closes that.
+//
+// The field types below mirror the live tables exactly. masterDataService still
+// creates them with CREATE TABLE IF NOT EXISTS on boot, which is now a harmless
+// no-op on any database Prisma has already migrated.
+// ---------------------------------------------------------------------------
 
-  @@map("customermaster")
+/// Every admin-editable dropdown list in the app (products, units, suppliers of
+/// names, packing materials, ...), keyed by category.
+model MasterDataItem {
+  id        Int      @id @default(autoincrement())
+  category  String   @db.VarChar(100)
+  value     String   @db.VarChar(191)
+  label     String?  @db.VarChar(191)
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@unique([category, value], map: "MasterDataItem_category_value_key")
+  @@index([category, sortOrder], map: "MasterDataItem_category_sortOrder_idx")
 }
 
 model EnquiryMaster {
-  id         Int       @id @default(autoincrement())
-  companyName String?
-  address    String?
-  createdAt  DateTime? @default(now())
-  updatedAt  DateTime? @updatedAt
+  id             Int      @id @default(autoincrement())
+  modeOfEnquiry  String   @db.VarChar(191)
+  companyName    String   @db.VarChar(191)
+  product        String   @db.VarChar(191)
+  assignedPerson String   @db.VarChar(191)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @default(now()) @updatedAt
 
-  @@map("enquirymaster")
+  @@unique([modeOfEnquiry, companyName, product, assignedPerson], map: "EnquiryMaster_unique_key")
 }
 
-model MasterDataItem {
-  id        Int       @id @default(autoincrement())
-  category  String?
-  value     String?
-  label     String?
-  createdAt DateTime? @default(now())
-  updatedAt DateTime? @updatedAt
-
-  @@map("masterdataitem")
+model CustomerMaster {
+  id                  Int      @id @default(autoincrement())
+  customerName        String   @db.VarChar(191)
+  gstn                String?  @db.VarChar(50)
+  country             String?  @db.VarChar(100)
+  countryCode         String?  @db.VarChar(20)
+  custInitials        String?  @db.VarChar(20)
+  sNoCode             String?  @db.VarChar(50)
+  customerCode        String?  @unique(map: "CustomerMaster_customerCode_key") @db.VarChar(80)
+  contactPerson       String?  @db.VarChar(191)
+  contactPersonNumber String?  @db.VarChar(30)
+  companyEmail        String?  @db.VarChar(191)
+  address             String?  @db.VarChar(500)
+  pincode             String?  @db.VarChar(20)
+  state               String?  @db.VarChar(100)
+  city                String?  @db.VarChar(100)
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @default(now()) @updatedAt
 }
 
 model SupplierMaster {
-  id        Int       @id @default(autoincrement())
-  name      String?
-  address   String?
-  city      String?
-  pincode   String?
-  state     String?
-  country   String?
-  createdAt DateTime? @default(now())
-  updatedAt DateTime? @updatedAt
+  id                  Int      @id @default(autoincrement())
+  supplierName        String   @db.VarChar(191)
+  gstn                String?  @db.VarChar(50)
+  panNo               String?  @db.VarChar(20)
+  country             String?  @db.VarChar(100)
+  countryCode         String?  @db.VarChar(20)
+  supplierCode        String?  @unique(map: "SupplierMaster_supplierCode_key") @db.VarChar(80)
+  contactPerson       String?  @db.VarChar(191)
+  contactPersonNumber String?  @db.VarChar(30)
+  companyEmail        String?  @db.VarChar(191)
+  address             String?  @db.VarChar(500)
+  pincode             String?  @db.VarChar(20)
+  state               String?  @db.VarChar(100)
+  city                String?  @db.VarChar(100)
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @default(now()) @updatedAt
+}
 
-  @@map("suppliermaster")
+/// The product master behind every product picker: the name is what the pickers
+/// bind to, the category and attributes are what a plain name cannot carry.
+model ProductMaster {
+  id          Int      @id @default(autoincrement())
+  productName String   @unique(map: "ProductMaster_productName_key") @db.VarChar(191)
+  category    String?  @db.VarChar(100)
+  defaultUnit String?  @db.VarChar(20)
+  hsnCode     String?  @db.VarChar(30)
+  description String?  @db.VarChar(500)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+
+  @@index([category], map: "ProductMaster_category_idx")
 }

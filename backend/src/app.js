@@ -6,8 +6,8 @@ import morgan from "morgan";
 import env from "./config/env.js";
 import { errorMiddleware, notFoundMiddleware } from "./middleware/errorMiddleware.js";
 import authRoutes from "./routes/authRoutes.js";
-import auditRoutes from "./routes/auditRoutes.js";
-import cronRoutes from "./routes/cronRoutes.js";
+import roleRoutes from "./routes/roleRoutes.js";
+import customerRoutes from "./routes/customerRoutes.js";
 import dashboardRoutes from "./routes/dashboardRoutes.js";
 import dispatchRoutes from "./routes/dispatchRoutes.js";
 import enquiryRoutes from "./routes/enquiryRoutes.js";
@@ -24,6 +24,14 @@ import productionRoutes from "./routes/productionRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 
 const app = express();
+
+// No ETags on API responses. Express fingerprints every JSON body by default, so
+// a repeat list request answers 304 with no body and the client re-renders from
+// its cache. The data behind these endpoints changes constantly and the payloads
+// are small, so always send the fresh body instead. This app serves no static
+// assets, so nothing else here wants an ETag.
+app.set("etag", false);
+
 const allowedOriginRules = String(env.clientOrigin || "")
   .split(",")
   .map((origin) => origin.trim())
@@ -62,7 +70,10 @@ app.use(
       // masks a config problem as a server error and breaks even preflight.
       return callback(null, isOriginAllowed(origin));
     },
-    credentials: true
+    credentials: true,
+    // Let the browser read the rolling-session token the auth middleware hands
+    // back, so an active user's session is refreshed without a re-login.
+    exposedHeaders: ["X-Renewed-Token"]
   })
 );
 app.use(helmet());
@@ -77,6 +88,13 @@ app.use(
     }
   })
 );
+
+// Belt and braces with the disabled ETag above: tell the browser (and any proxy
+// in front of us) not to hold on to an API response at all.
+app.use("/api", (req, res, next) => {
+  res.set("Cache-Control", "no-store");
+  next();
+});
 
 app.get("/", (req, res) => {
   res.json({
@@ -97,11 +115,11 @@ app.get("/api/health", (req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
+app.use("/api/customers", customerRoutes);
 app.use("/api/master-data", masterDataRoutes);
 app.use("/api/diagnostics", diagnosticsRoutes);
 app.use("/api/users", userRoutes);
-app.use("/api/audit-logs", auditRoutes);
-app.use("/api/cron", cronRoutes);
+app.use("/api/roles", roleRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/enquiries", enquiryRoutes);
 app.use("/api/manual-orders", manualOrderRequestRoutes);

@@ -55,7 +55,7 @@ assert.equal(
 
 assert.throws(
   () => buildProductionUpdateData({ capacity: "abc" }, { status: "PENDING" }),
-  (error) => error.statusCode === 400 && error.message === "Capacity must be a positive integer."
+  (error) => error.statusCode === 400 && error.message === "Capacity must be a positive number."
 );
 
 assert.throws(

@@ -80,13 +80,6 @@ body {
   width: 100%;
 }
 
-/* Pages hand Toolbar their search pre-wrapped in .ui-toolbar-search, which is
-   width-capped on its own. Inside the unified box it should span the card. */
-.unified-search-box .ui-toolbar-search {
-  width: 100%;
-  max-width: none;
-}
-
 .unified-search-box + .unified-filter-row {
   margin-top: 10px;
 }
@@ -135,8 +128,13 @@ body {
   gap: 8px;
 }
 
+.unified-filter-row > * {
+  min-width: 0;
+}
+
 .unified-filter-row select,
 .unified-filter-row input {
+  width: 100%;
   height: 40px;
   border-radius: 8px;
   border: 1px solid var(--ui-border);
@@ -338,96 +336,6 @@ body {
   display: flex;
   flex-direction: column;
   gap: 14px;
-}
-
-.ui-toolbar-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.ui-toolbar-row h2 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--ui-text-primary);
-  letter-spacing: -0.3px;
-}
-
-.ui-toolbar-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.ui-toolbar-search {
-  position: relative;
-  width: min(100%, 360px);
-}
-
-.ui-toolbar-search svg {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 16px;
-  height: 16px;
-  color: var(--ui-text-muted);
-}
-
-.ui-toolbar-search input {
-  width: 100%;
-  height: 40px;
-  border-radius: 8px;
-  border: 1px solid var(--ui-border);
-  background: #ffffff;
-  color: var(--ui-text-primary);
-  padding: 0 12px 0 36px;
-  font-size: 14px;
-  transition: all 0.2s ease;
-}
-
-.ui-toolbar-search input:focus {
-  outline: none;
-  border-color: var(--ui-primary);
-  box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.1);
-}
-
-.ui-toolbar-filters {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  padding-top: 0;
-  border-top: none;
-}
-
-.ui-toolbar-filters > * {
-  flex: 0 1 auto;
-  min-width: 140px;
-}
-
-.ui-toolbar-filters select,
-.ui-toolbar-filters input {
-  height: 40px;
-  border-radius: 8px;
-  border: 1px solid var(--ui-border);
-  background: #ffffff;
-  color: var(--ui-text-secondary);
-  padding: 0 12px;
-  font-size: 13px;
-  transition: all 0.2s ease;
-}
-
-.ui-toolbar-filters select:focus,
-.ui-toolbar-filters input:focus {
-  outline: none;
-  border-color: var(--ui-primary);
-  box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.1);
 }
 
 .ui-badge {
@@ -707,6 +615,218 @@ body {
   cursor: pointer;
 }
 
+.adjust-row-btn {
+  min-height: 30px;
+  border: 1px solid #bfdbfe;
+  border-radius: 7px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.adjust-row-btn:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
+.adjust-modal {
+  width: min(560px, 100%);
+  padding: 0;
+  overflow: visible;
+}
+
+.adjust-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 24px 18px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.adjust-head h3 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.adjust-head p {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.adjust-close {
+  width: 34px;
+  height: 34px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #475569;
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.adjust-close:hover:not(:disabled) {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.adjust-close:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.adjust-body {
+  display: grid;
+  gap: 16px;
+  padding: 20px 24px 22px;
+}
+
+.adjust-field {
+  display: grid;
+  gap: 7px;
+}
+
+.adjust-field .label {
+  margin: 0;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.adjust-field .req {
+  color: #dc2626;
+}
+
+.adjust-field .input,
+.adjust-field .enquiry-company-select > input {
+  height: 42px;
+  border-color: #cbd5e1;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.adjust-toggle {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.adjust-toggle-btn {
+  min-height: 42px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #334155;
+  padding: 9px 12px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.adjust-toggle-btn.in.active {
+  border-color: #86efac;
+  background: #f0fdf4;
+  color: #15803d;
+  box-shadow: inset 0 0 0 1px #86efac;
+}
+
+.adjust-toggle-btn.out.active {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+  box-shadow: inset 0 0 0 1px #fecaca;
+}
+
+.adjust-preview {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  background: #eff6ff;
+  padding: 12px;
+}
+
+.adjust-preview div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.adjust-preview span {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.adjust-preview strong {
+  color: #0f172a;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.adjust-preview-arrow {
+  color: #2563eb;
+  font-size: 18px;
+}
+
+.adjust-preview.negative {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.adjust-preview.negative .adjust-preview-arrow,
+.adjust-preview.negative strong {
+  color: #b91c1c;
+}
+
+.adjust-preview-warn {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #b91c1c;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.adjust-hint {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.adjust-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 24px 20px;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+  border-radius: 0 0 12px 12px;
+}
+
+.masterdata-btn-primary.danger {
+  background: #dc2626;
+}
+
+.masterdata-btn-primary.danger:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
 .masterdata-form-grid {
   display: grid;
   gap: 16px;
@@ -715,6 +835,30 @@ body {
 
 .masterdata-form-grid .full-row {
   grid-column: span 1;
+}
+
+/* SearchableSelect renders a bare <input> with no .input class of its own, so in
+   a form that mixes it with native fields (Adjust Stock: Product + Direction are
+   selects, Quantity + Reason are inputs) the two would sit at different heights
+   with different borders. Give it the same treatment as .input. */
+.masterdata-form-grid .enquiry-company-select input,
+.masterdata-form-grid select,
+.masterdata-form-grid textarea {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #0f172a;
+  padding: 12px;
+  font-size: 14px;
+}
+
+.masterdata-form-grid .enquiry-company-select input:focus,
+.masterdata-form-grid .input:focus,
+.masterdata-form-grid select:focus {
+  outline: none;
+  border-color: #94a3b8;
+  box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.18);
 }
 
 .masterdata-form-actions {
@@ -3655,73 +3799,6 @@ body {
   border-color: #cbd5e1;
 }
 
-.enquiry-search-wrap {
-  position: relative;
-}
-
-.enquiry-search-wrap svg {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 16px;
-  height: 16px;
-  color: #64748b;
-}
-
-.enquiry-search-input {
-  width: 100%;
-  height: 42px;
-  border-radius: 8px;
-  border: 1px solid #cbd5e1;
-  background: #ffffff;
-  color: #0f172a;
-  padding: 0 12px 0 36px;
-}
-
-.enquiry-toolbar {
-  margin-top: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.enquiry-filter-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 8px;
-  flex: 1;
-  min-width: 200px;
-}
-
-.enquiry-filter-grid select,
-.enquiry-filter-grid input {
-  height: 40px;
-  border-radius: 8px;
-  border: 1px solid var(--ui-border);
-  background: #ffffff;
-  color: var(--ui-text-secondary);
-  padding: 0 12px;
-  font-size: 13px;
-  transition: all 0.2s ease;
-}
-
-.enquiry-filter-grid select:focus,
-.enquiry-filter-grid input:focus {
-  outline: none;
-  border-color: var(--ui-primary);
-  box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.1);
-}
-
-.enquiry-toolbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
 .enquiry-table-wrap {
   margin-top: 14px;
   overflow-x: auto;
@@ -3986,6 +4063,36 @@ body {
 
 .enquiry-company-select {
   position: relative;
+  min-width: 0;
+}
+
+/* The control carried no styling of its own — it only looked like an input where
+   a filter row happened to style its descendants, and rendered as a bare
+   borderless line everywhere else (forms, modals). Style it at the source; the
+   filter rows still override height/width as they need. */
+.enquiry-company-select > input {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  border-radius: 8px;
+  border: 1px solid var(--ui-border, #cbd5e1);
+  background: #ffffff;
+  color: var(--ui-text-primary, #0f172a);
+  padding: 0 12px;
+  font-size: 14px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.enquiry-company-select > input:focus {
+  outline: none;
+  border-color: var(--ui-primary, #1e40af);
+  box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.1);
+}
+
+.enquiry-company-select > input:disabled {
+  background: #f1f5f9;
+  color: #64748b;
+  cursor: not-allowed;
 }
 
 .enquiry-company-select-menu {
@@ -4033,10 +4140,10 @@ body {
 
 .enquiry-product-row {
   display: grid;
-  /* Six items per row: Product, Grade, Quantity, Unit, Price, and the
-     remove-button column. Keep this in sync with the fields rendered in
+  /* Seven items per row: Product, Grade, Quantity, Unit, Price, Packaging Req,
+     and the remove-button column. Keep this in sync with the fields rendered in
      EnquiryPage — a mismatch collapses columns and overlaps the labels. */
-  grid-template-columns: minmax(0, 1.3fr) minmax(90px, 0.7fr) minmax(90px, 0.7fr) minmax(110px, 0.85fr) minmax(100px, 0.85fr) auto;
+  grid-template-columns: minmax(0, 1.25fr) minmax(88px, 0.65fr) minmax(88px, 0.65fr) minmax(105px, 0.8fr) minmax(100px, 0.75fr) minmax(130px, 1fr) auto;
   gap: 12px;
   align-items: end;
   padding: 12px;
@@ -4052,6 +4159,14 @@ body {
 .enquiry-product-row select,
 .enquiry-product-row input {
   width: 100%;
+}
+
+/* The Order modal reuses this row but has no "Price per UOM" field — it renders
+   Product, Grade, Quantity, Unit and the remove button, five items into a grid
+   cut for six. The remove button then lands in the narrow price column and every
+   field is squeezed. This variant matches the columns actually rendered there. */
+.enquiry-product-row.order-product-row {
+  grid-template-columns: minmax(0, 1.6fr) minmax(110px, 0.9fr) minmax(110px, 0.9fr) minmax(130px, 1fr) auto;
 }
 
 .enquiry-product-row-actions {
@@ -4077,7 +4192,8 @@ body {
 }
 
 @media (max-width: 768px) {
-  .enquiry-product-row {
+  .enquiry-product-row,
+  .enquiry-product-row.order-product-row {
     grid-template-columns: 1fr;
   }
 
@@ -5769,20 +5885,6 @@ body {
     align-items: flex-start;
   }
 
-  .enquiry-toolbar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .enquiry-filter-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .enquiry-toolbar-actions {
-    width: 100%;
-    flex-wrap: wrap;
-  }
-
   .enquiry-form-grid {
     grid-template-columns: 1fr;
   }
@@ -5869,7 +5971,6 @@ body {
     }
 
     .dispatch-filter-grid input[type="date"],
-    .enquiry-filter-grid input[type="date"],
     .order-filter-grid input[type="date"] {
       display: none;
     }
@@ -6299,6 +6400,51 @@ body {
   white-space: nowrap;
 }
 
+/* Stock Register date bar */
+.rm-register-bar-card {
+  padding: 12px 20px;
+}
+
+.rm-register-bar {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.rm-register-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ui-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.rm-register-count {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--ui-text-secondary);
+}
+
+/* On a phone the date picker gets the full width rather than being squeezed
+   against the count, which then sits under it as a caption. */
+@media screen and (max-width: 768px) {
+  .rm-register-bar {
+    align-items: stretch;
+  }
+
+  .rm-register-field,
+  .rm-register-field .input {
+    width: 100%;
+  }
+
+  .rm-register-count {
+    margin-left: 0;
+  }
+}
+
 /* Table */
 .rm-table-wrap {
   overflow-x: auto;
@@ -6415,6 +6561,30 @@ th.rm-th-right { text-align: right; }
   .rm-kpi-value { font-size: 20px; }
   .rm-toolbar { padding: 12px; }
   .rm-search-box { max-width: 100%; }
+
+  .adjust-head,
+  .adjust-body,
+  .adjust-actions {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .adjust-toggle,
+  .adjust-preview {
+    grid-template-columns: 1fr;
+  }
+
+  .adjust-preview-arrow {
+    display: none;
+  }
+
+  .adjust-actions {
+    flex-direction: column-reverse;
+  }
+
+  .adjust-actions button {
+    width: 100%;
+  }
 }
 
 @media (max-width: 400px) {
@@ -7231,37 +7401,40 @@ th.rm-th-right { text-align: right; }
   }
 
   table.responsive-table tr {
-    display: block;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    column-gap: 12px;
     background: #ffffff;
     border: 1px solid #e2e8f0;
     border-radius: 14px;
-    padding: 4px 14px;
+    padding: 8px 14px;
     margin-bottom: 12px;
     box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
   }
 
+  /* Two fields per row: each cell is a stacked label + control taking
+     roughly half the card width. */
   table.responsive-table td {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 4px;
+    flex: 1 1 calc(50% - 6px);
     width: auto !important;
-    min-width: 0 !important;
-    text-align: right !important;
-    padding: 9px 0 !important;
+    min-width: calc(50% - 6px);
+    max-width: 100%;
+    text-align: left !important;
+    padding: 8px 0 !important;
     border: none !important;
     border-bottom: 1px solid #f1f5f9 !important;
     white-space: normal !important;
     font-size: 13px;
   }
 
-  table.responsive-table td:last-child {
-    border-bottom: none !important;
-  }
-
   table.responsive-table td::before {
     content: attr(data-label);
-    flex: 0 0 42%;
     text-align: left;
     font-size: 11px;
     font-weight: 700;
@@ -7270,8 +7443,8 @@ th.rm-th-right { text-align: right; }
     letter-spacing: 0.03em;
   }
 
-  /* Cells with an empty/absent data-label render full-width, no label
-     (e.g. row-number cells or action buttons). */
+  /* Cells with an empty/absent data-label span the full width and carry
+     no label (e.g. row-number cells or action buttons). */
   table.responsive-table td[data-label=""]::before,
   table.responsive-table td:not([data-label])::before {
     content: none;
@@ -7279,23 +7452,38 @@ th.rm-th-right { text-align: right; }
 
   table.responsive-table td[data-label=""],
   table.responsive-table td:not([data-label]) {
-    justify-content: flex-end;
+    flex: 1 1 100%;
+    min-width: 100%;
+    align-items: flex-end;
+    border-bottom: none !important;
   }
 
-  /* Inputs/selects inside a stacked cell fill the remaining width. */
+  /* Inputs/selects inside a stacked cell fill the cell width. */
   table.responsive-table td .input,
   table.responsive-table td input,
   table.responsive-table td select,
   table.responsive-table td textarea {
-    flex: 1 1 auto;
-    width: auto !important;
+    flex: 0 0 auto;
+    width: 100% !important;
     min-width: 0 !important;
   }
 
-  /* Empty-state / colspan rows should stay centered and simple. */
+  /* The PO pricing grid only takes two short numbers per line (price and tax
+     %); a full half-card input reads as oversized, so keep those compact. */
+  table.responsive-table.po-pricing-grid td input {
+    max-width: 110px;
+    padding-top: 7px;
+    padding-bottom: 7px;
+  }
+
+  /* Empty-state / colspan rows span the full card width. */
   table.responsive-table td[colspan] {
+    flex: 1 1 100%;
+    min-width: 100%;
     justify-content: center;
+    align-items: stretch;
     text-align: center !important;
+    border-bottom: none !important;
   }
   table.responsive-table td[colspan]::before {
     content: none;
@@ -7538,14 +7726,21 @@ th.rm-th-right { text-align: right; }
   color: #94a3b8;
 }
 
+/* An IN_PROGRESS card carries four actions. Without wrapping they were each
+   squeezed to a third of a phone's width, which broke "Plan Batches" across two
+   lines and pushed "Complete" off the card. They now keep their text on one line
+   and spill onto a second row instead. */
 .prod-mcard-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 12px;
 }
 .prod-mcard-actions button {
-  flex: 1;
+  flex: 1 1 auto;
+  min-width: 92px;
   min-height: 38px;
+  padding: 0 10px;
   border-radius: 8px;
   border: 1px solid #e2e8f0;
   background: #f1f5f9;
@@ -7558,9 +7753,11 @@ th.rm-th-right { text-align: right; }
   align-items: center;
   justify-content: center;
   gap: 6px;
+  white-space: nowrap;
   transition: all 0.2s ease;
   letter-spacing: 0.3px;
 }
+
 .prod-mcard-actions button:hover {
   background: #e2e8f0;
   border-color: #cbd5e1;
@@ -7589,9 +7786,12 @@ th.rm-th-right { text-align: right; }
   background: #065f46;
   border-color: #065f46;
 }
+/* The icon-only view button is square — it must not stretch like a text one, and
+   min-width would beat its width, so it has to opt out of the shared floor. */
 .prod-mcard-actions .pa-ghost {
   flex: 0 0 auto;
   width: 38px;
+  min-width: 0;
   padding: 0;
 }
 .prod-mcard-actions .pa-ghost svg {
@@ -7765,6 +7965,132 @@ tr.row-urgent td:first-child {
   overflow-wrap: anywhere;
 }
 
+/* Reject dialog — a destructive decision that must carry a written reason, so
+   it reads as its own thing rather than a generic edit form. */
+.approval-reject-modal {
+  width: min(460px, 100%);
+  padding: 0;
+  overflow: hidden;
+  border-radius: 14px;
+}
+
+.approval-reject-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  background: #fef2f2;
+  border-bottom: 1px solid #fee2e2;
+}
+
+.approval-reject-head h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #991b1b;
+}
+
+.approval-reject-head p {
+  margin: 3px 0 0;
+  font-size: 13px;
+  color: #b45309;
+  overflow-wrap: anywhere;
+}
+
+.approval-reject-close {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #b91c1c;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.approval-reject-close:hover:not(:disabled) {
+  background: #fee2e2;
+}
+
+.approval-reject-body {
+  padding: 20px;
+}
+
+.approval-reject-body label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.approval-reject-body label span {
+  color: #dc2626;
+}
+
+.approval-reject-body textarea {
+  width: 100%;
+  min-height: 92px;
+  resize: vertical;
+  padding: 10px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.approval-reject-body textarea:focus {
+  outline: none;
+  border-color: #dc2626;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
+}
+
+.approval-reject-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.approval-reject-error {
+  margin: 8px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #dc2626;
+}
+
+.approval-reject-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 20px;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.approval-reject-actions .approval-btn-danger {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #ffffff;
+}
+
+.approval-reject-actions .approval-btn-danger:hover:not(:disabled) {
+  background: #b91c1c;
+  border-color: #b91c1c;
+}
+
+.approval-reject-actions .approval-btn-danger:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
 /* Urgent tick on the enquiry form. The extra `.enquiry-form-grid label`
    qualifier is needed so this beats the generic form-label rule (which sets
    display:block and would otherwise collapse the flex layout + gap). */
@@ -7817,3 +8143,2487 @@ tr.row-urgent td:first-child {
   }
 }
 
+
+/* ── Dropdown Masters (admin Master Data screen) ────────────────────────── */
+
+.masterdata-card-head h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #0f172a;
+}
+
+.masterdata-card-head p {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.masterdata-options-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  margin: 16px 0 12px;
+}
+
+.masterdata-options-field {
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+}
+
+.masterdata-options-field.grow {
+  flex: 1;
+  min-width: 260px;
+}
+
+.masterdata-options-field label {
+  margin-bottom: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.masterdata-options-field input {
+  width: 100%;
+  height: 40px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #0f172a;
+  padding: 8px 12px;
+}
+
+.masterdata-options-add {
+  display: flex;
+  gap: 8px;
+}
+
+.masterdata-options-hint {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.masterdata-options-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.masterdata-options-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #f8fafc;
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.masterdata-options-remove {
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 999px;
+}
+
+.masterdata-options-remove:hover:not(:disabled) {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.masterdata-options-remove:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+@media (max-width: 768px) {
+  .masterdata-options-field,
+  .masterdata-options-field.grow {
+    min-width: 100%;
+  }
+}
+
+/* ============================================================
+   PACKING PAGE
+   Unified layout: header → summary → search/filters/actions → table
+   ============================================================ */
+
+.order-header-sub {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--ui-text-muted, #64748b);
+}
+
+.pack-cell-sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.pack-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 160px;
+}
+
+.pack-progress-track {
+  height: 6px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.pack-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--erp-orange, #f97316);
+  transition: width 0.25s ease;
+}
+
+.pack-progress-fill.complete {
+  background: var(--erp-green, #16a34a);
+}
+
+.pack-progress-label {
+  font-size: 12px;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.pack-done-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #15803d;
+  white-space: nowrap;
+}
+
+.pack-done-note svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Record Packing modal */
+.pack-chips {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.pack-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.pack-chip.highlight {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.pack-chip span {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #64748b;
+}
+
+.pack-chip strong {
+  font-size: 14px;
+  color: #0f172a;
+}
+
+.pack-label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pack-link-btn {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1d4ed8;
+  cursor: pointer;
+}
+
+.pack-link-btn:hover {
+  text-decoration: underline;
+}
+
+.pack-error {
+  display: block;
+  margin-top: 4px;
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.pack-history {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px dashed #e5e7eb;
+}
+
+.pack-history h4 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #475569;
+}
+
+.pack-history ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.pack-history li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12.5px;
+}
+
+.pack-history-qty {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.pack-history-meta {
+  color: #64748b;
+  text-align: right;
+}
+
+@media (max-width: 768px) {
+  .pack-chips {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* ============================================================
+   MFG DOCUMENT SHEETS
+   On-screen rendering of the controlled paper formats, e.g. the
+   In-Process Product Test Sheet (QCD/021/F/002-00): a ruled frame
+   with the brand/company header box, dotted header fields, and a
+   fully-bordered grid — so the screen reads like the printed book.
+   ============================================================ */
+
+.mfg-doc {
+  border: 1px solid #0f172a;
+  background: #ffffff;
+}
+
+/* Header band: title on the left, logo, then the company/city box. */
+.mfg-doc-top {
+  display: grid;
+  grid-template-columns: 1fr auto minmax(180px, 240px);
+  align-items: stretch;
+  border-bottom: 1px solid #0f172a;
+}
+
+.mfg-doc-top-title {
+  display: flex;
+  align-items: center;
+  padding: 14px;
+}
+
+.mfg-doc-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  color: #0f172a;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.mfg-doc-top-brand {
+  display: grid;
+  place-items: center;
+  padding: 10px 16px;
+}
+
+.mfg-doc-top-brand img {
+  max-height: 40px;
+  max-width: 180px;
+  object-fit: contain;
+}
+
+.mfg-doc-top-org {
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid #0f172a;
+}
+
+.mfg-doc-org-cell {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.mfg-doc-org-cell + .mfg-doc-org-cell {
+  border-top: 1px solid #0f172a;
+  font-weight: 600;
+}
+
+/* Product Name / Grade / Batch No. — the dotted fill-in line on paper. */
+.mfg-doc-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 28px;
+  padding: 12px 14px;
+}
+
+.mfg-doc-fields label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex: 1 1 220px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+  white-space: nowrap;
+}
+
+.mfg-doc-line {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  border-bottom: 1px dotted #475569;
+  background: transparent;
+  padding: 2px 4px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #0f172a;
+}
+
+.mfg-doc-line:focus {
+  outline: none;
+  border-bottom-color: var(--ui-primary, #1e40af);
+  background: #f8fafc;
+}
+
+.mfg-doc-line:disabled {
+  color: #475569;
+}
+
+/* The grid itself: every cell ruled, like the printed sheet. */
+.mfg-sheet-table {
+  border-top: 1px solid #0f172a;
+}
+
+.mfg-sheet-table th,
+.mfg-sheet-table td {
+  border: 1px solid #64748b;
+  padding: 0;
+  vertical-align: middle;
+}
+
+.mfg-sheet-table thead th {
+  text-align: center;
+  background: #f1f5f9;
+  color: #0f172a;
+  font-size: 11px;
+  line-height: 1.25;
+  padding: 6px 6px;
+}
+
+.mfg-sheet-table tbody td {
+  padding: 0 2px;
+  text-align: center;
+  font-size: 12.5px;
+}
+
+/* The ruled cell *is* the box. An input with its own border and radius inside a
+   bordered cell reads as a double frame, which is what made the grid look like a
+   web form rather than the sheet — so inside this table the inputs go bare and
+   fill the cell they sit in. */
+.mfg-sheet-table .mfg-cell-input {
+  width: 100%;
+  min-width: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 7px 6px;
+  font-size: 12.5px;
+  text-align: center;
+  box-shadow: none;
+}
+
+.mfg-sheet-table .mfg-cell-input:hover:not(:disabled) {
+  background: #f8fafc;
+}
+
+.mfg-sheet-table .mfg-cell-input:focus {
+  background: #eff6ff;
+  box-shadow: inset 0 0 0 2px var(--ui-primary, #1e40af);
+}
+
+/* Keep the grid legible rather than letting 15 columns crush together; the
+   sheet scrolls inside its own frame, the page does not. */
+.mfg-sheet-table {
+  min-width: 1180px;
+}
+
+.mfg-sheet-table thead th small {
+  display: block;
+  font-weight: 500;
+  font-size: 10px;
+  color: #475569;
+  text-transform: none;
+}
+
+.mfg-group-th {
+  text-align: center;
+}
+
+/* The sheet is a document, not a card: let it rule its own edges. */
+.mfg-doc .mfg-sheet-wrap {
+  margin-top: 0;
+}
+
+/* Rows are the point of the sheet — give them a hand-filled row height and let
+   the eye track across 15 columns without losing the line. */
+.mfg-sheet-table tbody tr:nth-child(even) td {
+  background: #f8fafc;
+}
+
+.mfg-sheet-table tbody tr:hover td {
+  background: #eff6ff;
+}
+
+.mfg-sheet-table tbody td {
+  height: 38px;
+}
+
+@media (max-width: 768px) {
+  .mfg-doc-top {
+    grid-template-columns: 1fr;
+  }
+
+  .mfg-doc-top-title {
+    padding: 12px 14px 8px;
+  }
+
+  .mfg-doc-top-brand {
+    justify-items: start;
+    padding: 0 14px 10px;
+  }
+
+  .mfg-doc-top-org {
+    border-left: none;
+    border-top: 1px solid #0f172a;
+  }
+
+  .mfg-doc-fields label {
+    flex: 1 1 100%;
+  }
+}
+
+/* A batch QC rejected into rework — red, because it is holding up an order and
+   nothing it produced is sellable until it passes. */
+.order-status.rework {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+/* ------------------------------------------------------------
+   Sheets on a phone.
+   These two sheets are controlled paper forms, so they keep the ruled grid at
+   every width and scroll sideways inside their own frame rather than restacking
+   into cards like the app's other tables — the operator is reading the same
+   form on the floor tablet as on the desk. Only the frame scrolls; the page
+   itself never moves (html/body are overflow-x: hidden on mobile).
+   ------------------------------------------------------------ */
+.mfg-sheet-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media screen and (max-width: 768px) {
+  /* The global mobile rule gives every control a 44px tap target; inside the
+     grid that is what makes the cells comfortable to fill on a tablet. */
+  .mfg-sheet-table .mfg-cell-input {
+    min-height: 44px;
+  }
+
+  .mfg-doc-fields label {
+    flex: 1 1 100%;
+  }
+}
+
+/* Plan Batches modal — the screen is a decision ("how big is a batch?"), so the
+   supporting text stays out of the way until it has something to say. */
+.plan-note {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: #92400e;
+  line-height: 1.6;
+}
+
+.plan-summary {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: #334155;
+}
+
+.plan-hint {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  color: #64748b;
+}
+
+.plan-preview-table {
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+}
+
+.plan-preview-table table {
+  width: 100%;
+  font-size: 13px;
+  border-collapse: collapse;
+}
+
+.plan-preview-table th {
+  background: #f8fafc;
+  text-align: left;
+  padding: 6px 10px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.plan-preview-table td {
+  padding: 6px 10px;
+  border-top: 1px solid #e2e8f0;
+}
+
+/* The in-process sheet's verdict: the one control on the page that changes what
+   happens next, so it sits apart from the grid rather than inside it. */
+.mfg-verdict {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(180px, 1fr);
+  gap: 12px 16px;
+  margin-top: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--ui-border, #e2e8f0);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.mfg-verdict-warn {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #b91c1c;
+}
+
+@media (max-width: 768px) {
+  .mfg-verdict { grid-template-columns: 1fr; }
+}
+
+/* A rejected consignment: the reason is the record of the decision, so it stays
+   on the page rather than living only in a toast. */
+.grn-rejected-note {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid #fecaca;
+  border-left: 4px solid #b91c1c;
+  border-radius: 6px;
+  background: #fef2f2;
+  color: #7f1d1d;
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+
+/* ============================================================
+   NEW GRN FORM
+   Receiving a consignment against a PO: the outstanding quantity
+   is the thing being decided, so the sheet leads with it.
+   ============================================================ */
+
+.grn-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.grn-header-title h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.grn-header-title p {
+  margin: 3px 0 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.grn-section-title {
+  margin: 0 0 14px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #334155;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* The PO this receipt is booked against — visible while filling the sheet, so
+   nobody receipts a consignment onto the wrong order. */
+.grn-po-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+}
+
+.grn-po-strip-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 3px;
+}
+
+.grn-po-strip-value {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+  overflow-wrap: anywhere;
+}
+
+.grn-items-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.grn-items-head .grn-section-title {
+  margin: 0;
+}
+
+.grn-note {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.grn-note-done {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #047857;
+}
+
+.grn-remaining {
+  font-weight: 700;
+  color: #0f172a;
+  white-space: nowrap;
+}
+
+.grn-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.grn-pill-done {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+/* Quantity cell: the number, plus a one-tap way to take the whole outstanding
+   balance — the overwhelmingly common case. */
+.grn-qty-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.grn-qty-input {
+  width: 92px;
+  min-width: 0;
+  text-align: right;
+}
+
+.grn-fill-btn {
+  flex: 0 0 auto;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 5px 8px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.grn-fill-btn:hover {
+  background: #e2e8f0;
+  border-color: #94a3b8;
+}
+
+.grn-cell-error {
+  display: block;
+  margin-top: 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #dc2626;
+  white-space: nowrap;
+}
+
+.grn-row-active td {
+  background: #eff6ff;
+}
+
+.grn-row-over td {
+  background: #fef2f2;
+}
+
+.grn-row-done td {
+  color: #94a3b8;
+  background: #f8fafc;
+}
+
+.grn-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.grn-footer-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 13.5px;
+  color: #0f172a;
+}
+
+.grn-footer-muted {
+  color: #64748b;
+}
+
+.grn-footer-error {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #dc2626;
+}
+
+.grn-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 768px) {
+  .grn-footer,
+  .grn-footer-actions {
+    width: 100%;
+  }
+
+  .grn-footer-actions .order-btn-primary,
+  .grn-footer-actions .order-btn-secondary {
+    flex: 1 1 auto;
+  }
+
+  .grn-qty-input {
+    width: 100%;
+  }
+}
+
+/* ============================================================
+   ADJUST STOCK
+   A manual correction to a live balance — the direction of the
+   change is the thing to get right, so it leads the form.
+   ============================================================ */
+
+.adjust-modal {
+  width: min(460px, 100%);
+  padding: 0;
+  overflow: hidden;
+  border-radius: 14px;
+}
+
+.adjust-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.adjust-head h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.adjust-head p {
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  color: #64748b;
+}
+
+.adjust-close {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #475569;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.adjust-close:hover:not(:disabled) {
+  background: #f1f5f9;
+}
+
+.adjust-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+}
+
+.adjust-field .label {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.adjust-hint {
+  display: block;
+  margin-top: 5px;
+  font-size: 11.5px;
+  color: #94a3b8;
+}
+
+/* Segmented add/remove — one tap, and the choice is always visible. */
+.adjust-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.adjust-toggle-btn {
+  height: 40px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.adjust-toggle-btn:hover:not(.active) {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+.adjust-toggle-btn.in.active {
+  background: #ecfdf5;
+  border-color: #34d399;
+  color: #047857;
+}
+
+.adjust-toggle-btn.out.active {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #b91c1c;
+}
+
+/* Current → resulting balance, so the correction is never blind. */
+.adjust-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.adjust-preview span {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.adjust-preview strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.adjust-preview-arrow {
+  font-size: 16px !important;
+  color: #94a3b8 !important;
+  text-transform: none !important;
+}
+
+.adjust-preview.negative {
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+
+.adjust-preview.negative strong {
+  color: #b91c1c;
+}
+
+.adjust-preview-warn {
+  flex: 1 1 100%;
+  margin: 4px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #b91c1c;
+}
+
+.adjust-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 20px;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.adjust-actions .masterdata-btn-primary.danger {
+  background: #dc2626;
+  border-color: #dc2626;
+}
+
+.adjust-actions .masterdata-btn-primary.danger:hover:not(:disabled) {
+  background: #b91c1c;
+  border-color: #b91c1c;
+}
+
+/* ============================================================
+   LAST TRANSACTION PANEL (Enquiry form, Old customer)
+   Read-only history — a summary to glance at, not a field to
+   edit, so it stops pretending to be a textarea.
+   ============================================================ */
+
+.last-txn {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 12px 14px;
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.last-txn-muted {
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.last-txn-error {
+  border-color: #fca5a5;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-style: normal;
+}
+
+.last-txn-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.last-txn-ref {
+  font-weight: 700;
+  color: #1d4ed8;
+}
+
+.last-txn-date {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.last-txn-row + .last-txn-row {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.last-txn-product {
+  display: block;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 5px;
+}
+
+/* Each fact as its own labelled chip — reads at a glance instead of as one
+   run-on pipe-separated line. */
+.last-txn-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.last-txn-facts span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.last-txn-facts em {
+  font-style: normal;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Print button sits with the close button in the modal header. */
+.mfg-header-actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mfg-print-btn {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.mfg-print-btn:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+/* ============================================================
+   PRINT — MANUFACTURING ORDER SHEET
+   The sheet prints as it appears on screen: same header band,
+   same summary strip, same numbered sections and grids. Only the
+   app chrome and the controls you cannot use on paper come off.
+   ============================================================ */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 10mm;
+  }
+
+  .mfg-modal {
+    width: 100%;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    overflow: visible;
+  }
+
+  /* Keep the blue header band and the coloured chips — without this browsers
+     strip backgrounds and the sheet prints as bare text. */
+  .mfg-header,
+  .mfg-summary,
+  .mfg-section-num,
+  .mfg-badge,
+  .mfg-table thead th {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Controls that mean nothing on paper. */
+  .mfg-print-btn,
+  .mfg-close-btn,
+  .mfg-add-btn,
+  .mfg-del-btn,
+  .mfg-th-del,
+  .mfg-td-del,
+  .mfg-footer {
+    display: none !important;
+  }
+
+  /* Fields print as the filled-in sheet: the value stays, the input styling
+     softens to a ruled box rather than a web form control. */
+  .mfg-input,
+  .mfg-cell-input,
+  .mfg-textarea,
+  .enquiry-company-select > input {
+    border: 1px solid #cbd5e1 !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Nothing scrolls on paper — let every row and column onto the page. */
+  .mfg-form,
+  .mfg-table-wrap {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+
+  /* Don't split a section or a row across two pages. */
+  .mfg-section {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .mfg-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
+
+/* Print action above the sheet — screen only. */
+.mfg-doc-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+/* ============================================================
+   PRINT — CONTROLLED TEST SHEETS
+   The In-Process (QCD/021/F/002-00) and Finished Product
+   (QCD/021/F/001-00) sheets print as the ruled paper form they
+   mirror: same letterhead, same grid, values in the cells.
+   ============================================================ */
+@media print {
+  .mfg-doc {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    border: 1px solid #0f172a;
+    box-shadow: none;
+  }
+
+  /* Step tabs, page chrome and the sheet's own controls have no place on paper. */
+  .mfg-doc-toolbar,
+  .po-detail-header,
+  .order-btn-primary,
+  .order-btn-secondary {
+    display: none !important;
+  }
+
+  /* Keep the ruled grid and header shading — browsers drop backgrounds by
+     default, which would print the form as unruled text. */
+  .mfg-doc,
+  .mfg-sheet-table,
+  .mfg-sheet-table th,
+  .mfg-sheet-table td,
+  .mfg-doc-top,
+  .mfg-doc-org-cell {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* The sheet scrolls on screen because it is wide; on paper it must all land. */
+  .mfg-doc .responsive-table-wrap,
+  .mfg-sheet-wrap {
+    overflow: visible !important;
+  }
+
+  .mfg-sheet-table {
+    min-width: 0 !important;
+    width: 100% !important;
+    font-size: 9pt;
+  }
+
+  /* Row-delete column is meaningless once printed. */
+  .mfg-sheet-table thead th:last-child:empty,
+  .mfg-sheet-table tbody td:last-child:has(button) {
+    display: none !important;
+  }
+
+  /* Values print; the input chrome softens to the ruled cell it sits in. */
+  .mfg-sheet-table .mfg-cell-input,
+  .mfg-doc-line {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    color: #0f172a !important;
+  }
+
+  .mfg-doc-line {
+    border-bottom: 1px dotted #475569 !important;
+  }
+
+  .mfg-sheet-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  @page {
+    size: A4 landscape;
+    margin: 10mm;
+  }
+}
+
+/* ============================================================
+   TEST SHEET ENTRY
+   The paper form needs 10-14 columns; a person filling it in does
+   not. Entry is a list of samples plus a grouped form, and the
+   official wide sheet is rendered separately, print-only.
+   ============================================================ */
+.sample-heading {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ui-text-primary, #0f172a);
+}
+
+/* Sheet-level fields (product, grade, batch). One per line on a phone. */
+/* Product name is the long one, so it takes the full width and Grade / Batch
+   pair up beneath it. */
+.sample-header-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.sample-header-fields > label:first-child {
+  grid-column: 1 / -1;
+}
+
+.sample-header-fields label {
+  display: block;
+}
+
+.sample-header-fields > label > span {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ui-text-primary, #334155);
+}
+
+@media screen and (min-width: 640px) {
+  .sample-header-fields {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* ---- The sample list ---- */
+.sample-list {
+  border-top: 1px solid var(--ui-border, #e2e8f0);
+  padding-top: 14px;
+}
+
+.sample-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.sample-list-count {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ui-text-secondary, #64748b);
+}
+
+.sample-list-empty {
+  margin: 0;
+  padding: 22px 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--ui-text-secondary, #94a3b8);
+}
+
+.sample-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.sample-card {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--ui-border, #e2e8f0);
+  border-radius: 12px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.sample-card-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  min-height: 48px;
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sample-card-main:hover:not(:disabled) {
+  background: #f8fafc;
+}
+
+.sample-card-main:disabled {
+  cursor: default;
+}
+
+.sample-card-index {
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ui-text-secondary, #94a3b8);
+}
+
+.sample-card-text {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.sample-card-primary {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ui-text-primary, #0f172a);
+}
+
+.sample-card-secondary {
+  font-size: 12px;
+  color: var(--ui-text-secondary, #64748b);
+}
+
+.sample-card-remove {
+  flex: 0 0 auto;
+  width: 44px;
+  border: none;
+  border-left: 1px solid var(--ui-border, #e2e8f0);
+  background: none;
+  color: #94a3b8;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sample-card-remove:hover {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.sample-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+}
+
+/* ---- The one-sample form ---- */
+.sample-modal {
+  width: min(560px, 100%);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+}
+
+.sample-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--ui-border, #e2e8f0);
+}
+
+.sample-modal-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.sample-modal-close {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  font-size: 26px;
+  line-height: 1;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.sample-modal-close:hover {
+  background: #f1f5f9;
+}
+
+.sample-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 16px 16px;
+}
+
+/* A section reads as a titled block of the form, with a rule under the
+   heading — the shape of every application form on a phone. */
+.sample-section {
+  margin: 0;
+  padding: 12px 0 0;
+  border: none;
+}
+
+.sample-section legend {
+  width: 100%;
+  padding: 0 0 6px;
+  margin: 0;
+  border-bottom: 1px solid var(--ui-border, #e2e8f0);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ui-text-secondary, #64748b);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Two fields to a row, phone included — these are short values (a shift letter,
+   a lot number, a reading), so one per line just made the form long and pushed
+   the readings below the fold. Anything that needs the width says so with
+   .sample-field-wide. */
+.sample-section-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding-top: 10px;
+}
+
+/* Column flex, with the label taking up the slack: when one label in a row wraps
+   to two lines and its neighbour does not, the inputs still line up along the
+   bottom instead of stepping. */
+.sample-field {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.sample-field-wide {
+  grid-column: 1 / -1;
+}
+
+.sample-field > span {
+  flex: 1;
+  margin-bottom: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ui-text-primary, #334155);
+}
+
+/* Set deliberately below 16px. The tradeoff: iOS Safari zooms the page on focus
+   for any input under 16px, so on an iPhone the form will nudge as a field is
+   tapped. Accepted — the 16px version read as oversized on the shop-floor
+   phones, which are Android. Revisit if iPhones come into use. */
+/* The shared .input carries py-3 for standalone forms; packed two-to-a-row on a
+   sheet it only makes the boxes tall. */
+.sample-field .input,
+.sample-header-fields .input {
+  width: 100%;
+  min-height: 32px;
+  padding: 4px 8px;
+  font-size: 14px;
+}
+
+.sample-modal-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--ui-border, #e2e8f0);
+  background: #ffffff;
+}
+
+.sample-modal-foot .order-btn-primary,
+.sample-modal-foot .order-btn-secondary {
+  min-height: 40px;
+  padding-inline: 20px;
+  font-size: 14px;
+}
+
+/* On a phone the form is the screen: full bleed, and the actions stay put at
+   the bottom instead of being scrolled past. */
+@media screen and (max-width: 640px) {
+  .sample-modal {
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    border-radius: 0;
+  }
+
+  .sample-modal-foot {
+    position: sticky;
+    bottom: 0;
+  }
+
+  .sample-modal-foot .order-btn-primary {
+    flex: 1;
+  }
+
+  .sample-list-head .order-btn-primary {
+    width: 100%;
+    min-height: 42px;
+    font-size: 14px;
+  }
+}
+
+@media screen and (max-width: 640px) {
+  .masterdata-modal-overlay:has(.sample-modal) {
+    padding: 0;
+  }
+}
+
+/* Result / checked-by line at the foot of the printed sheet. */
+.mfg-doc-signoff {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ============================================================
+   COMPACT MOBILE FORMS
+   The app's forms each collapsed to a single column on a phone,
+   which made even a short form a long scroll. They now match the
+   test sheets: two fields to a row, tight labels, small boxes.
+   Anything that genuinely needs the width still says so with
+   .full-row. Mobile only — desktop layouts are untouched.
+
+   Placed after the per-form mobile blocks above so it wins.
+   ============================================================ */
+@media screen and (max-width: 768px) {
+  .enquiry-form-grid,
+  .order-form-grid,
+  .dispatch-form-grid,
+  .production-form-grid,
+  .users-form-grid,
+  .masterdata-form-grid,
+  .masterdata-form-grid-two,
+  .erp-form-grid-two {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .enquiry-form-grid .full-row,
+  .order-form-grid .full-row,
+  .dispatch-form-grid .full-row,
+  .production-form-grid .full-row,
+  .users-form-grid .full-row,
+  .masterdata-form-grid .full-row,
+  .masterdata-form-grid-two .full-row,
+  .erp-form-grid-two .full-row {
+    grid-column: 1 / -1;
+  }
+
+  .enquiry-form-grid label,
+  .order-form-grid label,
+  .dispatch-form-grid label,
+  .production-form-grid label,
+  .masterdata-form-grid label {
+    margin-bottom: 3px;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  .enquiry-form-grid input,
+  .enquiry-form-grid select,
+  .order-form-grid input,
+  .order-form-grid select,
+  .dispatch-form-grid input,
+  .dispatch-form-grid select,
+  .production-form-grid input,
+  .production-form-grid select,
+  .masterdata-form-grid input,
+  .masterdata-form-grid select {
+    height: 32px;
+    min-height: 32px;
+    padding: 4px 8px;
+    font-size: 14px;
+  }
+
+  .enquiry-form-grid textarea,
+  .order-form-grid textarea,
+  .dispatch-form-grid textarea,
+  .production-form-grid textarea,
+  .masterdata-form-grid textarea {
+    padding: 6px 8px;
+    font-size: 14px;
+  }
+}
+
+/* ============================================================
+   COMPACT FORMS ON MOBILE
+   These grids each collapsed to a single column on a phone, which
+   made every form a long scroll. Most of the fields are short —
+   a quantity, a grade, a date — so they go two to a row, matching
+   the test sheets. Anything that needs the width already says so
+   with .full-row.
+
+   Comes last on purpose: it overrides the per-form 1fr rules above.
+   ============================================================ */
+@media screen and (max-width: 768px) {
+  .enquiry-form-grid,
+  .order-form-grid,
+  .dispatch-form-grid,
+  .production-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .enquiry-form-grid .full-row,
+  .order-form-grid .full-row,
+  .dispatch-form-grid .full-row,
+  .production-form-grid .full-row {
+    grid-column: span 2;
+  }
+
+  /* Labels wrap at half width, so the label takes the slack and the inputs
+     still line up along the bottom of the row instead of stepping. */
+  .enquiry-form-grid > div,
+  .order-form-grid > div,
+  .dispatch-form-grid > div,
+  .production-form-grid > div {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .enquiry-form-grid label,
+  .order-form-grid label,
+  .dispatch-form-grid label,
+  .production-form-grid label {
+    flex: 1;
+    margin-bottom: 3px;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  .enquiry-form-grid input,
+  .enquiry-form-grid select,
+  .enquiry-form-grid textarea,
+  .order-form-grid input,
+  .order-form-grid select,
+  .order-form-grid textarea,
+  .dispatch-form-grid input,
+  .dispatch-form-grid select,
+  .dispatch-form-grid textarea,
+  .production-form-grid input,
+  .production-form-grid select,
+  .production-form-grid textarea {
+    padding: 4px 8px;
+    font-size: 14px;
+  }
+
+  .enquiry-form-grid input,
+  .enquiry-form-grid select,
+  .order-form-grid input,
+  .order-form-grid select,
+  .dispatch-form-grid input,
+  .dispatch-form-grid select,
+  .production-form-grid input,
+  .production-form-grid select {
+    height: 32px;
+  }
+}
+
+/* ============================================================
+   MOBILE TYPE SCALE (≤768px)
+   One place to tune how big the app reads on a phone, rather than
+   chasing sizes class by class. Everything here is a step down from
+   the desktop value; the shared .input stays at 14px because the
+   fields were tuned separately.
+
+   Comes last on purpose: it overrides the per-component sizes above.
+   ============================================================ */
+@media screen and (max-width: 768px) {
+  /* Stacked table cards */
+  table.responsive-table td {
+    font-size: 12px;
+  }
+
+  table.responsive-table td::before {
+    font-size: 10px;
+  }
+
+  /* Production cards */
+  .prod-mcard-name {
+    font-size: 13px;
+  }
+
+  .prod-mcard-meta {
+    font-size: 11.5px;
+  }
+
+  .prod-mcard-code,
+  .prod-mcard-pill {
+    font-size: 10px;
+  }
+
+  .prod-steps-labels {
+    font-size: 9px;
+  }
+
+  /* Text shrinks, the tap target does not go below ~36px — these are pressed
+     with a thumb on a shop floor. */
+  .prod-mcard-actions button {
+    font-size: 11px;
+    min-height: 36px;
+  }
+
+  /* The shared mobile list cards (enquiries, orders, dispatch, GRNs, POs) */
+  .mapp-card-title {
+    font-size: 13px;
+  }
+
+  .mapp-card-meta,
+  .mapp-card-sub {
+    font-size: 11.5px;
+  }
+
+  .mapp-chip {
+    font-size: 10px;
+  }
+
+  .mapp-btn {
+    font-size: 11px;
+  }
+
+  /* Page toolbar: title, search and the filter row. These sit at the top of
+     every list page, so they set the tone for how heavy the app reads. */
+  .order-header-left h2 {
+    font-size: 15px;
+  }
+
+  .unified-search-box input {
+    height: 36px;
+    font-size: 13px;
+  }
+
+  /* Two filters per row instead of one full-width stack — the auto-fit grid
+     would otherwise drop to a single column and make the filter bar very tall.
+     auto-fit (not a fixed repeat(2)) collapses the empty second track when only
+     one control is visible — pages like Production hide their other filters on
+     mobile, and a lone dropdown should fill the row, not sit half-empty. */
+  .unified-filter-row {
+    grid-template-columns: repeat(auto-fit, minmax(45%, 1fr));
+    gap: 8px;
+  }
+
+  .unified-filter-row select,
+  .unified-filter-row input,
+  .unified-filter-row .enquiry-company-select input {
+    height: 34px;
+    font-size: 12px;
+  }
+
+  .unified-filter-row .enquiry-company-select-item,
+  .unified-filter-row .enquiry-company-select-empty {
+    font-size: 12px;
+  }
+}
+
+/* ============================================================
+   PRINT ISOLATION
+   printSheet() (utils/printSheet.js) clones the element marked
+   .print-root into #print-container — a direct child of <body> —
+   and puts `is-printing` on the body. Everything else is then simply
+   display:none'd.
+
+   display, not visibility: a `visibility: hidden` element keeps its
+   layout box, so the app would still push the sheet down the page and
+   pad the output with blank sheets. Taking the sheet out of the app's
+   subtree also means no ancestor's overflow/height can clip it.
+
+   The whole thing is scoped to body.is-printing, so a normal Ctrl+P on
+   any page (the PO print page, a list) is untouched by these rules.
+   ============================================================ */
+#print-container {
+  display: none;
+}
+
+@media print {
+  body.is-printing > *:not(#print-container) {
+    display: none !important;
+  }
+
+  body.is-printing #print-container {
+    display: block !important;
+  }
+
+  /* The clone may carry classes that hide it on screen (.print-only) or make it
+     a floating overlay (.mfg-overlay); inside the print container it is simply
+     the page. */
+  #print-container .print-clone {
+    display: block !important;
+    position: static !important;
+    inset: auto !important;
+    width: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+    overflow: visible !important;
+  }
+
+  /* Nothing inside a printed sheet scrolls. */
+  #print-container * {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+}
+
+/* A sheet that exists only to be printed — never rendered on screen. */
+.print-only {
+  display: none;
+}
+
+/* Read-only values in the printed Manufacturing Order, standing in for the
+   inputs the on-screen form uses. */
+.mfg-print-value {
+  display: block;
+  min-height: 22px;
+  padding: 4px 2px;
+  border-bottom: 1px solid #cbd5e1;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.mfg-print-remarks {
+  min-height: 48px;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #0f172a;
+  white-space: pre-wrap;
+}
+
+@media print {
+  .mfg-doc-toolbar {
+    display: none !important;
+  }
+
+  .mfg-print-value,
+  .mfg-print-remarks {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Values frozen out of <select> controls by printSheet(). */
+  .print-field-value {
+    display: block;
+    padding: 6px;
+    font-size: 12.5px;
+    color: #0f172a;
+    text-align: center;
+  }
+}
+
+/* A card whose only job is to offer an action on a document (print the sheet). */
+.sheet-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.sheet-action-text h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #334155;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.sheet-action-text p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #64748b;
+  max-width: 62ch;
+}
+
+@media print {
+  .sheet-action-bar {
+    display: none !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .sheet-action-bar .order-btn-secondary {
+    width: 100%;
+  }
+}
+
+/* ============================================================
+   ERP DATA GRID
+   List pages are reference screens: people scan them, compare
+   rows and look things up. That wants density and alignment, not
+   the airy card look of a marketing page — a wrapped cell
+   ("CALCIUM 12-HYDROXY STEARATE" over three lines) pushes the row
+   to 65px and puts four records on a screen that should hold ten.
+
+   Scoped to the read-only list grids (.order-table-wrap and
+   friends). The editable sheets live under .responsive-table-wrap
+   and are deliberately untouched: truncating a cell that holds an
+   input would hide what the user is typing.
+
+   Desktop only. On mobile these tables become stacked cards, where
+   wrapping is exactly what you want.
+   ============================================================ */
+@media screen and (min-width: 769px) {
+  .order-table-wrap .order-table,
+  .enquiry-table-wrap .enquiry-table,
+  .dispatch-table-wrap .dispatch-table {
+    /* Figures line up digit-over-digit, so a column of numbers can be
+       compared at a glance instead of read one by one. */
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* The row: one line, ~38px, never taller. */
+  .order-table-wrap .order-table tbody td,
+  .enquiry-table-wrap .enquiry-table tbody td,
+  .dispatch-table-wrap .dispatch-table tbody td {
+    height: 38px;
+    padding: 6px 12px;
+    line-height: 1.35;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 220px;
+  }
+
+  /* Cells that hold a control (a button, a badge, a link) must not be clipped
+     or squeezed — they size to their content. */
+  .order-table-wrap .order-table tbody td:has(button),
+  .order-table-wrap .order-table tbody td:has(.order-status),
+  .enquiry-table-wrap .enquiry-table tbody td:has(button),
+  .enquiry-table-wrap .enquiry-table tbody td:has(.enquiry-status),
+  .dispatch-table-wrap .dispatch-table tbody td:has(button) {
+    overflow: visible;
+    max-width: none;
+    white-space: nowrap;
+  }
+
+  /* Header: tighter, and it stays put while the body scrolls (sticky was
+     already set — this keeps it legible at the new density). */
+  .order-table-wrap .order-table thead th,
+  .enquiry-table-wrap .enquiry-table thead th,
+  .dispatch-table-wrap .dispatch-table thead th {
+    height: 34px;
+    padding: 0 12px;
+    white-space: nowrap;
+    border-bottom: 1px solid #e2e8f0;
+    z-index: 2;
+  }
+
+  /* Banded rows: the eye tracks across 15 columns without losing the line. */
+  .order-table-wrap .order-table tbody tr:nth-child(even) td,
+  .enquiry-table-wrap .enquiry-table tbody tr:nth-child(even) td,
+  .dispatch-table-wrap .dispatch-table tbody tr:nth-child(even) td {
+    background: #fafbfc;
+  }
+
+  .order-table-wrap .order-table tbody tr:hover td,
+  .enquiry-table-wrap .enquiry-table tbody tr:hover td,
+  .dispatch-table-wrap .dispatch-table tbody tr:hover td {
+    background: #eff6ff;
+  }
+
+  /* Row-number column: a quiet index, not data. */
+  .order-table-wrap .order-table tbody td:first-child,
+  .enquiry-table-wrap .enquiry-table tbody td:first-child,
+  .dispatch-table-wrap .dispatch-table tbody td:first-child {
+    color: #94a3b8;
+    font-size: 12px;
+    max-width: 48px;
+  }
+
+  /* Reference numbers read as identifiers, so they get the tabular treatment —
+     same width per digit, easy to compare down the column. */
+  .order-table-wrap .order-table tbody td a,
+  .order-table-wrap .order-table tbody td[data-label="Order No"],
+  .order-table-wrap .order-table tbody td[data-label="Batch No."] {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+  }
+}
+
+/* Numeric columns: figures right-align so the decimal points stack and the
+   column can be scanned or mentally totalled. Text left, numbers right — the
+   oldest rule in tabular data, and the one that most makes a grid read as an
+   ERP rather than a web page. */
+.order-table th.num,
+.order-table td.num,
+.enquiry-table th.num,
+.enquiry-table td.num,
+.dispatch-table th.num,
+.dispatch-table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The sort button inside a numeric header has to right-align with it. */
+.order-table th.num .order-sort-btn,
+.enquiry-table th.num .order-sort-btn,
+.dispatch-table th.num .order-sort-btn {
+  width: 100%;
+  justify-content: flex-end;
+  text-align: right;
+}
+
+@media screen and (max-width: 768px) {
+  /* Stacked-card mode: the label sits left, the value right — forcing the value
+     hard right here would fight that layout. */
+  table.responsive-table td.num {
+    text-align: right;
+  }
+}
+
+/* Shorter approval card: the three remaining figures sit on one row instead of
+   wrapping to two, and the card breathes a little less. More cards fit the
+   screen, which is what an approval queue is for. */
+.approval-request-tiles {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.approval-request-card {
+  gap: 12px;
+  padding: 16px;
+}
+
+/* Compact approval card: an approval queue is a list of decisions, so the point
+   is how many you can see and act on at once — not how much air surrounds each
+   one. Padding and gaps come down across the card's internals. */
+.approval-request-card {
+  gap: 10px;
+  padding: 14px;
+  border-radius: 14px;
+}
+
+.approval-request-date {
+  padding: 5px 10px;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.approval-request-products {
+  padding: 10px 12px;
+  gap: 4px;
+  border-radius: 10px;
+}
+
+.approval-request-tile {
+  padding: 8px 10px;
+  border-radius: 10px;
+}
+
+.approval-request-tiles {
+  gap: 8px;
+}
+
+.approval-request-divider {
+  margin: 2px 0;
+}
+
+.approval-request-buttons {
+  gap: 8px;
+}
+
+/* Two figures now, not three — the tiles share the row evenly. */
+.approval-request-tiles {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* The currency rides with the price, quieter than the number itself. */
+.approval-tile-unit {
+  font-size: 0.78em;
+  font-weight: 600;
+  color: #64748b;
+}
+
+/* ==========================================================================
+   Production step rail
+   Nine sequential steps on one line. The rail scrolls sideways rather than
+   wrapping, so the batch workflow always reads as a single ordered run.
+   ========================================================================== */
+.prod-step-rail {
+  position: relative;
+  margin-bottom: 20px;
+}
+
+.prod-step-rail-track {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.prod-step-rail-track::-webkit-scrollbar {
+  display: none;
+}
+
+/* Fades hint that more steps sit beyond the edge once the rail overflows. */
+.prod-step-rail::before,
+.prod-step-rail::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 1px;
+  width: 28px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.prod-step-rail::before {
+  left: 0;
+  background: linear-gradient(90deg, #ffffff 20%, rgba(255, 255, 255, 0));
+}
+
+.prod-step-rail::after {
+  right: 0;
+  background: linear-gradient(270deg, #ffffff 20%, rgba(255, 255, 255, 0));
+}
+
+.prod-step-rail[data-overflow-start="true"]::before,
+.prod-step-rail[data-overflow-end="true"]::after {
+  opacity: 1;
+}
+
+/* Named .prod-tab, not .prod-step — that class is already the 4px lifecycle
+   bar segment on the Production and Dispatch list pages. */
+.prod-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 11px 14px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: none;
+  border-radius: 6px 6px 0 0;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ui-text-secondary);
+  white-space: nowrap;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.prod-tab:hover {
+  background: var(--ui-bg);
+  color: var(--ui-text-primary);
+}
+
+.prod-step-num {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #f1f5f9;
+  color: var(--ui-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.prod-tab[aria-current="page"] {
+  color: var(--ui-primary);
+  font-weight: 600;
+  border-bottom-color: var(--ui-primary);
+}
+
+.prod-tab[aria-current="page"] .prod-step-num {
+  background: var(--ui-primary);
+  color: #ffffff;
+}
+
+/* --------------------------------------------------------------------------
+   Production step selector (mobile)
+   The rail's nine tabs cannot fit a phone, so mobile shows only the current
+   step, arrows to walk the sequence, and a sheet to jump anywhere.
+   -------------------------------------------------------------------------- */
+.prod-step-selector {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.prod-step-arrow {
+  flex: 0 0 auto;
+  width: 44px;
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ui-text-secondary);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.prod-step-arrow:active:not(:disabled) {
+  background: var(--ui-bg);
+  color: var(--ui-primary);
+}
+
+.prod-step-arrow:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.prod-step-current {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 12px 10px;
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  background: #ffffff;
+  cursor: pointer;
+  text-align: left;
+}
+
+.prod-step-current:active {
+  background: var(--ui-bg);
+}
+
+.prod-step-current-count {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ui-text-muted);
+}
+
+.prod-step-current-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ui-text-primary);
+}
+
+.prod-step-caret {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--ui-text-muted);
+}
+
+/* A thin fill under the label — position in the batch run, read at a glance. */
+.prod-step-progress {
+  display: block;
+  width: 100%;
+  height: 3px;
+  margin-top: 6px;
+  border-radius: 2px;
+  background: #f1f5f9;
+  overflow: hidden;
+}
+
+.prod-step-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--ui-primary);
+  transition: width 0.2s ease;
+}
+
+.prod-step-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(15, 23, 42, 0.45);
+  animation: prodStepFade 0.15s ease;
+}
+
+.prod-step-sheet {
+  width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 10px 12px calc(16px + env(safe-area-inset-bottom, 0px));
+  background: #ffffff;
+  border-radius: 16px 16px 0 0;
+  animation: prodStepSlide 0.2s ease;
+}
+
+.prod-step-sheet-grip {
+  width: 36px;
+  height: 4px;
+  margin: 0 auto 12px;
+  border-radius: 2px;
+  background: var(--ui-border);
+}
+
+.prod-step-sheet-title {
+  padding: 0 8px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ui-text-muted);
+}
+
+.prod-step-sheet-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 10px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ui-text-primary);
+  text-align: left;
+}
+
+.prod-step-sheet-item:active {
+  background: var(--ui-bg);
+}
+
+.prod-step-sheet-item[aria-current="page"] {
+  background: var(--ui-primary-light);
+  color: var(--ui-primary);
+  font-weight: 700;
+}
+
+.prod-step-sheet-item[aria-current="page"] .prod-step-num {
+  background: var(--ui-primary);
+  color: #ffffff;
+}
+
+/* The badge tracks the smaller mobile type rather than towering over it. */
+.prod-step-sheet-item .prod-step-num {
+  width: 18px;
+  height: 18px;
+  font-size: 10px;
+}
+
+@keyframes prodStepFade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes prodStepSlide {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}

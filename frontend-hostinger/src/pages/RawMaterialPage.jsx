@@ -8,37 +8,11 @@ import Toolbar from "../components/common/Toolbar";
 import useMasterData from "../hooks/useMasterData";
 
 const emptyAdjustForm = { item_id: "", direction: "IN", quantity: "", reason: "" };
+const emptyOpeningForm = { item_id: "", quantity: "", batch_no: "" };
 
-function normalizeImportRowValue(value) {
-  return String(value ?? "").trim();
-}
-
-function normalizeImportRow(row) {
-  const itemId = normalizeImportRowValue(row.item_id ?? row["Item Id"] ?? row["Item ID"] ?? row.itemId ?? row.name ?? row.Name);
-  const quantityRaw = row.quantity ?? row.Quantity ?? row.qty ?? row.Qty;
-  return {
-    item_id:  itemId,
-    category: normalizeImportRowValue(row.category ?? row.Category) || undefined,
-    uom:      normalizeImportRowValue(row.uom ?? row.UOM ?? row.Unit) || undefined,
-    grade:    normalizeImportRowValue(row.grade ?? row.Grade) || undefined,
-    batch_no: normalizeImportRowValue(row.batch_no ?? row["Batch No"] ?? row.batchNo) || undefined,
-    quantity: Number(quantityRaw)
-  };
-}
-
-async function parseExcelToInventoryRows(file) {
-  const xlsxModule = await import("xlsx");
-  const XLSX = xlsxModule.default ?? xlsxModule;
-  const buffer = await file.arrayBuffer();
-  const workbook = XLSX.read(buffer, { type: "array" });
-  const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  if (!sheet) return [];
-
-  const objectRows = XLSX.utils.sheet_to_json(sheet, { defval: "", raw: false, blankrows: false });
-  return objectRows
-    .map(normalizeImportRow)
-    .filter((row) => row.item_id && Number.isFinite(row.quantity) && row.quantity >= 0);
-}
+// The stock register can list every material with a carried-forward balance, so
+// page it client-side rather than rendering hundreds of rows at once.
+const REGISTER_PAGE_SIZE = 25;
 
 function formatDate(value) {
   if (!value) return "-";
@@ -72,23 +46,55 @@ function RawMaterialPage() {
   const [isAdjustOpen, setIsAdjustOpen] = useState(false);
   const [adjustForm, setAdjustForm] = useState(emptyAdjustForm);
   const [savingAdjust, setSavingAdjust] = useState(false);
-  const [importing, setImporting] = useState(false);
+
+  const [isOpeningOpen, setIsOpeningOpen] = useState(false);
+  const [openingForm, setOpeningForm] = useState(emptyOpeningForm);
+  const [savingOpening, setSavingOpening] = useState(false);
 
   const [registerDate, setRegisterDate] = useState(todayIsoDate());
   const [registerRows, setRegisterRows] = useState([]);
   const [registerLoading, setRegisterLoading] = useState(false);
+  const [registerPage, setRegisterPage] = useState(1);
+  // Once the user picks a date we stop auto-jumping them to the latest movement.
+  const registerDateTouched = useRef(false);
 
   const fetchRegister = async (date) => {
     setRegisterLoading(true);
     try {
       const { data } = await api.get("/inventory/stock-register", { params: { date } });
       setRegisterRows(Array.isArray(data.rows) ? data.rows : []);
+      setRegisterPage(1);
+
+      // First open lands on the most recent day that actually had movement, so
+      // the screen shows data instead of an empty "today". Only until the user
+      // takes over the date picker themselves.
+      if (!registerDateTouched.current && data.latestMovementDate && data.latestMovementDate !== date) {
+        setRegisterDate(data.latestMovementDate);
+      }
     } catch (err) {
       logApiError(err, "Failed to load stock register");
     } finally {
       setRegisterLoading(false);
     }
   };
+
+  // A row counts as movement on the selected day if anything actually flowed —
+  // opening/closing balances carried forward are not movement.
+  const movedCount = registerRows.filter((row) =>
+    row.production || row.dispatch || row.consumeAShift || row.consumeBShift || row.consumeCShift
+  ).length;
+
+  const registerTotalPages = Math.max(1, Math.ceil(registerRows.length / REGISTER_PAGE_SIZE));
+  const pagedRegisterRows = useMemo(() => {
+    const start = (registerPage - 1) * REGISTER_PAGE_SIZE;
+    return registerRows.slice(start, start + REGISTER_PAGE_SIZE);
+  }, [registerRows, registerPage]);
+
+  // A new date (or refetch) can shrink the list — snap back if the current page
+  // no longer exists so the user never lands on an empty page.
+  useEffect(() => {
+    setRegisterPage((p) => Math.min(p, registerTotalPages));
+  }, [registerTotalPages]);
 
   useEffect(() => {
     if (activeView === "register") fetchRegister(registerDate);
@@ -140,6 +146,18 @@ function RawMaterialPage() {
     return [...options, ...extra];
   }, [masterData.products, items]);
 
+  // An adjustment is a blind edit to a live balance unless you can see what it
+  // does to that balance, so show current → resulting stock as it is typed.
+  const adjustPreview = useMemo(() => {
+    const stockRow = items.find((item) => item.itemId === adjustForm.item_id);
+    const qty = Number(adjustForm.quantity);
+    if (!stockRow || !Number.isFinite(qty) || qty <= 0) return null;
+
+    const current = Number(stockRow.netQty || 0);
+    const next = adjustForm.direction === "OUT" ? current - qty : current + qty;
+    return { current, next, uom: stockRow.uom || "", negative: next < 0 };
+  }, [items, adjustForm.item_id, adjustForm.quantity, adjustForm.direction]);
+
   const sorted = useMemo(() => {
     const { key, direction } = sortConfig;
     const sign = direction === "asc" ? 1 : -1;
@@ -186,32 +204,6 @@ function RawMaterialPage() {
     setGradeFilter("");
   };
 
-  const onImportFileSelected = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    setImporting(true);
-    try {
-      const rows = await parseExcelToInventoryRows(file);
-      if (!rows.length) {
-        dispatchUserMessage("No valid rows found in the file.", { title: "Import", variant: "error" });
-        return;
-      }
-
-      const { data } = await api.post("/inventory/import", { rows });
-      dispatchUserMessage(
-        `Opening stock import complete. Imported: ${data.imported}, unchanged: ${data.skipped}, failed: ${data.failed}.`,
-        { title: "Import complete", variant: data.failed ? "error" : "success" }
-      );
-      fetchData();
-    } catch (err) {
-      logApiError(err, "Failed to import inventory opening stock");
-    } finally {
-      setImporting(false);
-      event.target.value = "";
-    }
-  };
-
   const openAdjustModal = (itemId = "") => {
     setAdjustForm({ ...emptyAdjustForm, item_id: itemId });
     setIsAdjustOpen(true);
@@ -242,15 +234,45 @@ function RawMaterialPage() {
     }
   };
 
+  const openOpeningModal = () => {
+    setOpeningForm(emptyOpeningForm);
+    setIsOpeningOpen(true);
+  };
+
+  const closeOpeningModal = () => {
+    if (savingOpening) return;
+    setIsOpeningOpen(false);
+  };
+
+  const submitOpeningStock = async (e) => {
+    e.preventDefault();
+    if (savingOpening) return;
+    setSavingOpening(true);
+    try {
+      await api.post("/inventory/opening-stock", {
+        item_id: openingForm.item_id.trim(),
+        quantity: Number(openingForm.quantity),
+        batch_no: openingForm.batch_no.trim() || undefined
+      });
+      dispatchUserMessage("Opening stock saved.", { title: "Saved", variant: "success" });
+      setIsOpeningOpen(false);
+      fetchData();
+    } catch (err) {
+      logApiError(err, "Failed to save opening stock");
+    } finally {
+      setSavingOpening(false);
+    }
+  };
+
   return (
     <div className="order-page">
       <Toolbar
         title="Raw Material Inventory"
         search={
           activeView === "stock" && (
-            <div className="ui-toolbar-search">
+            <>
               <SearchIcon />
-              <input
+              <input autoComplete="off"
                 placeholder="Search item, category or grade..."
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
@@ -258,24 +280,15 @@ function RawMaterialPage() {
                   if (e.key === "Enter") onSearchSubmit();
                 }}
               />
-            </div>
+            </>
           )
         }
         actions={
           activeView === "stock" && (
             <>
               <button className="order-btn-primary ghost" onClick={onSearchSubmit}>Search</button>
+              <button className="order-btn-secondary" onClick={openOpeningModal}>Add Opening Stock</button>
               <button className="order-btn-secondary" onClick={() => openAdjustModal()}>Adjust Stock</button>
-              <label className="order-btn-secondary" style={{ cursor: importing ? "not-allowed" : "pointer", opacity: importing ? 0.6 : 1 }}>
-                {importing ? "Importing..." : "Import Opening Stock (Excel)"}
-                <input
-                  type="file"
-                  accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-                  onChange={onImportFileSelected}
-                  disabled={importing}
-                  style={{ display: "none" }}
-                />
-              </label>
             </>
           )
         }
@@ -310,23 +323,13 @@ function RawMaterialPage() {
         }
       />
 
-      <section className="order-card" style={{ padding: 0 }}>
-        <div style={{ display: "flex", gap: "2px", borderBottom: "2px solid #e2e8f0" }}>
+      <section className="order-card order-tabs-card">
+        <div className="order-tabs">
           {[{ key: "stock", label: "Current Stock" }, { key: "register", label: "Stock Register" }].map((tab) => (
             <button
               key={tab.key}
+              className={`order-tab-btn${activeView === tab.key ? " active" : ""}`}
               onClick={() => setActiveView(tab.key)}
-              style={{
-                padding: "10px 18px",
-                border: "none",
-                background: "none",
-                cursor: "pointer",
-                fontSize: "13px",
-                fontWeight: activeView === tab.key ? "700" : "400",
-                color: activeView === tab.key ? "#1e293b" : "#64748b",
-                borderBottom: activeView === tab.key ? "2px solid #1e293b" : "2px solid transparent",
-                marginBottom: "-2px"
-              }}
             >
               {tab.label}
             </button>
@@ -393,7 +396,7 @@ function RawMaterialPage() {
                     <td data-label="Warehouse">{item.warehouseLocation || "-"}</td>
                     <td data-label="Last Received">{formatDate(item.lastReceivedAt)}</td>
                     <td data-label="">
-                      <button className="order-sort-btn" onClick={() => openAdjustModal(item.itemId)}>
+                      <button className="adjust-row-btn" onClick={() => openAdjustModal(item.itemId)}>
                         Adjust
                       </button>
                     </td>
@@ -409,14 +412,18 @@ function RawMaterialPage() {
 
       {activeView === "register" && (
         <>
-          <section className="order-card" style={{ padding: "12px 20px" }}>
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
-              <div>
-                <label className="label" style={{ display: "block", fontSize: 11, color: "#64748b", fontWeight: 600, textTransform: "uppercase", marginBottom: 4 }}>Date</label>
-                <input className="input" type="date" value={registerDate} onChange={(e) => setRegisterDate(e.target.value)} />
+          <section className="order-card rm-register-bar-card">
+            <div className="rm-register-bar">
+              <div className="rm-register-field">
+                <label className="rm-register-label">Date</label>
+                <input autoComplete="off" className="input" type="date" value={registerDate} onChange={(e) => { registerDateTouched.current = true; setRegisterDate(e.target.value); }} />
               </div>
-              <span style={{ marginLeft: "auto", fontSize: 13, color: "#64748b" }}>
-                {registerRows.length} item{registerRows.length !== 1 ? "s" : ""} moved on this date
+              <span className="rm-register-count">
+                {movedCount > 0
+                  ? `${movedCount} item${movedCount !== 1 ? "s" : ""} moved on this date`
+                  : registerRows.length > 0
+                    ? `No movement on this date · ${registerRows.length} balance${registerRows.length !== 1 ? "s" : ""} carried forward`
+                    : "No movement on this date"}
               </span>
             </div>
           </section>
@@ -434,8 +441,8 @@ function RawMaterialPage() {
                 <p>No stock movement recorded for this date</p>
               </div>
             ) : (
-              <div className="order-table-wrap">
-                <table className="order-table">
+              <div className="responsive-table-wrap">
+                <table className="order-table responsive-table">
                   <thead>
                     <tr>
                       <th style={{ width: 44 }}>S.NO</th>
@@ -452,45 +459,118 @@ function RawMaterialPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {registerRows.map((row, idx) => (
+                    {pagedRegisterRows.map((row, idx) => (
                       <tr key={`${row.itemId}-${row.batchNo}-${idx}`}>
-                        <td style={{ color: "#94a3b8", fontSize: 12 }}>{idx + 1}</td>
-                        <td style={{ fontWeight: 600, color: "#1d4ed8" }}>{row.itemId}</td>
-                        <td>{row.batchNo || "-"}</td>
-                        <td>{row.grade || "-"}</td>
-                        <td style={{ textAlign: "right" }}>{Number(row.openingStock || 0).toLocaleString()}</td>
-                        <td style={{ textAlign: "right" }}>{Number(row.production || 0).toLocaleString()}</td>
-                        <td style={{ textAlign: "right" }}>{Number(row.dispatch || 0).toLocaleString()}</td>
-                        <td style={{ textAlign: "right" }}>{Number(row.consumeAShift || 0).toLocaleString()}</td>
-                        <td style={{ textAlign: "right" }}>{Number(row.consumeBShift || 0).toLocaleString()}</td>
-                        <td style={{ textAlign: "right" }}>{Number(row.consumeCShift || 0).toLocaleString()}</td>
-                        <td style={{ textAlign: "right", fontWeight: 600 }}>{Number(row.closingStock || 0).toLocaleString()}</td>
+                        <td data-label="" style={{ color: "#94a3b8", fontSize: 12 }}>{(registerPage - 1) * REGISTER_PAGE_SIZE + idx + 1}</td>
+                        <td data-label="Raw Material" style={{ fontWeight: 600, color: "#1d4ed8" }}>{row.itemId}</td>
+                        <td data-label="Batch No.">{row.batchNo || "-"}</td>
+                        <td data-label="Grade">{row.grade || "-"}</td>
+                        <td data-label="Opening Stock" style={{ textAlign: "right" }}>{Number(row.openingStock || 0).toLocaleString()}</td>
+                        <td data-label="Production" style={{ textAlign: "right" }}>{Number(row.production || 0).toLocaleString()}</td>
+                        <td data-label="Dispatch" style={{ textAlign: "right" }}>{Number(row.dispatch || 0).toLocaleString()}</td>
+                        <td data-label="Consume A-Shift" style={{ textAlign: "right" }}>{Number(row.consumeAShift || 0).toLocaleString()}</td>
+                        <td data-label="Consume B-Shift" style={{ textAlign: "right" }}>{Number(row.consumeBShift || 0).toLocaleString()}</td>
+                        <td data-label="Consume C-Shift" style={{ textAlign: "right" }}>{Number(row.consumeCShift || 0).toLocaleString()}</td>
+                        <td data-label="Closing Stock" style={{ textAlign: "right", fontWeight: 600 }}>{Number(row.closingStock || 0).toLocaleString()}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+                {registerTotalPages > 1 && (
+                  <div className="order-pagination" style={{ borderTop: "1px solid #f1f5f9" }}>
+                    <div className="order-pagination-info">
+                      Page {registerPage} of {registerTotalPages} · {registerRows.length} row{registerRows.length !== 1 ? "s" : ""}
+                    </div>
+                    <div className="order-page-controls">
+                      <button onClick={() => setRegisterPage((p) => Math.max(1, p - 1))} disabled={registerPage === 1}>Prev</button>
+                      <button onClick={() => setRegisterPage((p) => Math.min(registerTotalPages, p + 1))} disabled={registerPage === registerTotalPages}>Next</button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </section>
         </>
       )}
 
+      {isOpeningOpen && (
+        <div className="masterdata-modal-overlay" onClick={closeOpeningModal}>
+          <div className="masterdata-modal-card adjust-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="adjust-head">
+              <div>
+                <h3>Add Opening Stock</h3>
+                <p className="pack-cell-sub">Sets a material's starting balance. Pick it from the list so the name always matches.</p>
+              </div>
+              <button className="adjust-close" onClick={closeOpeningModal} disabled={savingOpening} type="button" aria-label="Close">
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={submitOpeningStock}>
+              <div className="adjust-body">
+                <div className="adjust-field">
+                  <label className="label">Material <span className="req">*</span></label>
+                  <SearchableSelect
+                    options={productOptions}
+                    value={openingForm.item_id}
+                    onChange={(value) => setOpeningForm((p) => ({ ...p, item_id: value }))}
+                    placeholder="Select material"
+                  />
+                </div>
+
+                <div className="adjust-field">
+                  <label className="label">Opening Quantity <span className="req">*</span></label>
+                  <input
+                    autoComplete="off"
+                    className="input"
+                    type="number"
+                    min="0"
+                    step="any"
+                    placeholder="0"
+                    value={openingForm.quantity}
+                    onChange={(e) => setOpeningForm((p) => ({ ...p, quantity: e.target.value }))}
+                    required
+                  />
+                </div>
+
+                <div className="adjust-field">
+                  <label className="label">Batch No <span style={{ color: "#94a3b8", fontWeight: 400 }}>(optional)</span></label>
+                  <input
+                    autoComplete="off"
+                    className="input"
+                    placeholder="Leave blank for a single un-batched balance"
+                    value={openingForm.batch_no}
+                    onChange={(e) => setOpeningForm((p) => ({ ...p, batch_no: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div className="adjust-actions">
+                <button type="button" className="order-btn-secondary" onClick={closeOpeningModal} disabled={savingOpening}>Cancel</button>
+                <button type="submit" className="order-btn-primary" disabled={savingOpening || !openingForm.item_id || openingForm.quantity === ""}>
+                  {savingOpening ? "Saving..." : "Save Opening Stock"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {isAdjustOpen && (
         <div className="masterdata-modal-overlay">
-          <div className="masterdata-modal-card" style={{ width: "min(480px, 100%)" }}>
-            <div className="masterdata-modal-head">
+          <div className="masterdata-modal-card adjust-modal">
+            <div className="adjust-head">
               <div>
                 <h3>Adjust Stock</h3>
-                <p>Correct raw material stock for wastage, damage, or a physical count mismatch.</p>
               </div>
-              <button className="masterdata-modal-close-btn" onClick={closeAdjustModal} disabled={savingAdjust} type="button">
-                X Close
+              <button className="adjust-close" onClick={closeAdjustModal} disabled={savingAdjust} type="button" aria-label="Close">
+                ✕
               </button>
             </div>
 
             <form onSubmit={submitAdjustment}>
-              <div className="masterdata-form-grid">
-                <div>
+              <div className="adjust-body">
+                <div className="adjust-field">
                   <label className="label">Product ID / Name <span className="req">*</span></label>
                   <SearchableSelect
                     options={productOptions}
@@ -499,33 +579,65 @@ function RawMaterialPage() {
                     placeholder="Select product"
                   />
                 </div>
-                <div>
+
+                {/* Add vs. remove is the decision that inverts the whole record —
+                    a two-way choice buried in a dropdown is too easy to get wrong. */}
+                <div className="adjust-field">
                   <label className="label">Direction <span className="req">*</span></label>
-                  <SearchableSelect
-                    options={[
-                      { value: "IN", label: "Add to stock (+)" },
-                      { value: "OUT", label: "Remove from stock (-)" }
-                    ]}
-                    value={adjustForm.direction}
-                    onChange={(value) => setAdjustForm((p) => ({ ...p, direction: value }))}
-                    placeholder="Select direction"
-                  />
+                  <div className="adjust-toggle">
+                    <button
+                      type="button"
+                      className={`adjust-toggle-btn in${adjustForm.direction === "IN" ? " active" : ""}`}
+                      onClick={() => setAdjustForm((p) => ({ ...p, direction: "IN" }))}
+                    >
+                      + Add to stock
+                    </button>
+                    <button
+                      type="button"
+                      className={`adjust-toggle-btn out${adjustForm.direction === "OUT" ? " active" : ""}`}
+                      onClick={() => setAdjustForm((p) => ({ ...p, direction: "OUT" }))}
+                    >
+                      − Remove from stock
+                    </button>
+                  </div>
                 </div>
-                <div>
+
+                <div className="adjust-field">
                   <label className="label">Quantity <span className="req">*</span></label>
-                  <input
+                  <input autoComplete="off"
                     className="input"
                     type="number"
                     min="0.01"
-                    step="0.01"
+                    step="any"
+                    placeholder="0"
                     value={adjustForm.quantity}
                     onChange={(e) => setAdjustForm((p) => ({ ...p, quantity: e.target.value }))}
                     required
                   />
                 </div>
-                <div>
+
+                {adjustPreview && (
+                  <div className={`adjust-preview${adjustPreview.negative ? " negative" : ""}`}>
+                    <div>
+                      <span>Current stock</span>
+                      <strong>{adjustPreview.current.toLocaleString()} {adjustPreview.uom}</strong>
+                    </div>
+                    <span className="adjust-preview-arrow">→</span>
+                    <div>
+                      <span>After adjustment</span>
+                      <strong>{adjustPreview.next.toLocaleString()} {adjustPreview.uom}</strong>
+                    </div>
+                    {adjustPreview.negative && (
+                      <p className="adjust-preview-warn">
+                        This removes more than is in stock and would take the balance negative.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <div className="adjust-field">
                   <label className="label">Reason <span className="req">*</span></label>
-                  <input
+                  <input autoComplete="off"
                     className="input"
                     placeholder="e.g. Damaged in storage, stock-take correction..."
                     value={adjustForm.reason}
@@ -536,12 +648,16 @@ function RawMaterialPage() {
                 </div>
               </div>
 
-              <div className="masterdata-form-actions" style={{ marginTop: 24, paddingTop: 24, borderTop: "1px solid #e5e7eb" }}>
+              <div className="adjust-actions">
                 <button type="button" className="masterdata-btn-secondary" onClick={closeAdjustModal} disabled={savingAdjust}>
                   Cancel
                 </button>
-                <button type="submit" className="masterdata-btn-primary" disabled={savingAdjust}>
-                  {savingAdjust ? "Saving..." : "Save Adjustment"}
+                <button
+                  type="submit"
+                  className={`masterdata-btn-primary${adjustForm.direction === "OUT" ? " danger" : ""}`}
+                  disabled={savingAdjust}
+                >
+                  {savingAdjust ? "Saving..." : adjustForm.direction === "OUT" ? "Remove Stock" : "Add Stock"}
                 </button>
               </div>
             </form>

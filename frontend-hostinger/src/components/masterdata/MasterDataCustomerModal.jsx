@@ -44,7 +44,7 @@ function MasterDataCustomerModal({
             <div className="masterdata-form-grid-two">
               <div>
                 <label className="label">Customer Code</label>
-                <input
+                <input autoComplete="off"
                   className={getInputClassName("customer_code")}
                   placeholder="Auto-generated"
                   value={customerForm.customer_code}
@@ -55,7 +55,7 @@ function MasterDataCustomerModal({
               </div>
               <div>
                 <label className="label">Customer Name <span className="req">*</span></label>
-                <input
+                <input autoComplete="off"
                   className={getInputClassName("customer_name")}
                   placeholder="Enter customer name"
                   value={customerForm.customer_name}
@@ -66,7 +66,7 @@ function MasterDataCustomerModal({
               </div>
               <div>
                 <label className="label">Contact Person</label>
-                <input
+                <input autoComplete="off"
                   className={getInputClassName("contact_person")}
                   placeholder="Enter contact person"
                   value={customerForm.contact_person}
@@ -75,7 +75,7 @@ function MasterDataCustomerModal({
               </div>
               <div>
                 <label className="label">Phone Number</label>
-                <input
+                <input autoComplete="off"
                   className={getInputClassName("contact_person_number")}
                   placeholder="Enter phone number"
                   value={customerForm.contact_person_number}
@@ -84,7 +84,7 @@ function MasterDataCustomerModal({
               </div>
               <div className="full-row">
                 <label className="label">Company Email</label>
-                <input
+                <input autoComplete="off"
                   className={getInputClassName("company_email")}
                   type="email"
                   placeholder="name@company.com"
@@ -114,7 +114,7 @@ function MasterDataCustomerModal({
               </div>
               <div>
                 <label className="label">Country Code</label>
-                <input
+                <input autoComplete="off"
                   className={getInputClassName("country_code")}
                   placeholder="IN"
                   value={customerForm.country_code}
@@ -132,7 +132,7 @@ function MasterDataCustomerModal({
               </div>
               <div>
                 <label className="label">City</label>
-                <input
+                <input autoComplete="off"
                   className={getInputClassName("city")}
                   placeholder="Enter city"
                   value={customerForm.city}
@@ -141,7 +141,7 @@ function MasterDataCustomerModal({
               </div>
               <div>
                 <label className="label">Pincode</label>
-                <input
+                <input autoComplete="off"
                   className={getInputClassName("pincode")}
                   placeholder="Enter pincode"
                   value={customerForm.pincode}
@@ -150,7 +150,7 @@ function MasterDataCustomerModal({
               </div>
               <div className="full-row">
                 <label className="label">Address</label>
-                <input
+                <input autoComplete="off"
                   className={getInputClassName("address")}
                   placeholder="Enter full address"
                   value={customerForm.address}
@@ -165,7 +165,7 @@ function MasterDataCustomerModal({
             <div className="masterdata-form-grid-two">
               <div>
                 <label className="label">GSTN</label>
-                <input
+                <input autoComplete="off"
                   className={getInputClassName("gstn")}
                   placeholder="Enter GSTN"
                   value={customerForm.gstn}
@@ -174,7 +174,7 @@ function MasterDataCustomerModal({
               </div>
               <div>
                 <label className="label">Serial Code</label>
-                <input
+                <input autoComplete="off"
                   className={getInputClassName("s_no_code")}
                   placeholder="Enter serial code"
                   value={customerForm.s_no_code}

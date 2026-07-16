@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/axiosClient";
+import { useAuth } from "../context/AuthContext";
 import VirtualizedTableBody from "../components/common/VirtualizedTableBody";
 import MobileListCard from "../components/common/MobileListCard";
 import { BoxesIcon, SearchIcon } from "../components/erp/ErpIcons";
@@ -9,6 +10,7 @@ import { useIsMobile } from "../hooks/useIsMobile";
 import { exportRowsToExcel } from "../utils/exportExcel";
 import PurchaseOrderFormPage from "./PurchaseOrderFormPage";
 import SearchableSelect from "../components/common/SearchableSelect";
+import MonthFilter from "../components/common/MonthFilter";
 import Toolbar from "../components/common/Toolbar";
 import StatusBadge from "../components/common/StatusBadge";
 
@@ -53,8 +55,12 @@ function formatAmount(val) {
 function PurchaseOrderListPage() {
   const navigate = useNavigate();
   const tableWrapRef = useRef(null);
+  const { user } = useAuth();
+  // Pricing is an accounts (or admin) job, so only they get the pricing queue.
+  const canPrice = user?.role === "admin" || user?.role === "accounts";
 
   const [showNewModal, setShowNewModal]  = useState(false);
+  const [pendingPricing, setPendingPricing] = useState(false);
   const [loading, setLoading]           = useState(true);
   const [pos, setPos]                   = useState([]);
   const [searchText, setSearchText]     = useState("");
@@ -62,6 +68,7 @@ function PurchaseOrderListPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [supplierFilter, setSupplierFilter] = useState("");
   const [dateFilter, setDateFilter]     = useState("");
+  const [monthFilter, setMonthFilter] = useState("");
   const isMobile = useIsMobile();
   useEffect(() => { if (isMobile) { setDateFilter(""); } }, [isMobile]);
   const [sortConfig, setSortConfig]     = useState({ key: "createdAt", direction: "desc" });
@@ -78,6 +85,8 @@ function PurchaseOrderListPage() {
           status:     statusFilter === "all" ? undefined : statusFilter,
           supplier:   supplierFilter || undefined,
           date_from:  dateFilter || undefined,
+          month: monthFilter || undefined,
+          pending_pricing: pendingPricing ? 1 : undefined,
           page:       currentPage,
           limit:      PAGE_SIZE
         }
@@ -95,7 +104,7 @@ function PurchaseOrderListPage() {
     }
   };
 
-  useEffect(() => { fetchData(); }, [query, statusFilter, supplierFilter, dateFilter, currentPage]);
+  useEffect(() => { fetchData(); }, [query, statusFilter, supplierFilter, dateFilter, monthFilter, pendingPricing, currentPage]);
   useEffect(() => { if (currentPage > totalPages) setCurrentPage(totalPages); }, [currentPage, totalPages]);
 
   const exportToExcel = async () => {
@@ -168,6 +177,13 @@ function PurchaseOrderListPage() {
 
   const onSearchSubmit = () => { setQuery(searchText.trim()); setCurrentPage(1); };
 
+  // From the pricing queue, a click lands straight on the pricing screen — that
+  // is the whole reason the accounts user is in this list. Everywhere else it
+  // opens the PO detail.
+  const openPO = (po) => navigate(
+    pendingPricing ? `/purchase-orders/${po.id}/pricing` : `/purchase-orders/${po.id}`
+  );
+
   const SortBtn = ({ colKey, label }) => (
     <button className="order-sort-btn" onClick={() => onSort(colKey)}>
       {label}
@@ -182,15 +198,15 @@ function PurchaseOrderListPage() {
       <Toolbar
         title="Purchase Orders"
         search={
-          <div className="ui-toolbar-search">
+          <>
             <SearchIcon />
-            <input
+            <input autoComplete="off"
               placeholder="Search PO number or supplier..."
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") onSearchSubmit(); }}
             />
-          </div>
+          </>
         }
         actions={
           <>
@@ -204,13 +220,22 @@ function PurchaseOrderListPage() {
         }
         filters={
           <>
+            {canPrice && (
+              <button
+                className={pendingPricing ? "order-btn-primary" : "order-btn-secondary"}
+                onClick={() => { setPendingPricing((v) => !v); setCurrentPage(1); }}
+                title="Purchase orders raised but not yet priced"
+              >
+                Awaiting Pricing
+              </button>
+            )}
             <SearchableSelect
               options={PO_STATUS_OPTIONS}
               value={statusFilter}
               onChange={(value) => { setStatusFilter(value); setCurrentPage(1); }}
               placeholder="All Status"
             />
-            <input
+            <input autoComplete="off"
               className="input"
               type="text"
               placeholder="Filter by supplier"
@@ -218,17 +243,22 @@ function PurchaseOrderListPage() {
               onChange={(e) => { setSupplierFilter(e.target.value); setCurrentPage(1); }}
             />
             {!isMobile && (
-              <input
+              <input autoComplete="off"
                 className="input"
                 type="date"
                 value={dateFilter}
                 onChange={(e) => { setDateFilter(e.target.value); setCurrentPage(1); }}
               />
             )}
-            {(query || statusFilter !== "all" || supplierFilter || dateFilter) && (
+            <MonthFilter
+              title="Filter by month the PO was raised"
+              value={monthFilter}
+              onChange={(month) => { setMonthFilter(month); setCurrentPage(1); }}
+            />
+            {(query || statusFilter !== "all" || supplierFilter || dateFilter || monthFilter || pendingPricing) && (
               <button
                 className="order-btn-secondary"
-                onClick={() => { setQuery(""); setSearchText(""); setStatusFilter("all"); setSupplierFilter(""); setDateFilter(""); setCurrentPage(1); }}
+                onClick={() => { setQuery(""); setSearchText(""); setStatusFilter("all"); setSupplierFilter(""); setDateFilter(""); setMonthFilter(""); setPendingPricing(false); setCurrentPage(1); }}
               >
                 Clear
               </button>
@@ -273,7 +303,7 @@ function PurchaseOrderListPage() {
                     <tr
                       key={po.id}
                       style={{ cursor: "pointer" }}
-                      onClick={() => navigate(`/purchase-orders/${po.id}`)}
+                      onClick={() => openPO(po)}
                     >
                       <td style={{ color: "#94a3b8", fontSize: 12 }}>
                         {(currentPage - 1) * PAGE_SIZE + index + 1}
@@ -314,9 +344,9 @@ function PurchaseOrderListPage() {
                     { label: "Items", value: po._count?.items ?? "-" },
                     { label: "Amount", value: formatAmount(po.totalAmount) }
                   ]}
-                  onClick={() => navigate(`/purchase-orders/${po.id}`)}
-                  onActionClick={() => navigate(`/purchase-orders/${po.id}`)}
-                  actionLabel="View Details"
+                  onClick={() => openPO(po)}
+                  onActionClick={() => openPO(po)}
+                  actionLabel={pendingPricing ? "Add Pricing" : "View Details"}
                 />
               ))}
               <div className="order-pagination" style={{ borderTop: "none", paddingTop: 16, marginTop: 0 }}>

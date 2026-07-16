@@ -15,12 +15,16 @@ import {
   resolveSalesGroupNumberForManualRequest,
   setManualOrderDispatchDate
 } from "../src/services/manualOrderRequestService.js";
+// This second copy lives in the frontend. The test imports the display helpers
+// from both sides and asserts they agree — a guard against the backend minting a
+// number the UI would render differently. The frontend dir is `frontend-hostinger`;
+// the old `frontend` path predates that rename and is what left this test red.
 import {
   getDisplayEnquiryNumber as getFrontendDisplayEnquiryNumber,
   getDisplaySalesGroupNumber,
   getDisplaySalesNumber as getFrontendDisplaySalesNumber,
   getDisplayManualOrderRequestNumber
-} from "../../frontend/src/utils/businessNumbers.js";
+} from "../../frontend-hostinger/src/utils/businessNumbers.js";
 
 assert.equal(formatSalesGroupNumber(1), "SO_001");
 assert.equal(formatSalesGroupNumber(2), "SO_002");

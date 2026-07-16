@@ -1,11 +1,11 @@
 export const RAW_MASTER_DATA = {
-  roles: ["admin", "sales", "production", "dispatch"],
+  roles: ["admin", "sales", "production", "dispatch", "purchase", "accounts"],
   enquiryStatuses: ["PENDING", "ACCEPTED", "REJECTED"],
   orderStatuses: ["CREATED", "IN_PRODUCTION", "READY_FOR_DISPATCH", "PARTIALLY_DISPATCHED", "COMPLETED", "DISPATCHED"],
-  productionStatuses: ["PENDING", "IN_PROGRESS", "PARTIALLY_PRODUCED", "HOLD", "COMPLETED"],
+  productionStatuses: ["PENDING", "IN_PROGRESS", "PARTIALLY_PRODUCED", "HOLD", "REWORK", "COMPLETED"],
   shipmentStatuses: ["PACKING", "SHIPPED", "DELIVERED"],
   units: ["KG", "MT", "LTR"],
-  modeOfEnquiry: ["Phone", "Whatsapp", "Website", "We Reached Out", "Walk-in", "Other"],
+  modeOfEnquiry: ["Phone", "Email", "Whatsapp", "Website", "We Reached Out", "Walk-in", "Other"],
   assignedPersons: [
     "Sharun Mittal",
     "Saumya Mittal",
@@ -23,6 +23,18 @@ export const RAW_MASTER_DATA = {
     "Mandeep Singh"
   ],
   companyNames: [],
+  // Seed set for the product master's category picker. An admin maintains this
+  // list from the Product Master screen as the plant's range changes.
+  productCategories: [
+    "Metallic Stearates",
+    "Waxes",
+    "Lubricants",
+    "PVC Stabilizers",
+    "Emulsifiers",
+    "Additives",
+    "Fatty Acids",
+    "Other"
+  ],
   products: [
     "ALUMINIUM STEARATE",
     "ANTIBLOCKING AGENT",
@@ -67,9 +79,7 @@ export const RAW_MASTER_DATA = {
     "Zinc Laurate",
     "ZINC OXIDE",
     "Zinc salt of fatty acids",
-    "ZINC STEARATE",
-    "Zinc Stearate",
-    "ABC"
+    "ZINC STEARATE"
   ],
   countryCodes: ["IN"],
   finishedGoodsCatalog: [
@@ -163,6 +173,7 @@ const PRODUCTION_STATUS_OPTIONS = [
   { value: "IN_PROGRESS", label: "In Progress" },
   { value: "PARTIALLY_PRODUCED", label: "Partially Produced" },
   { value: "HOLD", label: "Hold" },
+  { value: "REWORK", label: "Rework" },
   { value: "COMPLETED", label: "Completed" }
 ];
 
@@ -183,6 +194,7 @@ export const MASTER_DATA = {
   assignedPersons: toOptions(RAW_MASTER_DATA.assignedPersons),
   supervisors: toOptions(RAW_MASTER_DATA.supervisors),
   companyNames: toOptions(RAW_MASTER_DATA.companyNames),
+  productCategories: toOptions(RAW_MASTER_DATA.productCategories),
   products: toOptions(RAW_MASTER_DATA.products),
   countryCodes: toOptions(RAW_MASTER_DATA.countryCodes),
   finishedGoodsCatalog: toOptions(RAW_MASTER_DATA.finishedGoodsCatalog),

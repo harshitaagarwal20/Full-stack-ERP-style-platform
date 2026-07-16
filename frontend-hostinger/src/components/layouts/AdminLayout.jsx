@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
-import { getFlatNavItemsByRole, getNavItemsByRole } from "../../config/navigation";
+import { getFlatNavItems, getNavItems } from "../../config/navigation";
 import { useAuth } from "../../context/AuthContext";
+import { usePermissions } from "../../context/PermissionContext";
 import api from "../../api/axiosClient";
 import ErpNavbar from "../erp/ErpNavbar";
 import ErpSidebar from "../erp/ErpSidebar";
@@ -21,6 +22,7 @@ const iconMap = {
 
 function AdminLayout() {
   const { user, logout } = useAuth();
+  const { can } = usePermissions();
   const location = useLocation();
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -32,18 +34,20 @@ function AdminLayout() {
   const [changePwSuccess, setChangePwSuccess] = useState("");
   const [changePwSubmitting, setChangePwSubmitting] = useState(false);
 
+  const isAdmin = user?.role === "admin";
+
   const items = useMemo(
-    () => getNavItemsByRole(user?.role).map((item) => ({
+    () => getNavItems(can, isAdmin).map((item) => ({
       ...item,
       icon: iconMap[item.icon],
       children: item.children?.map((child) => ({ ...child, icon: iconMap[child.icon] }))
     })),
-    [user?.role]
+    [can, isAdmin]
   );
 
   const flatItems = useMemo(
-    () => getFlatNavItemsByRole(user?.role).map((item) => ({ ...item, icon: iconMap[item.icon] })),
-    [user?.role]
+    () => getFlatNavItems(can, isAdmin).map((item) => ({ ...item, icon: iconMap[item.icon] })),
+    [can, isAdmin]
   );
 
   const currentPageTitle = useMemo(() => {

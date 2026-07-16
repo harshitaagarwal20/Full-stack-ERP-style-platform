@@ -44,7 +44,7 @@ function MasterDataSupplierModal({
             <div className="masterdata-form-grid-two">
               <div>
                 <label className="label">Supplier Code</label>
-                <input
+                <input autoComplete="off"
                   className={getInputClassName("supplier_code")}
                   placeholder="Auto-generated"
                   value={supplierForm.supplier_code}
@@ -55,7 +55,7 @@ function MasterDataSupplierModal({
               </div>
               <div>
                 <label className="label">Supplier Name <span className="req">*</span></label>
-                <input
+                <input autoComplete="off"
                   className={getInputClassName("supplier_name")}
                   placeholder="Enter supplier name"
                   value={supplierForm.supplier_name}
@@ -66,7 +66,7 @@ function MasterDataSupplierModal({
               </div>
               <div>
                 <label className="label">Contact Person</label>
-                <input
+                <input autoComplete="off"
                   className={getInputClassName("contact_person")}
                   placeholder="Enter contact person"
                   value={supplierForm.contact_person}
@@ -75,7 +75,7 @@ function MasterDataSupplierModal({
               </div>
               <div>
                 <label className="label">Phone Number</label>
-                <input
+                <input autoComplete="off"
                   className={getInputClassName("contact_person_number")}
                   placeholder="Enter phone number"
                   value={supplierForm.contact_person_number}
@@ -84,7 +84,7 @@ function MasterDataSupplierModal({
               </div>
               <div className="full-row">
                 <label className="label">Company Email</label>
-                <input
+                <input autoComplete="off"
                   className={getInputClassName("company_email")}
                   type="email"
                   placeholder="name@company.com"
@@ -114,7 +114,7 @@ function MasterDataSupplierModal({
               </div>
               <div>
                 <label className="label">Country Code</label>
-                <input
+                <input autoComplete="off"
                   className={getInputClassName("country_code")}
                   placeholder="IN"
                   value={supplierForm.country_code}
@@ -123,7 +123,7 @@ function MasterDataSupplierModal({
               </div>
               <div>
                 <label className="label">Country Code</label>
-                <input
+                <input autoComplete="off"
                   className={getInputClassName("country_code")}
                   placeholder="IN"
                   value={supplierForm.country_code}
@@ -141,7 +141,7 @@ function MasterDataSupplierModal({
               </div>
               <div>
                 <label className="label">City</label>
-                <input
+                <input autoComplete="off"
                   className={getInputClassName("city")}
                   placeholder="Enter city"
                   value={supplierForm.city}
@@ -150,7 +150,7 @@ function MasterDataSupplierModal({
               </div>
               <div>
                 <label className="label">Pincode</label>
-                <input
+                <input autoComplete="off"
                   className={getInputClassName("pincode")}
                   placeholder="Enter pincode"
                   value={supplierForm.pincode}
@@ -159,7 +159,7 @@ function MasterDataSupplierModal({
               </div>
               <div className="full-row">
                 <label className="label">Address</label>
-                <input
+                <input autoComplete="off"
                   className={getInputClassName("address")}
                   placeholder="Enter full address"
                   value={supplierForm.address}
@@ -174,7 +174,7 @@ function MasterDataSupplierModal({
             <div className="masterdata-form-grid-two">
               <div>
                 <label className="label">GSTN</label>
-                <input
+                <input autoComplete="off"
                   className={getInputClassName("gstn")}
                   placeholder="Enter GSTN"
                   value={supplierForm.gstn}
@@ -183,7 +183,7 @@ function MasterDataSupplierModal({
               </div>
               <div>
                 <label className="label">PAN No</label>
-                <input
+                <input autoComplete="off"
                   className={getInputClassName("pan_no")}
                   placeholder="Enter PAN number"
                   value={supplierForm.pan_no}

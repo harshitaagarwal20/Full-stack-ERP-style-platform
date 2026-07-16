@@ -11,6 +11,8 @@ import { getDisplaySalesNumber } from "../utils/businessNumbers";
 import { getDispatchSortPriority } from "../utils/dispatchOrdering";
 import SearchableSelect from "../components/common/SearchableSelect";
 import { findCustomerProfile } from "../utils/customerLookup";
+import { fetchAllPages } from "../utils/listWindow";
+import { minEntryDateFor } from "../utils/dateRules";
 
 function formatDate(dateValue) {
   if (!dateValue) return "-";
@@ -393,18 +395,15 @@ function DispatchPage() {
   const exportDispatches = async () => {
     let rowsToExport = sortedDispatchRows;
     try {
-      const { data } = await api.get("/dispatch", {
-        params: {
-          paginated: 1,
-          q: query || undefined,
-          status: statusFilter === "all" ? undefined : statusFilter,
-          client: clientFilter || undefined,
-          date: dateFilter || undefined,
-          page: 1,
-          limit: 0
-        }
+      // Paged, not `limit: 0` — see utils/listWindow.js. Pulling every row into
+      // one response is what makes a 10,000-row export unusable on a phone.
+      rowsToExport = await fetchAllPages("/dispatch", {
+        paginated: 1,
+        q: query || undefined,
+        status: statusFilter === "all" ? undefined : statusFilter,
+        client: clientFilter || undefined,
+        date: dateFilter || undefined
       });
-      rowsToExport = Array.isArray(data?.items) ? data.items : sortedDispatchRows;
     } catch (error) {
       logApiError(error, "Export fallback: using current dispatch rows");
     }
@@ -452,7 +451,7 @@ function DispatchPage() {
       <section className="order-card">
         <div className="unified-search-box">
           <SearchIcon />
-          <input
+          <input autoComplete="off"
             placeholder="Search order ID, client, or product"
             value={searchText}
             onChange={(event) => setSearchText(event.target.value)}
@@ -472,7 +471,7 @@ function DispatchPage() {
             }}
             placeholder="All Status"
           />
-          <input
+          <input autoComplete="off"
             type="text"
             value={clientFilter}
             onChange={(event) => {
@@ -482,7 +481,7 @@ function DispatchPage() {
             placeholder="Filter by client"
           />
           {!isMobile && (
-            <input
+            <input autoComplete="off"
               type="date"
               value={dateFilter}
               onChange={(event) => {
@@ -686,8 +685,9 @@ function DispatchPage() {
             <form className="dispatch-form-grid" onSubmit={dispatchOrder}>
               <div>
                 <label>Dispatch Quantity</label>
-                <input
+                <input autoComplete="off"
                   type="number"
+                  step="any"
                   min="1"
                   value={dispatchForm.dispatch_quantity}
                   onChange={(event) => setDispatchForm((prev) => ({ ...prev, dispatch_quantity: event.target.value }))}
@@ -696,7 +696,7 @@ function DispatchPage() {
               </div>
               <div>
                 <label>Remaining Quantity</label>
-                <input
+                <input autoComplete="off"
                   type="number"
                   value={dispatchModalRemainingQuantity}
                   readOnly
@@ -704,8 +704,9 @@ function DispatchPage() {
               </div>
               <div>
                 <label>Dispatch Date</label>
-                <input
+                <input autoComplete="off"
                   type="date"
+                  min={minEntryDateFor(dispatchForm.dispatch_date)}
                   value={dispatchForm.dispatch_date}
                   onChange={(event) => setDispatchForm((prev) => ({ ...prev, dispatch_date: event.target.value }))}
                   required

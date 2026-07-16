@@ -7,7 +7,8 @@ const manualOrderRequestProductsInputSchema = z.preprocess((value) => {
   product: z.string().min(1),
   grade: z.string().min(1, "Grade is required"),
   quantity: z.union([z.string(), z.number()]).optional().nullable(),
-  unit_of_measurement: z.string().optional().nullable()
+  unit_of_measurement: z.string().optional().nullable(),
+  remark: z.string().optional().nullable()
 }))).optional();
 
 export const loginSchema = z.object({
@@ -15,18 +16,20 @@ export const loginSchema = z.object({
   password: z.string().min(6)
 });
 
+const roleSchema = z.enum(["admin", "sales", "production", "dispatch", "purchase", "accounts"]);
+
 export const createUserSchema = z.object({
   name: z.string().min(2),
   email: z.string().email(),
   password: z.string().min(6),
-  role: z.enum(["admin", "sales", "production", "dispatch"])
+  role: roleSchema
 });
 
 export const updateUserSchema = z.object({
   name: z.string().min(2).optional(),
   email: z.string().email().optional(),
   password: z.string().min(6).optional(),
-  role: z.enum(["admin", "sales", "production", "dispatch"]).optional()
+  role: roleSchema.optional()
 });
 
 export const changePasswordSchema = z.object({
@@ -40,13 +43,22 @@ const enquiryProductsInputSchema = z.preprocess((value) => {
   product: z.string().min(1),
   grade: z.string().min(1, "Grade is required"),
   quantity: z.union([z.string(), z.number()]).optional().nullable(),
-  unit_of_measurement: z.string().optional().nullable()
+  unit_of_measurement: z.string().optional().nullable(),
+  price_per_uom: z.union([z.string(), z.number()]).optional().nullable(),
+  packaging_requirement: z.string().optional().nullable(),
+  remark: z.string().optional().nullable()
 }))).optional();
 
 const enquiryBaseSchema = z.object({
   enquiry_date: z.string().min(4),
   mode_of_enquiry: z.string().min(1).optional().nullable(),
   company_name: z.string().min(2),
+  customer_type: z.string().optional().nullable(),
+  enquiry_type: z.string().optional().nullable(),
+  inco_term: z.string().optional().nullable(),
+  country: z.string().optional().nullable(),
+  port: z.string().optional().nullable(),
+  last_transaction: z.string().optional().nullable(),
   product: z.string().min(1).optional(),
   products: enquiryProductsInputSchema,
   quantity: z.number().positive().optional(),
@@ -104,7 +116,7 @@ export const createOrderSchema = z.object({
   enquiry_id: z.number().int().positive().optional().nullable(),
   product: z.string().min(2),
   grade: z.string().min(1),
-  quantity: z.number().int().positive(),
+  quantity: z.number().positive(),
   price: z.number().nonnegative().optional().nullable(),
   currency: z.string().length(3).optional().nullable(),
   unit: z.string().min(1),
@@ -167,7 +179,7 @@ export const setManualOrderRequestDispatchDateSchema = z.object({
 export const updateOrderSchema = z.object({
   product: z.string().min(2).optional(),
   grade: z.string().min(1).optional(),
-  quantity: z.number().int().positive().optional(),
+  quantity: z.number().positive().optional(),
   price: z.number().nonnegative().optional().nullable(),
   currency: z.string().length(3).optional().nullable(),
   unit: z.string().min(1).optional(),
@@ -183,6 +195,12 @@ export const updateOrderSchema = z.object({
   remarks: z.string().optional().nullable()
 });
 
+export const updateOrderPaymentSchema = z.object({
+  payment_status: z.enum(["PENDING", "PARTIAL", "RECEIVED"]),
+  amount_received: z.number().nonnegative().optional().nullable(),
+  remarks: z.string().max(500).optional().nullable()
+});
+
 export const moveOrderToProductionSchema = z.object({
   status: z.enum(["IN_PRODUCTION"])
 });
@@ -192,12 +210,13 @@ export const createProductionSchema = z.object({
   assigned_personnel: z.string().min(2).optional().or(z.literal("")),
   delivery_date: z.string().min(4).optional().or(z.literal("")),
   product_specs: z.string().min(2).optional().or(z.literal("")),
-  capacity: z.number().int().positive().optional(),
+  capacity: z.number().positive().optional(),
   particle_size: z.string().min(1).optional().or(z.literal("")),
   acm_rpm: z.number().int().positive().optional(),
   classifier_rpm: z.number().int().positive().optional(),
   blower_rpm: z.number().int().positive().optional(),
   raw_materials: z.string().min(2).optional().or(z.literal("")),
+  product_remark: z.string().optional().nullable(),
   remarks: z.string().optional().nullable(),
   state: z.string().optional().nullable()
 });
@@ -206,14 +225,15 @@ export const updateProductionSchema = z.object({
   assigned_personnel: z.string().min(2).optional().or(z.literal("")),
   delivery_date: z.string().min(4).optional().or(z.literal("")),
   product_specs: z.string().min(2).optional().or(z.literal("")),
-  capacity: z.number().int().positive().optional(),
+  capacity: z.number().positive().optional(),
   particle_size: z.string().min(1).optional().or(z.literal("")),
   acm_rpm: z.number().int().positive().optional(),
   classifier_rpm: z.number().int().positive().optional(),
   blower_rpm: z.number().int().positive().optional(),
-  produced_quantity: z.number().int().nonnegative().optional(),
+  produced_quantity: z.number().nonnegative().optional(),
   batch_no: z.string().optional().nullable().or(z.literal("")),
   raw_materials: z.string().min(2).optional().or(z.literal("")),
+  product_remark: z.string().optional().nullable(),
   remarks: z.string().optional().nullable(),
   status: z.enum(["PENDING", "IN_PROGRESS", "HOLD", "COMPLETED"]).optional(),
   state: z.string().optional().nullable()
@@ -221,6 +241,33 @@ export const updateProductionSchema = z.object({
 
 export const completeProductionSchema = z.object({
   completion_date: z.string().min(4).optional().nullable()
+});
+
+// Split a not-yet-started production job into several batches. The planner
+// gives us exactly one of the two — the size of each batch, or how many
+// batches they want — and the service derives the other.
+export const splitProductionSchema = z
+  .object({
+    batch_size: z.number().int().positive().optional(),
+    batch_count: z.number().int().min(2, "Split into at least 2 batches.").optional()
+  })
+  .superRefine((data, ctx) => {
+    const hasSize = data.batch_size !== undefined && data.batch_size !== null;
+    const hasCount = data.batch_count !== undefined && data.batch_count !== null;
+
+    if (hasSize === hasCount) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["batch_size"],
+        message: "Provide either a batch size or a batch count — not both, and not neither."
+      });
+    }
+  });
+
+// "Plan Batches": the planner states the size they want each batch to be, and
+// the service reshapes the order's batches to match.
+export const planOrderBatchesSchema = z.object({
+  batch_size: z.number().int().positive("Enter a batch size.")
 });
 
 export const stockAdjustmentSchema = z.object({
@@ -247,7 +294,7 @@ const dateOnlySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in 
 
 export const createDispatchSchema = z.object({
   order_id: z.number().int().positive(),
-  dispatch_quantity: z.number().int().positive(),
+  dispatch_quantity: z.number().positive(),
   dispatch_date: dateOnlySchema,
   packing_done: z.boolean(),
   shipment_status: z.enum(["PACKING", "SHIPPED", "DELIVERED"]),
@@ -255,7 +302,7 @@ export const createDispatchSchema = z.object({
 });
 
 export const updateDispatchSchema = z.object({
-  dispatch_quantity: z.number().int().positive().optional(),
+  dispatch_quantity: z.number().positive().optional(),
   dispatch_date: dateOnlySchema.optional().nullable(),
   packing_done: z.boolean().optional(),
   shipment_status: z.enum(["PACKING", "SHIPPED", "DELIVERED"]).optional(),
@@ -274,6 +321,32 @@ export const createPackingRecordSchema = z.object({
 export const updateOrderDispatchDateSchema = z.object({
   dispatch_date: z.string().min(4)
 });
+
+export const createCustomerSchema = z.object({
+  name: z.preprocess((value) => String(value ?? "").trim(), z.string().min(1, "Customer name is required"))
+});
+
+const customerAddressFields = {
+  address: z.preprocess((value) => String(value ?? "").trim(), z.string().min(1, "Address is required")),
+  city: z.string().optional().nullable(),
+  pincode: z.string().optional().nullable(),
+  state: z.string().optional().nullable(),
+  country_code: z.string().optional().nullable(),
+  countryCode: z.string().optional().nullable(),
+  is_default: z.boolean().optional(),
+  isDefault: z.boolean().optional()
+};
+
+export const createCustomerAddressSchema = z.object(customerAddressFields);
+
+export const updateCustomerAddressSchema = z
+  .object({
+    ...customerAddressFields,
+    address: z.preprocess((value) => (value === undefined ? undefined : String(value ?? "").trim()), z.string().min(1, "Address is required").optional())
+  })
+  .refine((data) => Object.keys(data).length > 0, {
+    message: "At least one field must be provided."
+  });
 
 export const createMasterDataValueSchema = z.object({
   value: z.string().min(1),
@@ -326,6 +399,24 @@ export const createSupplierMasterSchema = z.object({
 
 export const importSupplierMasterSchema = z.object({
   rows: z.array(createSupplierMasterSchema).min(1)
+});
+
+export const productMasterSchema = z.object({
+  product_name: z.preprocess((value) => String(value ?? "").trim(), z.string().min(1)),
+  category: z.string().optional().nullable(),
+  default_unit: z.string().optional().nullable(),
+  hsn_code: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+  // Optional starting balance, seeded into the inventory ledger on create only
+  // (see addProductMasterRow). A blank field is "no opening stock", not zero.
+  opening_stock: z.preprocess(
+    (value) => (value === "" || value === null || value === undefined ? undefined : Number(value)),
+    z.number().nonnegative().optional()
+  )
+});
+
+export const importProductMasterSchema = z.object({
+  rows: z.array(productMasterSchema).min(1)
 });
 
 const poItemSchema = z.object({
@@ -448,6 +539,7 @@ export const saveFinishedGoodsTestSheetSchema = z.object({
     bulk_density:   z.string().optional().nullable(),
     sieve_residue:  z.string().optional().nullable(),
     analysis_by:    z.string().optional().nullable(),
+    approved_by:    z.string().optional().nullable(),
     remarks:        z.string().optional().nullable()
   })).min(1, "At least one test row is required")
 });
@@ -456,6 +548,8 @@ export const saveInProcessTestSheetSchema = z.object({
   product_name: z.string().optional().nullable(),
   grade:        z.string().optional().nullable(),
   batch_no:     z.string().optional().nullable(),
+  overall_result: z.enum(["PENDING", "PASS", "FAIL"]).optional(),
+  approved_by:  z.string().optional().nullable(),
   items: z.array(z.object({
     analysis_date:   z.string().optional().nullable(),
     shift:           z.string().optional().nullable(),
@@ -479,12 +573,16 @@ export const substituteProductionBatchSchema = z.object({
   row_index:           z.number().int().nonnegative(),
   original_item_id:    z.string().min(1),
   original_batch_no:   z.string().min(1),
-  quantity:            z.number().int().positive(),
+  quantity:            z.number().positive(),
   substitute_item_id:  z.string().min(1),
   substitute_batch_no: z.string().min(1),
   substitute_vendor:   z.string().optional().nullable(),
   substitute_grade:    z.string().optional().nullable(),
   reason:              z.string().optional().nullable()
+});
+
+export const rejectGrnSchema = z.object({
+  rejection_reason: z.string().trim().min(1, "Please give a reason for rejecting this consignment.").max(500)
 });
 
 export const saveQcTestSheetSchema = z.object({

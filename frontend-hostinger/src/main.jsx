@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import App from "./App.jsx";
 import AppErrorBoundary from "./components/common/AppErrorBoundary.jsx";
 import { AuthProvider } from "./context/AuthContext.jsx";
+import { PermissionProvider } from "./context/PermissionContext.jsx";
 import "./styles/erp.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
@@ -11,7 +12,9 @@ ReactDOM.createRoot(document.getElementById("root")).render(
     <BrowserRouter>
       <AppErrorBoundary>
         <AuthProvider>
-          <App />
+          <PermissionProvider>
+            <App />
+          </PermissionProvider>
         </AuthProvider>
       </AppErrorBoundary>
     </BrowserRouter>

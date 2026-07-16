@@ -127,7 +127,7 @@ function OperationLogListPage() {
       <section className="order-card">
         <div className="unified-search-box">
           <SearchIcon />
-          <input
+          <input autoComplete="off"
             placeholder="Search batch, client or product..."
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}

@@ -1,11 +1,11 @@
 import prisma from "../config/prisma.js";
-import { recordAuditEvent } from "./auditService.js";
 import { buildPagination } from "../utils/pagination.js";
 import { buildCacheKey, getOrLoadCached, invalidateCacheByPrefix } from "../utils/responseCache.js";
 import { DISPATCH_LIST_SELECT, MANUAL_ORDER_REQUEST_SELECT } from "../utils/selects.js";
-import { formatEnquiryProducts, getPrimaryEnquiryProduct } from "../utils/enquiryProducts.js";
+import { formatEnquiryProducts, getPrimaryEnquiryProduct, getPrimaryEnquiryProductRow } from "../utils/enquiryProducts.js";
 import { normalizeOrderUnit } from "../utils/orderUnits.js";
 import { getCustomerMasterProfileByName } from "../utils/customerCatalog.js";
+import { assertEntryDate } from "../utils/dateRules.js";
 import { getAvailableInventoryQty } from "./inventoryService.js";
 import {
   extractSalesGroupSequence,
@@ -61,13 +61,22 @@ function validateDeliveredShipmentStatus(shipmentStatus, dispatchQuantity, remai
   }
 }
 
+// Next sales-group sequence, resolved in the database rather than by pulling
+// every Order row back and scanning them in JS.
+//
+// FOR UPDATE matters as much as the speed: callers run inside the order-creation
+// transaction, and without the lock two orders created concurrently both read
+// the same max and get handed the *same* group number (salesGroupNumber has no
+// unique constraint, so nothing downstream would catch it). The lock serialises
+// that read, so the second transaction waits and sees the first one's row.
 async function getNextSalesGroupNumber(client = prisma) {
-  const existing = await client.order.findMany({
-    select: {
-      salesGroupNumber: true
-    }
-  });
-  const maxSequence = existing.reduce((max, row) => Math.max(max, extractSalesGroupSequence(row.salesGroupNumber)), 0);
+  const rows = await client.$queryRawUnsafe(
+    "SELECT `salesGroupNumber` FROM `Order` " +
+    "WHERE `salesGroupNumber` REGEXP '^SO[_-][0-9]+$' " +
+    "ORDER BY CAST(SUBSTRING(`salesGroupNumber`, 4) AS UNSIGNED) DESC LIMIT 1 FOR UPDATE"
+  );
+
+  const maxSequence = extractSalesGroupSequence(rows?.[0]?.salesGroupNumber);
   return formatSalesGroupNumber(maxSequence + 1);
 }
 
@@ -132,12 +141,23 @@ async function syncDispatchOutward(tx, dispatchId, itemId, dispatchedQty) {
   }
 }
 
+// Shipping the goods no longer finishes the order. Per the approved flow,
+// accounts monitors payment after dispatch and the process only completes once
+// the money is in: fully shipped but unpaid lands on DISPATCHED, and
+// orderService.updateOrderPayment() is what promotes it to COMPLETED.
+export function resolveOrderStatusFromDispatch(order, delivered) {
+  if (delivered <= 0) return "READY_FOR_DISPATCH";
+  if (delivered < Number(order.quantity)) return "PARTIALLY_DISPATCHED";
+  return order.paymentStatus === "RECEIVED" ? "COMPLETED" : "DISPATCHED";
+}
+
 async function syncOrderDispatchStatus(tx, orderId) {
   const order = await tx.order.findUnique({
     where: { id: orderId },
     select: {
       id: true,
-      quantity: true
+      quantity: true,
+      paymentStatus: true
     }
   });
   if (!order) return;
@@ -150,15 +170,10 @@ async function syncOrderDispatchStatus(tx, orderId) {
   });
 
   const delivered = Number(aggregate?._sum?.dispatchedQuantity || 0);
-  const nextStatus = delivered <= 0
-    ? "READY_FOR_DISPATCH"
-    : delivered >= order.quantity
-      ? "COMPLETED"
-      : "PARTIALLY_DISPATCHED";
 
   await tx.order.update({
     where: { id: orderId },
-    data: { status: nextStatus }
+    data: { status: resolveOrderStatusFromDispatch(order, delivered) }
   });
 }
 
@@ -611,6 +626,7 @@ export { buildDispatchDashboardData };
 export async function createOrderFromEnquiry(enquiry, dispatchDate, actorUser, tx) {
   const hasDispatchDateColumn = await hasOrderDispatchDateColumn();
   const unit = normalizeOrderUnit(enquiry.unitOfMeasurement);
+  const primaryProduct = getPrimaryEnquiryProductRow(enquiry);
 
   const salesGroupNumber = await resolveSalesGroupNumberForEnquiry(enquiry, tx);
 
@@ -625,12 +641,13 @@ export async function createOrderFromEnquiry(enquiry, dispatchDate, actorUser, t
       salesOrderNumber: `TSO-${Date.now()}-${enquiry.id}`,
       salesGroupNumber,
       orderNo: `TMP-${Date.now()}-${enquiry.id}`,
-      product: getPrimaryEnquiryProduct(enquiry),
-      grade: "NA",
-      // Order.quantity is a whole-unit Int column, but enquiries allow
-      // fractional quantities (e.g. 7.5 kg). Round up rather than truncate
-      // so the order never silently under-commits vs. what was enquired.
-      quantity: Math.ceil(Number(enquiry.quantity) || 0),
+      product: primaryProduct?.product || getPrimaryEnquiryProduct(enquiry),
+      grade: primaryProduct?.grade || "",
+      // Order.quantity is a decimal now, so the enquiry's quantity carries over
+      // exactly. It used to be rounded up to a whole unit here, which quietly
+      // turned an enquiry for 10.5 MT into an order for 11 MT — the customer was
+      // committed to half a tonne they never asked for.
+      quantity: Number(enquiry.quantity) || 0,
       price: enquiry.price ?? null,
       currency: enquiry.currency ?? null,
       unit,
@@ -668,20 +685,7 @@ export async function createOrderFromEnquiry(enquiry, dispatchDate, actorUser, t
     }
   });
 
-  await recordAuditEvent({
-    tx,
-    action: "CREATE_ORDER",
-    entityType: "Order",
-    entityId: updated.id,
-    user: actorUser,
-    oldValue: null,
-    newValue: {
-      enquiryId: enquiry.id,
-      salesOrderNumber: updated.salesOrderNumber,
-      dispatchDate
-    },
-    note: `Created order #${updated.id} from approved enquiry #${enquiry.id} with dispatch date`
-  });
+
 
   return updated;
 }
@@ -693,6 +697,8 @@ export async function updateOrderDispatchDate(enquiryId, payload, actorUser) {
     error.statusCode = 400;
     throw error;
   }
+
+  assertEntryDate(payload.dispatch_date, "Dispatch date");
 
   const enquiry = await prisma.enquiry.findUnique({
       where: { id: enquiryId },
@@ -748,70 +754,77 @@ export async function createDispatch(payload, actorUser) {
     throw error;
   }
 
-  const order = await prisma.order.findUnique({
-    where: { id: payload.order_id },
-    select: {
-      id: true,
-      quantity: true,
-      status: true,
-      salesOrderNumber: true,
-      clientName: true,
-      product: true,
-      dispatches: {
-        select: {
-          dispatchedQuantity: true
-        }
-      },
-      packingRecords: {
-        select: { packedQuantity: true }
-      }
-    }
-  });
+  assertEntryDate(payload.dispatch_date, "Dispatch date");
 
-  if (!order) {
-    const error = new Error("Order not found.");
-    error.statusCode = 404;
-    throw error;
-  }
-
-  const deliveredQuantity = getDeliveredQuantity(order.dispatches);
-  const remainingOrderQty = Math.max(order.quantity - deliveredQuantity, 0);
-  if (remainingOrderQty <= 0) {
-    const error = new Error("Order already fully dispatched.");
-    error.statusCode = 400;
-    throw error;
-  }
-
-  // Dispatch eligibility is driven by real-time finished-goods inventory
-  // (topped up when a batch's QC sheet passes) rather than any single
-  // production's status — an order can be fulfilled across several batches.
-  const availableQty = await getAvailableInventoryQty(order.product);
-  if (availableQty <= 0) {
-    const error = new Error("No finished goods stock available in inventory for dispatch.");
-    error.statusCode = 409;
-    throw error;
-  }
-
-  // Hard gate: can't dispatch more than has actually been packed for this
-  // order. "Packed" is a recorded fact (see packingService) that consumes
-  // real packing-material inventory, not a free checkbox.
-  const packedQuantity = order.packingRecords.reduce((sum, r) => sum + Number(r.packedQuantity || 0), 0);
-  const packedNotYetDispatched = Math.max(packedQuantity - deliveredQuantity, 0);
-  if (packedNotYetDispatched <= 0) {
-    const error = new Error("No packed quantity available for this order yet — pack it before dispatching.");
-    error.statusCode = 409;
-    throw error;
-  }
-
-  const dispatchableQty = Math.min(remainingOrderQty, availableQty, packedNotYetDispatched);
-  if (payload.dispatch_quantity > dispatchableQty) {
-    const error = new Error(`Dispatch quantity cannot exceed available packed quantity (${dispatchableQty}).`);
-    error.statusCode = 400;
-    throw error;
-  }
-  validateDeliveredShipmentStatus(payload.shipment_status, payload.dispatch_quantity, remainingOrderQty);
-
+  // Every quantity gate below is re-evaluated INSIDE the transaction that
+  // writes the dispatch. Reading stock/packed/remaining beforehand let two
+  // concurrent dispatches of the same order each see the full remaining
+  // quantity and both pass, over-dispatching the order and pushing the
+  // finished-goods ledger negative.
   const dispatch = await prisma.$transaction(async (tx) => {
+    const order = await tx.order.findUnique({
+      where: { id: payload.order_id },
+      select: {
+        id: true,
+        quantity: true,
+        status: true,
+        salesOrderNumber: true,
+        clientName: true,
+        product: true,
+        dispatches: {
+          select: {
+            dispatchedQuantity: true
+          }
+        },
+        packingRecords: {
+          select: { packedQuantity: true }
+        }
+      }
+    });
+
+    if (!order) {
+      const error = new Error("Order not found.");
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const deliveredQuantity = getDeliveredQuantity(order.dispatches);
+    const remainingOrderQty = Math.max(order.quantity - deliveredQuantity, 0);
+    if (remainingOrderQty <= 0) {
+      const error = new Error("Order already fully dispatched.");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // Dispatch eligibility is driven by real-time finished-goods inventory
+    // (topped up when a batch's QC sheet passes) rather than any single
+    // production's status — an order can be fulfilled across several batches.
+    const availableQty = await getAvailableInventoryQty(order.product, undefined, tx);
+    if (availableQty <= 0) {
+      const error = new Error("No finished goods stock available in inventory for dispatch.");
+      error.statusCode = 409;
+      throw error;
+    }
+
+    // Hard gate: can't dispatch more than has actually been packed for this
+    // order. "Packed" is a recorded fact (see packingService) that consumes
+    // real packing-material inventory, not a free checkbox.
+    const packedQuantity = order.packingRecords.reduce((sum, r) => sum + Number(r.packedQuantity || 0), 0);
+    const packedNotYetDispatched = Math.max(packedQuantity - deliveredQuantity, 0);
+    if (packedNotYetDispatched <= 0) {
+      const error = new Error("No packed quantity available for this order yet — pack it before dispatching.");
+      error.statusCode = 409;
+      throw error;
+    }
+
+    const dispatchableQty = Math.min(remainingOrderQty, availableQty, packedNotYetDispatched);
+    if (payload.dispatch_quantity > dispatchableQty) {
+      const error = new Error(`Dispatch quantity cannot exceed available packed quantity (${dispatchableQty}).`);
+      error.statusCode = 400;
+      throw error;
+    }
+    validateDeliveredShipmentStatus(payload.shipment_status, payload.dispatch_quantity, remainingOrderQty);
+
     const created = await tx.dispatch.create({
       data: {
         orderId: payload.order_id,
@@ -835,15 +848,7 @@ export async function createDispatch(payload, actorUser) {
 
     await syncOrderDispatchStatus(tx, payload.order_id);
     await syncDispatchOutward(tx, created.id, order.product, created.dispatchedQuantity);
-    await recordAuditEvent({
-      tx,
-      action: "CREATE_DISPATCH",
-      entityType: "Dispatch",
-      entityId: created.id,
-      user: actorUser,
-      newValue: created,
-      note: `Created dispatch for order #${payload.order_id}`
-    });
+
     return created;
   }, DISPATCH_TRANSACTION_OPTIONS);
 
@@ -859,60 +864,63 @@ export async function updateDispatch(dispatchId, payload, actorUser) {
     throw error;
   }
 
-  const dispatch = await prisma.dispatch.findUnique({
-    where: { id: dispatchId },
-    select: {
-      id: true,
-      orderId: true,
-      dispatchedQuantity: true,
-      dispatchDate: true,
-      packingDone: true,
-      shipmentStatus: true,
-      remarks: true,
-      order: {
-        select: {
-          id: true,
-          quantity: true,
-          product: true,
-          dispatches: {
-            select: {
-              id: true,
-              dispatchedQuantity: true
+  // Load and re-validate inside the write transaction — see createDispatch.
+  const result = await prisma.$transaction(async (tx) => {
+    const dispatch = await tx.dispatch.findUnique({
+      where: { id: dispatchId },
+      select: {
+        id: true,
+        orderId: true,
+        dispatchedQuantity: true,
+        dispatchDate: true,
+        packingDone: true,
+        shipmentStatus: true,
+        remarks: true,
+        order: {
+          select: {
+            id: true,
+            quantity: true,
+            product: true,
+            dispatches: {
+              select: {
+                id: true,
+                dispatchedQuantity: true
+              }
+            },
+            packingRecords: {
+              select: { packedQuantity: true }
             }
-          },
-          packingRecords: {
-            select: { packedQuantity: true }
           }
         }
       }
+    });
+
+    if (!dispatch) {
+      const error = new Error("Dispatch record not found.");
+      error.statusCode = 404;
+      throw error;
     }
-  });
 
-  if (!dispatch) {
-    const error = new Error("Dispatch record not found.");
-    error.statusCode = 404;
-    throw error;
-  }
+    assertEntryDate(payload.dispatch_date, "Dispatch date", { grandfathered: dispatch.dispatchDate });
 
-  const currentTotal = getDeliveredQuantity(dispatch.order.dispatches);
-  const currentRowQty = dispatch.dispatchedQuantity || 0;
-  const incomingQty = payload.dispatch_quantity ?? currentRowQty;
-  const remainingWithoutCurrent = Math.max(dispatch.order.quantity - (currentTotal - currentRowQty), 0);
-  const packedQuantity = dispatch.order.packingRecords.reduce((sum, r) => sum + Number(r.packedQuantity || 0), 0);
-  const packedRemainingWithoutCurrent = Math.max(packedQuantity - (currentTotal - currentRowQty), 0);
-  const allowedQty = Math.min(remainingWithoutCurrent, packedRemainingWithoutCurrent);
-  if (incomingQty > allowedQty) {
-    const error = new Error(`Dispatch quantity cannot exceed available packed quantity (${allowedQty}).`);
-    error.statusCode = 400;
-    throw error;
-  }
-  validateDeliveredShipmentStatus(
-    payload.shipment_status ?? dispatch.shipmentStatus,
-    incomingQty,
-    remainingWithoutCurrent
-  );
+    const currentTotal = getDeliveredQuantity(dispatch.order.dispatches);
+    const currentRowQty = dispatch.dispatchedQuantity || 0;
+    const incomingQty = payload.dispatch_quantity ?? currentRowQty;
+    const remainingWithoutCurrent = Math.max(dispatch.order.quantity - (currentTotal - currentRowQty), 0);
+    const packedQuantity = dispatch.order.packingRecords.reduce((sum, r) => sum + Number(r.packedQuantity || 0), 0);
+    const packedRemainingWithoutCurrent = Math.max(packedQuantity - (currentTotal - currentRowQty), 0);
+    const allowedQty = Math.min(remainingWithoutCurrent, packedRemainingWithoutCurrent);
+    if (incomingQty > allowedQty) {
+      const error = new Error(`Dispatch quantity cannot exceed available packed quantity (${allowedQty}).`);
+      error.statusCode = 400;
+      throw error;
+    }
+    validateDeliveredShipmentStatus(
+      payload.shipment_status ?? dispatch.shipmentStatus,
+      incomingQty,
+      remainingWithoutCurrent
+    );
 
-  const result = await prisma.$transaction(async (tx) => {
     const updated = await tx.dispatch.update({
       where: { id: dispatchId },
       data: {
@@ -936,16 +944,7 @@ export async function updateDispatch(dispatchId, payload, actorUser) {
 
     await syncOrderDispatchStatus(tx, dispatch.orderId);
     await syncDispatchOutward(tx, dispatchId, dispatch.order.product, updated.dispatchedQuantity);
-    await recordAuditEvent({
-      tx,
-      action: "UPDATE_DISPATCH",
-      entityType: "Dispatch",
-      entityId: dispatchId,
-      user: actorUser,
-      oldValue: dispatch,
-      newValue: updated,
-      note: `Updated dispatch #${dispatchId}`
-    });
+
     return updated;
   }, DISPATCH_TRANSACTION_OPTIONS);
   invalidateDispatchReadCaches();
@@ -971,15 +970,7 @@ export async function deleteDispatch(dispatchId, actorUser) {
   await prisma.$transaction(async (tx) => {
     await syncDispatchOutward(tx, dispatchId, dispatch.order.product, 0);
 
-    await recordAuditEvent({
-      tx,
-      action: "DELETE_DISPATCH",
-      entityType: "Dispatch",
-      entityId: dispatchId,
-      user: actorUser,
-      oldValue: dispatch,
-      note: `Deleted dispatch #${dispatchId}`
-    });
+
 
     await tx.dispatch.delete({ where: { id: dispatchId } });
     await syncOrderDispatchStatus(tx, dispatch.orderId);

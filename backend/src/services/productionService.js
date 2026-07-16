@@ -1,8 +1,10 @@
 import prisma from "../config/prisma.js";
-import { recordAuditEvent } from "./auditService.js";
 import { buildPagination } from "../utils/pagination.js";
+import { buildMonthRange, recentDaysWhere } from "../utils/dateFilters.js";
 import { buildCacheKey, getOrLoadCached, invalidateCacheByPrefix } from "../utils/responseCache.js";
 import { ORDER_LIST_SELECT, PRODUCTION_LIST_SELECT, PRODUCTION_DETAIL_SELECT, BATCH_SUBSTITUTION_SELECT } from "../utils/selects.js";
+import { formatBatchNumber } from "../utils/businessNumbers.js";
+import { assertEntryDate } from "../utils/dateRules.js";
 import { getAvailableInventoryQty } from "./inventoryService.js";
 
 const SUBSTITUTION_SECTIONS = ["rm", "additives", "catalysts"];
@@ -25,9 +27,15 @@ function parseFullMfgBlob(rawMaterialsStr) {
 }
 
 const PRODUCTION_CACHE_PREFIX = "production:list";
-const PRODUCTION_CACHE_TTL_MS = 0;
+// The list is re-read constantly by the production screens. Every write path
+// calls invalidateProductionReadCaches(), so a short TTL cannot serve stale data
+// after a change made through the app — it only collapses the repeated reads in
+// between. It was 0, which disabled the cache entirely and left the machinery
+// around it doing nothing.
+const PRODUCTION_CACHE_TTL_MS = 10 * 1000;
 const MAX_PRODUCTION_STATUS_CHANGES = 2;
 let hasStatusChangeCountColumnCache;
+let hasProductRemarkColumnCache;
 
 function invalidateProductionReadCaches() {
   invalidateCacheByPrefix("production:");
@@ -60,6 +68,21 @@ function normalizePositiveIntegerInput(value, fieldName) {
   return numeric;
 }
 
+// Quantities are weights, not counts — 10.5 T is a legitimate order — so they
+// take a decimal. RPMs and batch counts keep the integer check above.
+function normalizePositiveNumberInput(value, fieldName) {
+  if (value === undefined || value === null || value === "") return undefined;
+
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    const error = new Error(`${fieldName} must be a positive number.`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return numeric;
+}
+
 function normalizeTrimmedInput(value) {
   if (value === undefined) return undefined;
   if (value === null) return undefined;
@@ -72,6 +95,14 @@ function normalizeNullableTrimmedInput(value) {
   if (value === null) return null;
   const trimmed = String(value).trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function assertInProcessTestApproved(production) {
+  if (production?.inProcessTestSheet?.overallResult === "PASS") return;
+
+  const error = new Error("In-process test sheet must be approved before production can be completed.");
+  error.statusCode = 400;
+  throw error;
 }
 
 function parseRawMaterialLines(rawMaterialsStr) {
@@ -95,7 +126,9 @@ function buildConsumptionRows(rawMaterialsStr, productionId) {
     itemId:    String(item.name).trim(),
     batchNo:   item.batch_no ? String(item.batch_no).trim() : null,
     shift:     item.shift ? String(item.shift).trim() : null,
-    quantity:  Math.round(Number(item.qty)),
+    // Raw material is consumed in kg and the ledger column is a decimal, so a
+    // 6800.5 kg charge is booked as 6800.5, not 6801.
+    quantity:  Number(item.qty),
     reference: `Production #${productionId}`,
     remarks:   "Production consumption"
   }));
@@ -199,13 +232,14 @@ export function buildProductionCreateData(order, payload = {}) {
   const parsedDeliveryDate = parseDateInput(payload.delivery_date);
   const deliveryDateValue = parsedDeliveryDate || new Date(order.deliveryDate || new Date());
   const productSpecs = normalizeTrimmedInput(payload.product_specs) || `${order.product} ${order.grade ? `(${order.grade})` : ""}`.trim();
-  const capacity = normalizePositiveIntegerInput(payload.capacity, "Capacity") ?? normalizePositiveIntegerInput(order.quantity, "Order quantity") ?? 1;
+  const capacity = normalizePositiveNumberInput(payload.capacity, "Capacity") ?? normalizePositiveNumberInput(order.quantity, "Order quantity") ?? 1;
   const particleSize = normalizeTrimmedInput(payload.particle_size) || "NA";
   const acmRpm = normalizePositiveIntegerInput(payload.acm_rpm, "ACM RPM") ?? 1000;
   const classifierRpm = normalizePositiveIntegerInput(payload.classifier_rpm, "Classifier RPM") ?? 1000;
   const blowerRpm = normalizePositiveIntegerInput(payload.blower_rpm, "Blower RPM") ?? 1000;
   const rawMaterials = normalizeTrimmedInput(payload.raw_materials) || null;
   const remarks = payload.remarks ?? `Auto-generated from order ${order.salesOrderNumber}`;
+  const productRemark = normalizeNullableTrimmedInput(payload.product_remark);
 
   return {
     assignedPersonnel,
@@ -217,6 +251,7 @@ export function buildProductionCreateData(order, payload = {}) {
     classifierRpm,
     blowerRpm,
     rawMaterials,
+    productRemark,
     remarks,
     state: payload.state || null
   };
@@ -237,6 +272,35 @@ async function hasProductionStatusChangeCountColumn() {
 
   hasStatusChangeCountColumnCache = Number(rows?.[0]?.total || 0) > 0;
   return hasStatusChangeCountColumnCache;
+}
+
+// productRemark ships ahead of its migration on some databases (the additive
+// migration is applied separately), so treat it as optional: never select or
+// write it unless the column is actually present, or the whole Production list
+// query fails. Mirrors the statusChangeCount handling above.
+async function hasProductionProductRemarkColumn() {
+  if (typeof hasProductRemarkColumnCache === "boolean") {
+    return hasProductRemarkColumnCache;
+  }
+
+  const rows = await prisma.$queryRawUnsafe(
+    `SELECT COUNT(*) AS total
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'Production'
+       AND COLUMN_NAME = 'productRemark'`
+  );
+
+  hasProductRemarkColumnCache = Number(rows?.[0]?.total || 0) > 0;
+  return hasProductRemarkColumnCache;
+}
+
+// PRODUCTION_LIST_SELECT with productRemark added only when the column exists.
+async function productionListSelect() {
+  if (await hasProductionProductRemarkColumn()) {
+    return { ...PRODUCTION_LIST_SELECT, productRemark: true };
+  }
+  return PRODUCTION_LIST_SELECT;
 }
 
 async function getProductionStatusChangeCount(productionId) {
@@ -264,6 +328,16 @@ async function getProductionStatusChangeCount(productionId) {
   return Number(rows?.[0]?.total || 0);
 }
 
+// The operation log rides inside the manufacturing blob, and saving it resends
+// every row. Dates already stored on the sheet stay valid; only a row whose date
+// is new has to clear the backdating floor.
+function assertOperationLogDates(incomingBlob, existingBlob) {
+  const saved = parseFullMfgBlob(existingBlob).batchLogs.map((row) => row?.date).filter(Boolean);
+  for (const row of parseFullMfgBlob(incomingBlob).batchLogs) {
+    assertEntryDate(row?.date, "Operation log date", { grandfathered: saved });
+  }
+}
+
 export function buildProductionUpdateData(payload = {}, production = {}) {
   const updateData = {};
 
@@ -284,7 +358,7 @@ export function buildProductionUpdateData(payload = {}, production = {}) {
     updateData.productSpecs = productSpecs;
   }
 
-  const capacity = normalizePositiveIntegerInput(payload.capacity, "Capacity");
+  const capacity = normalizePositiveNumberInput(payload.capacity, "Capacity");
   if (capacity !== undefined) {
     updateData.capacity = capacity;
   }
@@ -316,11 +390,16 @@ export function buildProductionUpdateData(payload = {}, production = {}) {
 
   const rawMaterials = normalizeTrimmedInput(payload.raw_materials);
   if (rawMaterials !== undefined) {
+    assertOperationLogDates(rawMaterials, production.rawMaterials);
     updateData.rawMaterials = rawMaterials;
   }
 
   if (payload.remarks !== undefined) {
     updateData.remarks = normalizeNullableTrimmedInput(payload.remarks);
+  }
+
+  if (payload.product_remark !== undefined) {
+    updateData.productRemark = normalizeNullableTrimmedInput(payload.product_remark);
   }
 
   if (payload.status !== undefined) {
@@ -350,6 +429,118 @@ export function buildProductionUpdateData(payload = {}, production = {}) {
   return updateData;
 }
 
+// An order can be topped up with extra batches, but never planned beyond what
+// it actually still needs. "Still needed" is the order quantity minus:
+//
+//   - what has genuinely been made: produced quantity on batches whose QC
+//     passed. A batch that FAILED QC produced nothing sellable (no finished
+//     goods ever entered inventory), so its quantity becomes available to plan
+//     again — that is exactly the top-up case.
+//   - what is already planned in a batch that can still produce (anything not
+//     yet COMPLETED), so a batch in flight is not double-counted.
+const OPEN_BATCH_STATUSES = ["PENDING", "IN_PROGRESS", "HOLD", "PARTIALLY_PRODUCED"];
+const BATCH_ADDABLE_ORDER_STATUSES = ["CREATED", "IN_PRODUCTION", "READY_FOR_DISPATCH"];
+
+// A batch can be re-planned only while it is still purely a plan: not started,
+// nothing produced against it, and no QC or substitution history hanging off it.
+// Once any of that exists, re-cutting the batch would orphan real work — so its
+// quantity is locked and planning works around it.
+function isBatchEditable(batch) {
+  return (
+    batch.status === "PENDING"
+    && Number(batch.producedQuantity || 0) === 0
+    && !batch.finishedGoodsTestSheet
+    && !batch.inProcessTestSheet
+    && (batch.batchSubstitutions?.length ?? 0) === 0
+  );
+}
+
+export async function getOrderBatchPlan(orderId, client = prisma) {
+  const order = await client.order.findUnique({
+    where: { id: orderId },
+    select: {
+      id: true,
+      status: true,
+      quantity: true,
+      deliveryDate: true,
+      salesOrderNumber: true,
+      productions: {
+        select: {
+          id: true,
+          status: true,
+          capacity: true,
+          producedQuantity: true,
+          batchNo: true,
+          deliveryDate: true,
+          finishedGoodsTestSheet: { select: { id: true, overallResult: true } },
+          inProcessTestSheet: { select: { id: true } },
+          batchSubstitutions: { select: { id: true } }
+        },
+        orderBy: { id: "asc" }
+      }
+    }
+  });
+
+  if (!order) {
+    const error = new Error("Order not found.");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  let qcPassedQty = 0;
+  let openPlannedQty = 0;
+  // Quantity already committed to batches that can no longer be re-planned.
+  let lockedQty = 0;
+
+  const batches = order.productions.map((batch) => {
+    if (batch.finishedGoodsTestSheet?.overallResult === "PASS") {
+      qcPassedQty += Number(batch.producedQuantity || 0);
+    }
+    if (OPEN_BATCH_STATUSES.includes(batch.status)) {
+      openPlannedQty += Number(batch.capacity || 0);
+    }
+
+    const editable = isBatchEditable(batch);
+    if (!editable) {
+      lockedQty += Number(batch.capacity || 0);
+    }
+
+    return {
+      id: batch.id,
+      status: batch.status,
+      capacity: batch.capacity,
+      producedQuantity: batch.producedQuantity,
+      batchNo: batch.batchNo,
+      deliveryDate: batch.deliveryDate,
+      editable
+    };
+  });
+
+  const remaining = Math.max(Number(order.quantity) - qcPassedQty - openPlannedQty, 0);
+  // What a re-plan is free to redistribute: the order quantity minus everything
+  // locked into batches that have already started.
+  const plannableQty = Math.max(Number(order.quantity) - lockedQty, 0);
+  const canAddBatch = BATCH_ADDABLE_ORDER_STATUSES.includes(order.status) && remaining > 0;
+  const canPlan = BATCH_ADDABLE_ORDER_STATUSES.includes(order.status) && plannableQty > 0;
+
+  return {
+    orderId: order.id,
+    salesOrderNumber: order.salesOrderNumber,
+    orderStatus: order.status,
+    orderQuantity: order.quantity,
+    orderDeliveryDate: order.deliveryDate,
+    qcPassedQty,
+    openPlannedQty,
+    remaining,
+    lockedQty,
+    plannableQty,
+    canAddBatch,
+    canPlan,
+    batchCount: order.productions.length,
+    batches
+  };
+}
+
 export async function createProduction(payload, actorUser, client = prisma) {
   const order = await client.order.findUnique({
     where: { id: payload.order_id },
@@ -370,18 +561,70 @@ export async function createProduction(payload, actorUser, client = prisma) {
     }
   });
 
-  const { production } = await startProductionFromOrder(order, actorUser, payload, client);
+  if (!order) {
+    const error = new Error("Order not found.");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const plan = await getOrderBatchPlan(order.id, client);
+
+  if (!BATCH_ADDABLE_ORDER_STATUSES.includes(order.status)) {
+    const error = new Error(`Cannot add a batch to an order that is ${order.status.replace(/_/g, " ").toLowerCase()}.`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (plan.remaining <= 0) {
+    const error = new Error(
+      `Order ${order.salesOrderNumber} is fully planned (${plan.qcPassedQty} made, ${plan.openPlannedQty} in open batches, of ${order.quantity}). ` +
+      "Reduce an existing batch's capacity before adding another."
+    );
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const requested = payload.capacity === undefined || payload.capacity === null
+    ? plan.remaining
+    : Number(payload.capacity);
+
+  if (!Number.isFinite(requested) || requested <= 0) {
+    const error = new Error("Batch capacity must be a positive number.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (requested > plan.remaining) {
+    const error = new Error(`Batch capacity ${requested} exceeds the ${plan.remaining} still to be planned on this order.`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const { production } = await startProductionFromOrder(
+    order,
+    actorUser,
+    { ...payload, capacity: requested },
+    client,
+    { allowTopUp: true }
+  );
   return production;
 }
 
-export async function startProductionFromOrder(order, actorUser, payload = {}, client = prisma) {
+export async function startProductionFromOrder(order, actorUser, payload = {}, client = prisma, options = {}) {
   if (!order) {
     const error = new Error("Cannot start production without valid order.");
     error.statusCode = 400;
     throw error;
   }
 
-  if (order.status !== "CREATED" && order.status !== "IN_PRODUCTION") {
+  // A top-up batch may also be added to an order that already reached
+  // READY_FOR_DISPATCH but came up short (e.g. a batch failed QC). Adding one
+  // pulls the order back into production below, since it is no longer complete.
+  const allowed = options.allowTopUp
+    ? ["CREATED", "IN_PRODUCTION", "READY_FOR_DISPATCH"]
+    : ["CREATED", "IN_PRODUCTION"];
+
+  if (!allowed.includes(order.status)) {
     const error = new Error("Only orders from order slab can be sent to production.");
     error.statusCode = 400;
     throw error;
@@ -399,13 +642,22 @@ export async function startProductionFromOrder(order, actorUser, payload = {}, c
     throw error;
   }
 
-  const production = await client.production.create({
-    data: {
-      orderId: order.id,
-      ...buildProductionCreateData(order, payload),
-      status: "PENDING"
-    },
-    select: PRODUCTION_LIST_SELECT
+  const createData = { orderId: order.id, ...buildProductionCreateData(order, payload), status: "PENDING" };
+  if ("productRemark" in createData && !(await hasProductionProductRemarkColumn())) {
+    delete createData.productRemark;
+  }
+  const listSelect = await productionListSelect();
+  const created = await client.production.create({
+    data: createData,
+    select: listSelect
+  });
+
+  // The batch number is derived from the row's own id, so it can only be stamped
+  // once the row exists.
+  const production = await client.production.update({
+    where: { id: created.id },
+    data: { batchNo: formatBatchNumber(created.id) },
+    select: listSelect
   });
 
   const updatedOrder = await client.order.update({
@@ -414,23 +666,397 @@ export async function startProductionFromOrder(order, actorUser, payload = {}, c
     select: ORDER_LIST_SELECT
   });
 
-  await recordAuditEvent({
-    action: "START_PRODUCTION",
-    entityType: "Production",
-    entityId: production.id,
-    user: actorUser,
-    newValue: production,
-    note: `Started production for order #${order.id}`,
-    tx: client
-  });
+
 
   invalidateProductionReadCaches();
   return { production, order: updatedOrder };
 }
 
+// Splitting a job into more batches than this is almost certainly a typo in the
+// batch size (e.g. entering 1 instead of 1000), and each batch is a real row
+// with its own batch card — so refuse rather than create hundreds of them.
+const MAX_SPLIT_BATCHES = 100;
+
+// Divide `total` into `count` whole-unit batches that sum back to exactly
+// `total`. The remainder is spread one unit at a time across the leading
+// batches rather than dumped on the last one, which keeps batch sizes within
+// one unit of each other (7 into 3 gives 3,2,2 — not 2,2,3).
+export function splitQuantityEvenly(total, count) {
+  const base = Math.floor(total / count);
+  const remainder = total % count;
+
+  return Array.from({ length: count }, (_, index) => base + (index < remainder ? 1 : 0));
+}
+
+// Schedule batches backwards from the order's expected timeline: the final
+// batch lands exactly on the due date and the rest are spread evenly between
+// now and then, so batch 1 is due soonest. The production queue then sorts
+// each batch on its own date (see listProductionOrders).
+//
+// If the order is already due (or overdue), there is no window to spread over —
+// every batch simply carries the due date and the queue falls back to FIFO.
+export function buildBatchSchedule(dueDate, count, now = new Date()) {
+  const due = new Date(dueDate);
+  const start = now.getTime();
+  const end = due.getTime();
+
+  if (!Number.isFinite(end) || end <= start) {
+    return Array.from({ length: count }, () => due);
+  }
+
+  const step = (end - start) / count;
+  return Array.from({ length: count }, (_, index) => new Date(start + step * (index + 1)));
+}
+
+// The material quantities on the batch card were planned for the whole job, so
+// after a split each batch needs its proportional share. Equipment and process
+// parameters are per-batch settings, not quantities, so they ride along
+// unchanged.
+function scaleMfgBlobForBatch(rawMaterialsStr, ratio) {
+  if (!rawMaterialsStr) return null;
+
+  const mfg = parseFullMfgBlob(rawMaterialsStr);
+  const scaleRows = (rows) =>
+    rows.map((row) => {
+      const qty = Number(row.qty);
+      if (!Number.isFinite(qty) || qty <= 0) return row;
+      // Scaling a recipe to a split batch rarely lands on a whole kg; keep three
+      // decimals rather than rounding each line and drifting off the total.
+      return { ...row, qty: Math.round(qty * ratio * 1000) / 1000 };
+    });
+
+  return JSON.stringify({
+    ...mfg,
+    rm: scaleRows(mfg.rm),
+    additives: scaleRows(mfg.additives),
+    catalysts: scaleRows(mfg.catalysts)
+  });
+}
+
+export async function splitProductionIntoBatches(productionId, payload, actorUser) {
+  const production = await prisma.production.findUnique({
+    where: { id: productionId },
+    select: {
+      id: true,
+      status: true,
+      capacity: true,
+      producedQuantity: true,
+      assignedPersonnel: true,
+      deliveryDate: true,
+      productSpecs: true,
+      particleSize: true,
+      acmRpm: true,
+      classifierRpm: true,
+      blowerRpm: true,
+      rawMaterials: true,
+      remarks: true,
+      state: true,
+      orderId: true,
+      order: { select: { id: true, deliveryDate: true, salesOrderNumber: true } },
+      finishedGoodsTestSheet: { select: { id: true } },
+      inProcessTestSheet: { select: { id: true } },
+      batchSubstitutions: { select: { id: true } }
+    }
+  });
+
+  if (!production) {
+    const error = new Error("Production record not found.");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  // A job that has started has already deducted raw materials against its own
+  // reference, may carry QC sheets and substitutions, and may have produced
+  // stock. Re-cutting it into different batches would orphan all of that, so a
+  // split is only ever allowed before work begins.
+  if (production.status !== "PENDING") {
+    const error = new Error("Only a batch that has not started yet can be split.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (production.producedQuantity > 0) {
+    const error = new Error("Cannot split a batch that already has a produced quantity.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (production.finishedGoodsTestSheet || production.inProcessTestSheet || production.batchSubstitutions.length > 0) {
+    const error = new Error("Cannot split a batch that already has test sheets or batch substitutions recorded.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const capacity = Number(production.capacity);
+  if (!Number.isInteger(capacity) || capacity < 2) {
+    const error = new Error("This batch is too small to split.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const batchCount = payload.batch_count !== undefined && payload.batch_count !== null
+    ? Number(payload.batch_count)
+    : Math.ceil(capacity / Number(payload.batch_size));
+
+  if (batchCount < 2) {
+    const error = new Error("That batch size covers the whole job — nothing to split.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (batchCount > capacity) {
+    const error = new Error(`Cannot split ${capacity} into ${batchCount} batches — each batch must be at least 1 unit.`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (batchCount > MAX_SPLIT_BATCHES) {
+    const error = new Error(`Cannot split into more than ${MAX_SPLIT_BATCHES} batches (asked for ${batchCount}). Check the batch size.`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const quantities = splitQuantityEvenly(capacity, batchCount);
+  // The order's expected timeline is the commitment to the customer, so it
+  // anchors the schedule. Fall back to the batch's own date if the order
+  // somehow has none.
+  const dueDate = production.order?.deliveryDate || production.deliveryDate;
+  const schedule = buildBatchSchedule(dueDate, batchCount);
+
+  const batches = await prisma.$transaction(async (tx) => {
+    // Batch 1 reuses the existing row, so anything already linked to this
+    // production id (and the planner's batch-card work) survives the split.
+    const first = await tx.production.update({
+      where: { id: productionId },
+      data: {
+        capacity: quantities[0],
+        deliveryDate: schedule[0],
+        rawMaterials: scaleMfgBlobForBatch(production.rawMaterials, quantities[0] / capacity)
+      },
+      select: PRODUCTION_LIST_SELECT
+    });
+
+    const created = [first];
+
+    for (let index = 1; index < batchCount; index += 1) {
+      const batch = await tx.production.create({
+        data: {
+          orderId: production.orderId,
+          status: "PENDING",
+          producedQuantity: 0,
+          capacity: quantities[index],
+          deliveryDate: schedule[index],
+          rawMaterials: scaleMfgBlobForBatch(production.rawMaterials, quantities[index] / capacity),
+          assignedPersonnel: production.assignedPersonnel,
+          productSpecs: production.productSpecs,
+          particleSize: production.particleSize,
+          acmRpm: production.acmRpm,
+          classifierRpm: production.classifierRpm,
+          blowerRpm: production.blowerRpm,
+          remarks: production.remarks,
+          state: production.state
+        },
+        select: PRODUCTION_LIST_SELECT
+      });
+      created.push(batch);
+    }
+
+    // Every batch carries its own auto-generated number, including the original
+    // row being split — it is now just the first batch of the set.
+    const numbered = [];
+    for (const batch of created) {
+      numbered.push(
+        await tx.production.update({
+          where: { id: batch.id },
+          data: { batchNo: formatBatchNumber(batch.id) },
+          select: PRODUCTION_LIST_SELECT
+        })
+      );
+    }
+
+    return numbered;
+  });
+
+  invalidateProductionReadCaches();
+  return batches;
+}
+
+// One action behind the "Plan Batches" screen: make the order's batches match a
+// requested batch size. It replaces the old split/add-batch pair — dividing one
+// big batch and filling in an under-planned order are the same operation seen
+// from two ends, so the planner states the batch size they want and this works
+// out whether that means resizing, creating or dropping rows.
+//
+// Batches that have already started are untouchable (see isBatchEditable): their
+// quantity is subtracted from the order first, and only the rest is re-planned.
+export async function planOrderBatches(orderId, payload, actorUser) {
+  const batchSize = Number(payload.batch_size);
+
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    select: {
+      id: true,
+      status: true,
+      quantity: true,
+      salesOrderNumber: true,
+      deliveryDate: true,
+      product: true,
+      grade: true,
+      clientName: true,
+      city: true,
+      pincode: true,
+      state: true,
+      countryCode: true,
+      productions: {
+        select: {
+          id: true,
+          status: true,
+          capacity: true,
+          producedQuantity: true,
+          deliveryDate: true,
+          assignedPersonnel: true,
+          productSpecs: true,
+          particleSize: true,
+          acmRpm: true,
+          classifierRpm: true,
+          blowerRpm: true,
+          rawMaterials: true,
+          remarks: true,
+          state: true,
+          finishedGoodsTestSheet: { select: { id: true } },
+          inProcessTestSheet: { select: { id: true } },
+          batchSubstitutions: { select: { id: true } }
+        },
+        orderBy: { id: "asc" }
+      }
+    }
+  });
+
+  if (!order) {
+    const error = new Error("Order not found.");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  if (!BATCH_ADDABLE_ORDER_STATUSES.includes(order.status)) {
+    const error = new Error(`Cannot plan batches for an order that is ${order.status.replace(/_/g, " ").toLowerCase()}.`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const editable = order.productions.filter(isBatchEditable);
+  const lockedQty = order.productions
+    .filter((batch) => !isBatchEditable(batch))
+    .reduce((sum, batch) => sum + Number(batch.capacity || 0), 0);
+
+  const plannableQty = Math.max(Number(order.quantity) - lockedQty, 0);
+
+  if (plannableQty <= 0) {
+    const error = new Error(
+      `Order ${order.salesOrderNumber} has no quantity left to plan — all ${order.quantity} is committed to batches that have already started.`
+    );
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const batchCount = Math.max(1, Math.ceil(plannableQty / batchSize));
+
+  if (batchCount > MAX_SPLIT_BATCHES) {
+    const error = new Error(
+      `That batch size would create ${batchCount} batches (max ${MAX_SPLIT_BATCHES}). Check the batch size.`
+    );
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const quantities = splitQuantityEvenly(plannableQty, batchCount);
+  const schedule = buildBatchSchedule(order.deliveryDate, batchCount);
+
+  // New rows copy their process settings from an existing batch so the planner's
+  // batch-card work carries over; if every batch is locked (or there are none),
+  // fall back to deriving a fresh one from the order.
+  const template = editable[0] || order.productions[0] || null;
+
+  const batches = await prisma.$transaction(async (tx) => {
+    const result = [];
+
+    for (let index = 0; index < batchCount; index += 1) {
+      const existing = editable[index];
+      const capacity = quantities[index];
+
+      if (existing) {
+        // Reuse the row, so anything already linked to this production id
+        // survives, and rescale its material quantities to the new size.
+        const ratio = Number(existing.capacity) > 0 ? capacity / Number(existing.capacity) : 1;
+        result.push(
+          await tx.production.update({
+            where: { id: existing.id },
+            data: {
+              capacity,
+              deliveryDate: schedule[index],
+              rawMaterials: scaleMfgBlobForBatch(existing.rawMaterials, ratio),
+              batchNo: formatBatchNumber(existing.id)
+            },
+            select: PRODUCTION_LIST_SELECT
+          })
+        );
+        continue;
+      }
+
+      const created = await tx.production.create({
+        data: {
+          orderId: order.id,
+          status: "PENDING",
+          producedQuantity: 0,
+          capacity,
+          deliveryDate: schedule[index],
+          ...(template
+            ? {
+              rawMaterials: scaleMfgBlobForBatch(
+                template.rawMaterials,
+                Number(template.capacity) > 0 ? capacity / Number(template.capacity) : 1
+              ),
+              assignedPersonnel: template.assignedPersonnel,
+              productSpecs: template.productSpecs,
+              particleSize: template.particleSize,
+              acmRpm: template.acmRpm,
+              classifierRpm: template.classifierRpm,
+              blowerRpm: template.blowerRpm,
+              remarks: template.remarks,
+              state: template.state
+            }
+            : buildProductionCreateData(order, { capacity, delivery_date: schedule[index] }))
+        },
+        select: PRODUCTION_LIST_SELECT
+      });
+
+      result.push(
+        await tx.production.update({
+          where: { id: created.id },
+          data: { batchNo: formatBatchNumber(created.id) },
+          select: PRODUCTION_LIST_SELECT
+        })
+      );
+    }
+
+    // Any editable batch the new plan does not need is surplus. It is PENDING
+    // with no produced quantity, QC or substitutions, so deleting it discards
+    // nothing that was ever worked on.
+    const surplus = editable.slice(batchCount);
+    if (surplus.length > 0) {
+      await tx.production.deleteMany({ where: { id: { in: surplus.map((batch) => batch.id) } } });
+    }
+
+    return result;
+  });
+
+  invalidateProductionReadCaches();
+  return { orderId: order.id, plannableQty, lockedQty, batchCount, batches };
+}
+
 export async function listProductionOrders(filters = {}) {
-  const { q, status, company, date } = filters;
-  const { page, take, skip } = buildPagination(filters, { defaultLimit: 0, maxLimit: 100 });
+  const { q, status, company, date, month, recent_days: recentDays } = filters;
+  const { page, take, skip } = buildPagination(filters, { defaultLimit: 20, maxLimit: 100 });
   const normalizedCompany = String(company || "").trim();
   const normalizedDate = String(date || "").trim();
   const dateFrom = normalizedDate ? new Date(`${normalizedDate}T00:00:00.000Z`) : null;
@@ -438,8 +1064,13 @@ export async function listProductionOrders(filters = {}) {
 
   const where = {
     ...(status ? { status } : {}),
+    // Mobile sends recent_days=45; desktop omits it and sees full history.
+    ...recentDaysWhere("createdAt", recentDays),
     ...(normalizedCompany ? { order: { clientName: { contains: normalizedCompany } } } : {}),
     ...(normalizedDate && dateFrom && dateTo ? { deliveryDate: { gte: dateFrom, lte: dateTo } } : {}),
+    // Month = when the batch was created. AND-wrapped so it can't clobber the
+    // search box's OR below.
+    ...(buildMonthRange(month) ? { AND: [{ createdAt: buildMonthRange(month) }] } : {}),
     ...(q
       ? {
         OR: [
@@ -454,16 +1085,46 @@ export async function listProductionOrders(filters = {}) {
       : {})
   };
 
-  const query = {
-    where,
-    select: PRODUCTION_LIST_SELECT,
-    // Production queue priority: urgent jobs are pulled to the front, and
-    // everything else runs FIFO (oldest order first) so nothing starves.
-    orderBy: [
-      { order: { isUrgent: "desc" } },
-      { createdAt: "asc" },
-      { id: "asc" }
-    ]
+  // Production queue priority, in order:
+  //   1. Urgent jobs are pulled to the front.
+  //   2. Then the earliest expected timeline (the order's committed delivery
+  //      date) — the job whose promise to the customer comes due soonest is
+  //      the one the floor should run next.
+  //   3. Then FIFO (oldest batch first) so jobs sharing a delivery date —
+  //      which is common — still run in the order they were raised and
+  //      nothing starves.
+  const ACTIVE_ORDER_BY = [
+    { order: { isUrgent: "desc" } },
+    { order: { deliveryDate: "asc" } },
+    { createdAt: "asc" },
+    { id: "asc" }
+  ];
+
+  // Finished jobs are not work any more, so they sink below everything still
+  // open no matter how urgent or overdue they once were — the floor should only
+  // ever read down from the top. Newest completion first among themselves.
+  const DONE_ORDER_BY = [{ createdAt: "desc" }, { id: "desc" }];
+
+  // The list is one page of [everything open, then everything completed], so it
+  // is queried as two segments and sliced across the boundary. A status filter
+  // collapses it to whichever segment that status belongs to.
+  const completedFilter = status === "COMPLETED";
+  const activeWhere = completedFilter ? null : { ...where, status: status || { not: "COMPLETED" } };
+  const completedWhere = !status || completedFilter ? { ...where, status: "COMPLETED" } : null;
+
+  const countSegment = (segmentWhere) =>
+    (segmentWhere ? prisma.production.count({ where: segmentWhere }) : Promise.resolve(0));
+
+  const listSelect = await productionListSelect();
+  const fetchSegment = (segmentWhere, orderBy, segmentSkip, segmentTake) => {
+    if (!segmentWhere || segmentTake <= 0) return Promise.resolve([]);
+    return prisma.production.findMany({
+      where: segmentWhere,
+      select: listSelect,
+      orderBy,
+      skip: segmentSkip,
+      take: segmentTake
+    });
   };
 
   const cacheKey = buildCacheKey(PRODUCTION_CACHE_PREFIX, {
@@ -471,24 +1132,35 @@ export async function listProductionOrders(filters = {}) {
     status: status || null,
     company: normalizedCompany || null,
     date: normalizedDate || null,
+    // Must be part of the key, or a cached response would ignore the month.
+    month: String(month || "") || null,
+    recentDays: String(recentDays || "") || null,
     page,
     take,
     skip
   });
 
   return getOrLoadCached(cacheKey, PRODUCTION_CACHE_TTL_MS, async () => {
-    if (take > 0) {
-      const [items, total] = await Promise.all([
-        prisma.production.findMany({
-          ...query,
-          skip,
-          take
-        }),
-        prisma.production.count({ where })
-      ]);
+    const [activeTotal, completedTotal] = await Promise.all([
+      countSegment(activeWhere),
+      countSegment(completedWhere)
+    ]);
 
+    if (take > 0) {
+      // Rows 0..activeTotal-1 of the combined list are the open jobs; the
+      // completed ones continue the numbering from there. A page can straddle
+      // the boundary and draw from both.
+      const activeItems = await fetchSegment(activeWhere, ACTIVE_ORDER_BY, skip, Math.max(0, Math.min(take, activeTotal - skip)));
+      const completedItems = await fetchSegment(
+        completedWhere,
+        DONE_ORDER_BY,
+        Math.max(0, skip - activeTotal),
+        take - activeItems.length
+      );
+
+      const total = activeTotal + completedTotal;
       return {
-        items,
+        items: [...activeItems, ...completedItems],
         pagination: {
           page,
           limit: take,
@@ -498,7 +1170,16 @@ export async function listProductionOrders(filters = {}) {
       };
     }
 
-    return prisma.production.findMany(query);
+    const [activeItems, completedItems] = await Promise.all([
+      activeWhere
+        ? prisma.production.findMany({ where: activeWhere, select: listSelect, orderBy: ACTIVE_ORDER_BY })
+        : Promise.resolve([]),
+      completedWhere
+        ? prisma.production.findMany({ where: completedWhere, select: listSelect, orderBy: DONE_ORDER_BY })
+        : Promise.resolve([])
+    ]);
+
+    return [...activeItems, ...completedItems];
   });
 }
 
@@ -511,6 +1192,11 @@ export async function markProductionComplete(productionId, actorUser, payload = 
       orderId: true,
       producedQuantity: true,
       productionStartedDate: true,
+      inProcessTestSheet: {
+        select: {
+          overallResult: true
+        }
+      },
       order: {
         select: {
           id: true,
@@ -540,6 +1226,10 @@ export async function markProductionComplete(productionId, actorUser, payload = 
     throw error;
   }
 
+  assertInProcessTestApproved(production);
+
+  assertEntryDate(payload.completion_date, "Completion date");
+
   const completionDate = parseDateInput(payload.completion_date) || new Date();
   // Each production row is now its own batch, so completing it should not
   // force its producedQuantity up to the order's full quantity — that's only
@@ -567,16 +1257,7 @@ export async function markProductionComplete(productionId, actorUser, payload = 
       data: { status: "READY_FOR_DISPATCH" }
     });
 
-    await recordAuditEvent({
-      tx,
-      action: "COMPLETE_PRODUCTION",
-      entityType: "Production",
-      entityId: productionId,
-      user: actorUser,
-      oldValue: { status: production.status },
-      newValue: { status: "COMPLETED", productionCompletionDate: completionDate, orderStatus: "READY_FOR_DISPATCH" },
-      note: `Completed production #${productionId}`
-    });
+
   });
 
   const updated = await prisma.production.findUnique({
@@ -607,7 +1288,12 @@ export async function updateProduction(productionId, payload, actorUser) {
       rawMaterials: true,
       remarks: true,
       productionStartedDate: true,
-      productionCompletionDate: true
+      productionCompletionDate: true,
+      inProcessTestSheet: {
+        select: {
+          overallResult: true
+        }
+      }
     }
   });
 
@@ -623,11 +1309,17 @@ export async function updateProduction(productionId, payload, actorUser) {
     statusChangeCount
   });
 
+  // Drop productRemark on databases that have not run its migration yet, so the
+  // save still succeeds (the value is simply not persisted until the column exists).
+  if ("productRemark" in updateData && !(await hasProductionProductRemarkColumn())) {
+    delete updateData.productRemark;
+  }
+
   // Handle produced quantity updates (partial production)
   if (payload.produced_quantity !== undefined) {
     const numeric = Number(payload.produced_quantity);
-    if (!Number.isInteger(numeric) || numeric < 0) {
-      const error = new Error("Produced quantity must be a non-negative integer.");
+    if (!Number.isFinite(numeric) || numeric < 0) {
+      const error = new Error("Produced quantity must be a non-negative number.");
       error.statusCode = 400;
       throw error;
     }
@@ -646,10 +1338,16 @@ export async function updateProduction(productionId, payload, actorUser) {
     updateData.producedQuantity = numeric;
 
     if (numeric >= maxQty) {
+      assertInProcessTestApproved(production);
       updateData.status = "COMPLETED";
       updateData.productionCompletionDate = new Date();
     } else if (numeric > 0) {
+      // A part-made batch has still finished a run of work, and QC can already
+      // test it — so stamp the completion date here too, or Duration would stay
+      // blank on every partial batch. Re-stamped on each partial update, so it
+      // tracks the most recent run rather than the first one.
       updateData.status = "PARTIALLY_PRODUCED";
+      updateData.productionCompletionDate = new Date();
     }
   }
 
@@ -670,11 +1368,12 @@ export async function updateProduction(productionId, payload, actorUser) {
     throw error;
   }
 
+  const listSelect = await productionListSelect();
   const updatedProduction = await prisma.$transaction(async (tx) => {
     const updated = await tx.production.update({
       where: { id: productionId },
       data: updateData,
-      select: PRODUCTION_LIST_SELECT
+      select: listSelect
     });
 
     if (payload.status !== undefined && payload.status !== production.status) {
@@ -691,7 +1390,7 @@ export async function updateProduction(productionId, payload, actorUser) {
     // Deduct raw material inventory when production starts, and keep the
     // ledger in sync if the raw material list is corrected afterwards
     // (re-deducting from scratch avoids drift between edits).
-    const alreadyActive = ["IN_PROGRESS", "PARTIALLY_PRODUCED", "HOLD", "COMPLETED"].includes(production.status);
+    const alreadyActive = ["IN_PROGRESS", "PARTIALLY_PRODUCED", "HOLD", "REWORK", "COMPLETED"].includes(production.status);
     const rawMaterialsChanging = updateData.rawMaterials !== undefined && updateData.rawMaterials !== production.rawMaterials;
 
     if (leavingPending || (alreadyActive && rawMaterialsChanging)) {
@@ -703,16 +1402,7 @@ export async function updateProduction(productionId, payload, actorUser) {
       }
     }
 
-    await recordAuditEvent({
-      tx,
-      action: "UPDATE_PRODUCTION",
-      entityType: "Production",
-      entityId: productionId,
-      user: actorUser,
-      oldValue: production,
-      newValue: updated,
-      note: `Updated production #${productionId}`
-    });
+
 
     return updated;
   });
@@ -754,7 +1444,8 @@ export async function saveFinishedGoodsTestSheet(productionId, payload, actorUse
       status: true,
       producedQuantity: true,
       orderId: true,
-      order: { select: { product: true, unit: true, grade: true, status: true } }
+      order: { select: { product: true, unit: true, grade: true, status: true } },
+      finishedGoodsTestSheet: { select: { items: { select: { sampleDate: true } } } }
     }
   });
 
@@ -764,10 +1455,17 @@ export async function saveFinishedGoodsTestSheet(productionId, payload, actorUse
     throw error;
   }
 
-  if (!["COMPLETED", "PARTIALLY_PRODUCED"].includes(production.status)) {
+  // REWORK is allowed so a failed batch can be re-tested after production has
+  // reworked it, without first having to fake a status change.
+  if (!["COMPLETED", "PARTIALLY_PRODUCED", "REWORK"].includes(production.status)) {
     const error = new Error("Finished product test sheet can only be recorded once production has at least a partial produced quantity.");
     error.statusCode = 400;
     throw error;
+  }
+
+  const savedSampleDates = (production.finishedGoodsTestSheet?.items || []).map((item) => item.sampleDate);
+  for (const item of payload.items) {
+    assertEntryDate(item.sample_date, "Sample date", { grandfathered: savedSampleDates });
   }
 
   const overallResult = payload.overall_result || "PENDING";
@@ -781,6 +1479,7 @@ export async function saveFinishedGoodsTestSheet(productionId, payload, actorUse
     bulkDensity:   item.bulk_density || null,
     sieveResidue:  item.sieve_residue || null,
     analysisBy:    item.analysis_by || null,
+    approvedBy:    item.approved_by || null,
     remarks:       item.remarks || null
   }));
 
@@ -828,14 +1527,57 @@ export async function saveFinishedGoodsTestSheet(productionId, payload, actorUse
         data: { status: "READY_FOR_DISPATCH" }
       });
     }
+
+    // A FAIL is what opens the rework loop: the batch produced nothing sellable,
+    // so it parks in REWORK until production works it again. A later PASS on the
+    // same sheet closes the loop and hands the batch back as COMPLETED.
+    if (overallResult === "FAIL" && production.status !== "REWORK") {
+      await tx.production.update({
+        where: { id: productionId },
+        data: { status: "REWORK" }
+      });
+    }
+
+    if (overallResult === "PASS" && production.status === "REWORK") {
+      await tx.production.update({
+        where: { id: productionId },
+        data: { status: "COMPLETED" }
+      });
+    }
   });
 
-  await recordAuditEvent({
-    action:     "SAVE_FINISHED_GOODS_TEST_SHEET",
-    entityType: "Production",
-    entityId:   productionId,
-    user:       actorUser,
-    newValue:   { overallResult }
+
+
+  invalidateProductionReadCaches();
+  return getProductionById(productionId);
+}
+
+// Closes the rework loop from the production side: a batch QC rejected into
+// REWORK goes back onto the floor. Deliberately not routed through
+// updateProduction() — rework is not one of the two discretionary status changes
+// an operator is budgeted, and it must stay available however many times QC
+// rejects the batch.
+export async function resumeReworkBatch(productionId, actorUser) {
+  const production = await prisma.production.findUnique({
+    where: { id: productionId },
+    select: { id: true, status: true }
+  });
+
+  if (!production) {
+    const error = new Error("Production record not found.");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  if (production.status !== "REWORK") {
+    const error = new Error("Only a batch rejected into rework can be resumed.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  await prisma.production.update({
+    where: { id: productionId },
+    data: { status: "IN_PROGRESS" }
   });
 
   invalidateProductionReadCaches();
@@ -844,12 +1586,20 @@ export async function saveFinishedGoodsTestSheet(productionId, payload, actorUse
 
 // Periodic in-process sampling log (by shift/lot/reactor), taken while
 // production is running — distinct from the finished-goods test sheet
-// recorded once at completion. Purely a record-keeping log: it does not
-// gate production status or dispatch.
+// recorded once at completion.
+//
+// This is the "quality check in between project" gate on the approved flow: the
+// sheet carries its own PASS/FAIL, and a FAIL sends the batch to REWORK before
+// it ever reaches packing. Leaving the result PENDING keeps the sheet what it
+// always was — a running log that gates nothing.
 export async function saveInProcessTestSheet(productionId, payload, actorUser) {
   const production = await prisma.production.findUnique({
     where: { id: productionId },
-    select: { id: true }
+    select: {
+      id: true,
+      status: true,
+      inProcessTestSheet: { select: { items: { select: { analysisDate: true } } } }
+    }
   });
 
   if (!production) {
@@ -857,6 +1607,13 @@ export async function saveInProcessTestSheet(productionId, payload, actorUser) {
     error.statusCode = 404;
     throw error;
   }
+
+  const savedAnalysisDates = (production.inProcessTestSheet?.items || []).map((item) => item.analysisDate);
+  for (const item of payload.items) {
+    assertEntryDate(item.analysis_date, "Date of analysis", { grandfathered: savedAnalysisDates });
+  }
+
+  const overallResult = payload.overall_result || "PENDING";
 
   const itemsData = payload.items.map((item) => ({
     analysisDate:  item.analysis_date ? new Date(item.analysis_date) : null,
@@ -880,27 +1637,37 @@ export async function saveInProcessTestSheet(productionId, payload, actorUser) {
       where:  { productionId },
       create: {
         productionId,
-        productName: payload.product_name || null,
-        grade:       payload.grade || null,
-        batchNo:     payload.batch_no || null,
+        productName:   payload.product_name || null,
+        grade:         payload.grade || null,
+        batchNo:       payload.batch_no || null,
+        overallResult,
+        approvedBy:    payload.approved_by || null,
+        approvedAt:    overallResult !== "PENDING" ? new Date() : null,
         items: { create: itemsData }
       },
       update: {
-        productName: payload.product_name || null,
-        grade:       payload.grade || null,
-        batchNo:     payload.batch_no || null,
+        productName:   payload.product_name || null,
+        grade:         payload.grade || null,
+        batchNo:       payload.batch_no || null,
+        overallResult,
+        approvedBy:    payload.approved_by || null,
+        approvedAt:    overallResult !== "PENDING" ? new Date() : null,
         items: { deleteMany: {}, create: itemsData }
       }
     });
+
+    // Same loop as the finished-goods gate: a failed in-process check parks the
+    // batch in REWORK, so it cannot be produced onward or packed until
+    // production works it again.
+    if (overallResult === "FAIL" && production.status !== "REWORK") {
+      await tx.production.update({
+        where: { id: productionId },
+        data: { status: "REWORK" }
+      });
+    }
   });
 
-  await recordAuditEvent({
-    action:     "SAVE_IN_PROCESS_TEST_SHEET",
-    entityType: "Production",
-    entityId:   productionId,
-    user:       actorUser,
-    newValue:   { itemCount: itemsData.length }
-  });
+
 
   invalidateProductionReadCaches();
   return getProductionById(productionId);
@@ -942,14 +1709,14 @@ export async function substituteProductionBatch(productionId, payload, actorUser
 
   const originalItemId = String(row.name || "").trim();
   const originalBatchNo = String(row.batch_no || "").trim();
-  const quantity = Math.round(Number(payload.quantity));
+  const quantity = Number(payload.quantity);
 
   // Optimistic concurrency: the row must still match what the client saw
   // when it decided to substitute it (it may have been edited since).
   if (
     originalItemId !== String(payload.original_item_id || "").trim() ||
     originalBatchNo !== String(payload.original_batch_no || "").trim() ||
-    Math.round(Number(row.qty)) !== quantity
+    Number(row.qty) !== quantity
   ) {
     const error = new Error("This raw material row has changed since it was loaded. Reload and try again.");
     error.statusCode = 409;
@@ -962,8 +1729,8 @@ export async function substituteProductionBatch(productionId, payload, actorUser
     throw error;
   }
 
-  if (!Number.isInteger(quantity) || quantity <= 0) {
-    const error = new Error("Quantity must be a positive integer.");
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    const error = new Error("Quantity must be a positive number.");
     error.statusCode = 400;
     throw error;
   }
@@ -982,29 +1749,32 @@ export async function substituteProductionBatch(productionId, payload, actorUser
     throw error;
   }
 
-  // Prevent negative inventory: the substitute batch must actually carry enough stock.
-  const availableQty = await getAvailableInventoryQty(substituteItemId, substituteBatchNo);
-  if (availableQty < quantity) {
-    const error = new Error(`Substitute batch "${substituteBatchNo}" only has ${availableQty} available, cannot deduct ${quantity}.`);
-    error.statusCode = 409;
-    throw error;
-  }
-
-  // Prevent duplicate substitution of the exact same original consumption.
-  const duplicate = await prisma.batchSubstitution.findFirst({
-    where: { productionId, section, originalItemId, originalBatchNo, quantity }
-  });
-  if (duplicate) {
-    const error = new Error("This batch has already been substituted.");
-    error.statusCode = 409;
-    throw error;
-  }
-
   const reference = `Production #${productionId}`;
   const substituteVendor = payload.substitute_vendor ? String(payload.substitute_vendor).trim() : null;
   const substituteGrade = payload.substitute_grade ? String(payload.substitute_grade).trim() : null;
 
   const substitution = await prisma.$transaction(async (tx) => {
+    // Both gates run inside the transaction that writes the ledger rows:
+    // checking stock (or for a duplicate) beforehand lets two concurrent
+    // substitutions of the same row each pass and double-deduct the
+    // substitute batch.
+    const availableQty = await getAvailableInventoryQty(substituteItemId, substituteBatchNo, tx);
+    if (availableQty < quantity) {
+      const error = new Error(`Substitute batch "${substituteBatchNo}" only has ${availableQty} available, cannot deduct ${quantity}.`);
+      error.statusCode = 409;
+      throw error;
+    }
+
+    // Prevent duplicate substitution of the exact same original consumption.
+    const duplicate = await tx.batchSubstitution.findFirst({
+      where: { productionId, section, originalItemId, originalBatchNo, quantity }
+    });
+    if (duplicate) {
+      const error = new Error("This batch has already been substituted.");
+      error.statusCode = 409;
+      throw error;
+    }
+
     const reversalTxn = await tx.inventoryTransaction.create({
       data: {
         type:      "ADJUSTMENT_IN",
@@ -1057,16 +1827,7 @@ export async function substituteProductionBatch(productionId, payload, actorUser
       select: BATCH_SUBSTITUTION_SELECT
     });
 
-    await recordAuditEvent({
-      tx,
-      action:     "SUBSTITUTE_PRODUCTION_BATCH",
-      entityType: "Production",
-      entityId:   productionId,
-      user:       actorUser,
-      oldValue:   { itemId: originalItemId, batchNo: originalBatchNo, quantity },
-      newValue:   { itemId: substituteItemId, batchNo: substituteBatchNo, quantity },
-      note: `Substituted batch ${originalBatchNo} with ${substituteBatchNo} for ${quantity} of "${originalItemId}" on production #${productionId}`
-    });
+
 
     return created;
   });
@@ -1120,15 +1881,7 @@ export async function deleteProduction(productionId, actorUser) {
     await reverseProductionConsumption(tx, productionId);
     await syncFinishedGoodsInward(tx, productionId, production.order.product, 0);
 
-    await recordAuditEvent({
-      tx,
-      action: "DELETE_PRODUCTION",
-      entityType: "Production",
-      entityId: productionId,
-      user: actorUser,
-      oldValue: production,
-      note: `Deleted production #${productionId}`
-    });
+
 
     await tx.production.delete({ where: { id: productionId } });
 

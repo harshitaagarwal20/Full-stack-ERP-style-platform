@@ -41,8 +41,50 @@ function applyMonthlyCounts(buckets, rows = [], field) {
   });
 }
 
-export function invalidateDashboardSummaryCache() {
-  invalidateCacheByPrefix(DASHBOARD_CACHE_PREFIX);
+function ratio(numerator, denominator) {
+  if (!denominator || denominator <= 0) return 0;
+  return Math.round((numerator / denominator) * 1000) / 10;
+}
+
+// Enquiry conversion, in two parts — because `stage` (sales progress) and
+// `status` (the approval decision) are independent in this system. An enquiry
+// can be approved while still sitting at GENERAL, having never been sampled or
+// quoted. Chaining them into one funnel produces ratios above 100% (approved
+// enquiries outnumbering quoted ones), which is meaningless, so they are
+// reported separately:
+//
+//   stageFunnel  — sales progression, each step as a share of the one before,
+//                  which is where the real drop-off shows.
+//   outcomeMix   — what actually became of the enquiries, each as a share of
+//                  all of them.
+//
+// "Sampled" counts enquiries that ever reached sampling, not just those parked
+// there now: sampledAt is stamped on first entry to SAMPLED, and anything now
+// QUOTED must have passed through it.
+function buildStageFunnel({ totalEnquiries, everSampled, quoted }) {
+  const steps = [
+    { key: "ENQUIRY", label: "Enquiries", count: totalEnquiries },
+    { key: "SAMPLED", label: "Sampled", count: everSampled },
+    { key: "QUOTED", label: "Quoted", count: quoted }
+  ];
+
+  return steps.map((step, index) => {
+    const previous = index === 0 ? null : steps[index - 1];
+    return {
+      ...step,
+      conversionFromPrevious: previous ? ratio(step.count, previous.count) : 100,
+      conversionFromStart: ratio(step.count, totalEnquiries)
+    };
+  });
+}
+
+function buildOutcomeMix({ totalEnquiries, approved, rejected, pending, ordered }) {
+  return [
+    { key: "APPROVED", label: "Approved", count: approved, share: ratio(approved, totalEnquiries), color: "#16a34a" },
+    { key: "PENDING", label: "Awaiting Decision", count: pending, share: ratio(pending, totalEnquiries), color: "#ea580c" },
+    { key: "REJECTED", label: "Rejected", count: rejected, share: ratio(rejected, totalEnquiries), color: "#dc2626" },
+    { key: "ORDER", label: "Order Created", count: ordered, share: ratio(ordered, totalEnquiries), color: "#2563eb" }
+  ];
 }
 
 export async function getDashboardSummary() {
@@ -62,6 +104,13 @@ export async function getDashboardSummary() {
       partiallyDispatchedOrders,
       completedOrders,
       convertedEnquiries,
+      generalStageEnquiries,
+      sampledStageEnquiries,
+      quotedStageEnquiries,
+      everSampledEnquiries,
+      approvedEnquiries,
+      rejectedEnquiries,
+      approvedWithOrderEnquiries,
       enquiryTrendRows,
       orderTrendRows
     ] = await Promise.all([
@@ -76,6 +125,22 @@ export async function getDashboardSummary() {
       // Orders that originated from an enquiry — the numerator for the
       // enquiry-to-order conversion ratio.
       prisma.order.count({ where: { enquiryId: { not: null } } }),
+      // Current stage distribution.
+      prisma.enquiry.count({ where: { stage: "GENERAL" } }),
+      prisma.enquiry.count({ where: { stage: "SAMPLED" } }),
+      prisma.enquiry.count({ where: { stage: "QUOTED" } }),
+      // "Ever sampled": sampledAt is stamped on first entry to SAMPLED, but an
+      // enquiry quoted straight after sampling may predate that column, so
+      // treat a QUOTED stage as having been sampled too.
+      prisma.enquiry.count({
+        where: { OR: [{ sampledAt: { not: null } }, { stage: { in: ["SAMPLED", "QUOTED"] } }] }
+      }),
+      prisma.enquiry.count({ where: { status: "ACCEPTED" } }),
+      prisma.enquiry.count({ where: { status: "REJECTED" } }),
+      // Approved enquiries that actually produced an order. Not the same as
+      // "orders from enquiries": an urgent enquiry auto-creates its order while
+      // its status stays PENDING, so orders can outnumber approvals.
+      prisma.enquiry.count({ where: { status: "ACCEPTED", order: { isNot: null } } }),
       prisma.$queryRaw`
         SELECT DATE_FORMAT(createdAt, '%Y-%m') AS monthKey, COUNT(*) AS total
         FROM \`Enquiry\`
@@ -100,6 +165,26 @@ export async function getDashboardSummary() {
       ? Math.round((convertedEnquiries / totalEnquiries) * 1000) / 10
       : 0;
 
+    const stageFunnel = buildStageFunnel({
+      totalEnquiries,
+      everSampled: everSampledEnquiries,
+      quoted: quotedStageEnquiries
+    });
+
+    const outcomeMix = buildOutcomeMix({
+      totalEnquiries,
+      approved: approvedEnquiries,
+      rejected: rejectedEnquiries,
+      pending: pendingApprovals,
+      ordered: convertedEnquiries
+    });
+
+    // Of the enquiries that were approved, how many became an order. Measured
+    // against approved-enquiries-with-an-order rather than all enquiry-linked
+    // orders, otherwise urgent enquiries (which skip approval but still create
+    // an order) push this above 100%.
+    const approvedToOrderRate = ratio(approvedWithOrderEnquiries, approvedEnquiries);
+
     return {
       counts: {
         totalEnquiries,
@@ -112,7 +197,18 @@ export async function getDashboardSummary() {
         completedOrders,
         convertedEnquiries,
         conversionRate,
+        generalStageEnquiries,
+        sampledStageEnquiries,
+        quotedStageEnquiries,
+        approvedEnquiries,
+        rejectedEnquiries,
+        approvedToOrderRate
       },
+      // Sales progression (Enquiries → Sampled → Quoted), each step as a share
+      // of the previous one.
+      stageFunnel,
+      // What became of the enquiries, each as a share of all of them.
+      outcomeMix,
       trendData: buckets,
       statusMix: [
         { label: "Created", value: createdOrders, color: "#2563eb" },

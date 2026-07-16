@@ -4,6 +4,7 @@ import api from "../api/axiosClient";
 import { useAuth } from "../context/AuthContext";
 import { logApiError } from "../utils/apiError";
 import { getDisplaySalesNumber } from "../utils/businessNumbers";
+import { minEntryDateFor } from "../utils/dateRules";
 
 function toPositiveNumber(value) {
   const parsed = Number(value);
@@ -175,16 +176,16 @@ function ProductionCompletePage() {
                       <td data-label="Sales ID">{row.sales_order_no}</td>
                       <td data-label="Product">{row.product}</td>
                       <td data-label="Batch No">
-                        <input
+                        <input autoComplete="off"
                           value={row.batch_no}
                           onChange={(event) => onBatchChange(index, "batch_no", event.target.value)}
                         />
                       </td>
                       <td data-label="Produced Quantity">
-                        <input
+                        <input autoComplete="off"
                           type="number"
                           min="0"
-                          step="1"
+                          step="any"
                           value={row.produced_qty}
                           onChange={(event) => onBatchChange(index, "produced_qty", event.target.value)}
                         />
@@ -218,7 +219,7 @@ function ProductionCompletePage() {
             {hasOverproduction ? " | Overproduction detected." : ""}
           </p>
           <label>Completion Date</label>
-          <input type="date" value={form.completion_date} onChange={(event) => setForm((prev) => ({ ...prev, completion_date: event.target.value }))} required />
+          <input autoComplete="off" type="date" min={minEntryDateFor(form.completion_date)} value={form.completion_date} onChange={(event) => setForm((prev) => ({ ...prev, completion_date: event.target.value }))} required />
           <label>Notes</label>
           <textarea rows="3" value={form.notes} onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))} />
           <label>Output</label>

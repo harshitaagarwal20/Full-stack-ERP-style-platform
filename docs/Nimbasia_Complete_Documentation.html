@@ -1,0 +1,1387 @@
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">
+<head>
+<meta charset="utf-8">
+<title>Nimbasia ERP - Complete System Documentation</title>
+<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->
+<style>
+body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; color: #1a1a1a; margin: 40px; }
+h1 { font-size: 22pt; color: #1f3864; border-bottom: 3px solid #1f3864; padding-bottom: 6px; page-break-before: always; }
+h1.first { page-break-before: avoid; }
+h2 { font-size: 15pt; color: #2e5496; margin-top: 24px; }
+h3 { font-size: 12.5pt; color: #333f50; margin-top: 18px; }
+h4 { font-size: 11.5pt; color: #444; }
+table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 10pt; }
+th { background: #1f3864; color: #fff; padding: 6px 8px; text-align: left; border: 1px solid #999; }
+td { padding: 5px 8px; border: 1px solid #bbb; vertical-align: top; }
+tr:nth-child(even) td { background: #f2f6fc; }
+code, pre { font-family: Consolas, monospace; font-size: 9.5pt; }
+pre { background: #f4f4f4; border: 1px solid #ccc; padding: 10px; white-space: pre-wrap; }
+.cover { text-align: center; margin-top: 200px; }
+.cover h1 { border: none; font-size: 32pt; page-break-before: avoid; }
+.note { background: #fff8e1; border-left: 4px solid #f0a500; padding: 8px 12px; margin: 10px 0; }
+.warn { background: #fdecea; border-left: 4px solid #c0392b; padding: 8px 12px; margin: 10px 0; }
+.tip { background: #e8f5e9; border-left: 4px solid #2e7d32; padding: 8px 12px; margin: 10px 0; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+<h1>NIMBASIA ERP SYSTEM</h1>
+<h2>Complete End-to-End System Documentation</h2>
+<p style="font-size:13pt">Business - Functional - Technical - Database - API - User Manual - Developer Guide - QA Guide</p>
+<p style="font-size:12pt"><b>Scope:</b> backend/ (Node.js + Express + Prisma + MySQL) and frontend-hostinger/ (React + Vite + Tailwind)</p>
+<p><b>Document Version:</b> 1.0 &nbsp;&nbsp; <b>Date:</b> 12 July 2026</p>
+<p><b>Prepared by:</b> Automated code-level analysis (Claude Code)</p>
+</div>
+
+<h1 class="first">Version History</h1>
+<table>
+<tr><th>Version</th><th>Date</th><th>Author</th><th>Changes</th></tr>
+<tr><td>1.0</td><td>2026-07-12</td><td>Claude Code (automated full-codebase analysis)</td><td>Initial complete documentation covering all modules, screens, APIs, tables, roles, workflows, validations, security, testing, bugs and improvements. Scoped to <code>backend/</code> and <code>frontend-hostinger/</code>; the legacy <code>frontend/</code> folder is documented only as legacy code.</td></tr>
+</table>
+
+<h1>Table of Contents</h1>
+<ol>
+<li>Business Understanding</li>
+<li>Project Structure (every file)</li>
+<li>System Architecture</li>
+<li>User Roles &amp; Permissions</li>
+<li>Module Documentation</li>
+<li>Screen Documentation</li>
+<li>Field-Level Documentation</li>
+<li>Button-Level Documentation</li>
+<li>Complete Business Flows</li>
+<li>Database Documentation (ER model, every table &amp; column)</li>
+<li>API Documentation (every endpoint)</li>
+<li>Code Flow (function-level traces)</li>
+<li>Master Data</li>
+<li>Transaction Flow</li>
+<li>Inventory Flow</li>
+<li>Authentication &amp; Security</li>
+<li>Validations</li>
+<li>Reports</li>
+<li>Notifications</li>
+<li>Audit Log</li>
+<li>Configuration</li>
+<li>Deployment</li>
+<li>Testing (scenarios &amp; test cases)</li>
+<li>Bug Analysis</li>
+<li>Performance Review</li>
+<li>Improvements</li>
+<li>Complete User Manual</li>
+<li>Developer Guide</li>
+<li>Flowcharts (Mermaid sources)</li>
+<li>Glossary, Notes, Warnings, Best Practices, References</li>
+</ol>
+
+<h1>Phase 1 - Business Understanding</h1>
+
+<h2>1.1 Business Domain and Industry</h2>
+<p>Nimbasia ERP (internally also called <b>FMS</b> — Factory/Flow Management System) is a manufacturing ERP for <b>Nimbasia Stabilizers</b>, an Indian speciality-chemicals manufacturer producing <b>metallic stearates and polymer additives</b> (Zinc Stearate, Calcium Stearate, Magnesium Stearate, PE-Wax, GMS grades, PVC stabilizers such as CZ-100, lubricants such as Nimlub-T, etc.). The product catalogue in <code>backend/src/config/masterData.js</code> and the plant locations in <code>frontend-hostinger/src/config/shipToLocations.js</code> (Kota — Rajasthan, Bhiwandi &amp; Khalapur — Maharashtra, Saykha — Gujarat) confirm the industry: batch chemical manufacturing with QC-gated release, GST-registered Indian legal entities.</p>
+
+<h2>1.2 Business Problem</h2>
+<p>Before this system, sales enquiries, order approvals, production batch cards, QC test sheets (in-process and finished goods), raw-material purchase orders, goods receipts, stock registers, packing and dispatch were tracked manually (registers/Excel/WhatsApp). This caused: lost enquiries and missed follow-ups, orders started without approval, no reliable link between what was produced, what passed QC, what was packed, and what was dispatched, untracked raw-material consumption per batch/shift, and no audit trail of who changed what.</p>
+
+<h2>1.3 Project Objective</h2>
+<p>One integrated web application that enforces the complete order-to-cash and procure-to-stock chain:</p>
+<pre>Enquiry -&gt; Approval -&gt; Sales Order -&gt; Production (batches) -&gt; QC (In-Process + Finished Goods) -&gt; Inventory -&gt; Packing -&gt; Dispatch
+Purchase Order -&gt; (Pricing by Accounts) -&gt; Sent to Supplier -&gt; GRN + Incoming QC -&gt; Raw Material Inventory -&gt; Production Consumption</pre>
+<p>with role-based access, hard business gates (an order cannot dispatch more than has been packed; goods enter stock only after QC PASS; a GRN cannot be confirmed without a passed QC sheet), and a permanent audit log.</p>
+
+<h2>1.4 Manual Process vs Automated Process</h2>
+<table>
+<tr><th>Process</th><th>Manual (before)</th><th>Automated (now)</th></tr>
+<tr><td>Enquiry intake</td><td>Phone/WhatsApp notes; no numbering</td><td>Enquiry screen; auto number ENQ_0001; stages GENERAL/SAMPLED/QUOTED; 12-day sample follow-up clock (<code>SAMPLED_FOLLOW_UP_DAYS</code> in enquiryService.js)</td></tr>
+<tr><td>Approval</td><td>Verbal management approval</td><td>Approval screen; one-time ACCEPT/REJECT; rejection requires a written reason; accepting auto-creates the sales order</td></tr>
+<tr><td>Order numbering</td><td>Ad-hoc</td><td>SO_0001 sales order numbers, SO_001 sales-group numbers, ORD-0001 order numbers, MOR_0001 manual requests, PO-001 purchase orders, GRN-2026-0001 receipts — all generated in <code>utils/businessNumbers.js</code></td></tr>
+<tr><td>Production batch card</td><td>Paper batch card</td><td>Production wizard (batch setup, raw materials, additives, catalysts, equipment, process parameters, operation log) stored as a JSON blob in <code>Production.rawMaterials</code></td></tr>
+<tr><td>QC</td><td>Paper test sheets</td><td>In-Process Test Sheet + Finished Goods Test Sheet per batch; GRN QC sheet for incoming material; maker/checker rule (approver must differ from analyst)</td></tr>
+<tr><td>Stock</td><td>Physical stock register</td><td>Append-only <code>InventoryTransaction</code> ledger; daily Stock Register report by item/batch/shift; opening-stock Excel import</td></tr>
+<tr><td>Dispatch</td><td>Loading slip</td><td>Dispatch screen with hard caps: cannot exceed remaining order qty, available QC-passed stock, or packed-not-yet-dispatched qty</td></tr>
+<tr><td>Purchasing</td><td>Phone orders to suppliers</td><td>PO module with segregation of duties: <b>purchase</b> raises the PO without seeing prices, <b>accounts</b> prices it and releases it to the supplier</td></tr>
+</table>
+
+<h2>1.5 Business Terminology</h2>
+<table>
+<tr><th>Term</th><th>Meaning in this system</th></tr>
+<tr><td>Enquiry</td><td>A sales lead: customer + product(s) + quantity + expected timeline. One enquiry number can cover multiple product rows (each stored as its own Enquiry DB row sharing <code>enquiryNumber</code>).</td></tr>
+<tr><td>Stage</td><td>Sales progress of an enquiry: GENERAL → SAMPLED → QUOTED (independent of the approval status).</td></tr>
+<tr><td>Urgent enquiry</td><td><code>isUrgent = true</code>: skips the approval queue; the system immediately auto-creates the order and a PENDING production job inside the same transaction (<code>createUrgentDownstreamRecords</code>).</td></tr>
+<tr><td>Manual Order Request (MOR)</td><td>An order requested without an enquiry. Must be approved before an order is created from it.</td></tr>
+<tr><td>Sales Group Number</td><td><code>SO_001</code> — groups all orders that came from the same enquiry number.</td></tr>
+<tr><td>Production / Batch</td><td>One <code>Production</code> row = one manufacturing batch of an order. An order may have several batches.</td></tr>
+<tr><td>MFG blob</td><td>The JSON stored in <code>Production.rawMaterials</code>: sections <code>rm</code>, <code>additives</code>, <code>catalysts</code>, <code>equipment</code>, <code>processParams</code>, <code>batchLogs</code>, <code>pulveriserRpm</code>.</td></tr>
+<tr><td>Batch substitution</td><td>Swapping a consumed raw-material batch for another batch, with inventory reversal + re-consumption + permanent <code>BatchSubstitution</code> record.</td></tr>
+<tr><td>GRN</td><td>Goods Receipt Note recording physical receipt against a PO; stock enters the ledger only when the GRN is confirmed (which requires QC PASS).</td></tr>
+<tr><td>Packing record</td><td>A recorded fact that N units of finished goods were packed for an order, consuming packing-material stock. Dispatch is capped by packed quantity.</td></tr>
+<tr><td>Shift</td><td>Factory shifts A/B/C used in consumption ledger rows and the stock register.</td></tr>
+</table>
+
+<h2>1.6 Scope, Assumptions, Constraints, Benefits</h2>
+<h3>In scope</h3>
+<ul>
+<li>Sales: enquiries, approvals, orders, manual order requests, dashboard KPIs.</li>
+<li>Purchasing: suppliers, purchase orders with price segregation, GRN with incoming QC, raw-material inventory.</li>
+<li>Production: batch jobs, batch card wizard, in-process testing, finished-goods QC, batch substitution, BOM lookup.</li>
+<li>Inventory: transaction ledger, stock register, adjustments, opening-stock import.</li>
+<li>Packing and dispatch with partial shipments.</li>
+<li>Administration: users (6 roles), master data (products, customers, suppliers, persons), activity log.</li>
+</ul>
+<h3>Explicitly out of scope (verified: no code exists)</h3>
+<ul>
+<li>Invoicing / accounting ledgers / payments (the "accounts" role only prices POs).</li>
+<li>Email/SMS/WhatsApp/push notifications (UI toasts only).</li>
+<li>File attachments, e-way bills, GST returns (a separate <code>fuzzy.py</code> GST reconciliation script exists in backend/ but is not wired to the app).</li>
+<li>Multi-warehouse stock separation (warehouseLocation is a free-text label, not enforced).</li>
+<li>Refresh tokens / password reset by email (see Security phase).</li>
+</ul>
+<h3>Assumptions</h3>
+<ul>
+<li>Single company, single database, trusted internal users on desktop and mobile browsers.</li>
+<li>MySQL 8+ (raw SQL uses backticks, <code>ON DUPLICATE KEY UPDATE</code>, <code>INFORMATION_SCHEMA</code>).</li>
+<li>One backend instance (in-memory response cache and master-data cache are per-process — see Performance phase).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Quantities on Order/Production/Dispatch are integers (whole units); enquiry quantities may be fractional and are rounded <b>up</b> when converted to orders.</li>
+<li>Production status may only be changed twice (<code>MAX_PRODUCTION_STATUS_CHANGES = 2</code>) and never after COMPLETED.</li>
+<li>Enquiry approval is one-shot (only from PENDING).</li>
+<li>GRN over-receipt tolerance is +2% of ordered quantity.</li>
+</ul>
+<h3>Benefits</h3>
+<ul>
+<li>End-to-end traceability from enquiry number to dispatched batch, including which raw-material batches went into each production batch.</li>
+<li>QC-gated stock: nothing is dispatchable until a finished-goods QC sheet passes; nothing enters raw-material stock until GRN QC passes.</li>
+<li>Segregation of duties in purchasing (requisition vs pricing vs receiving vs QC sign-off).</li>
+<li>30-day audit trail of every create/update/delete/approve with old and new values.</li>
+</ul>
+
+<h2>1.7 Real-World Use Case (end-to-end example)</h2>
+<ol>
+<li>A customer phones asking for 500 KG Zinc Stearate. Sales user records an enquiry (mode "Phone", stage GENERAL). System assigns <b>ENQ_0042</b>.</li>
+<li>Admin/sales approves it on the Approval screen → order <b>SO_0057</b> (group SO_012, order no ORD-0057) is created automatically, address auto-filled from the Customer Master.</li>
+<li>Sales fills city/pincode/state/country (mandatory gate) and clicks "Move to Production" → order becomes IN_PRODUCTION and a production batch is created (PENDING / "Not Started").</li>
+<li>Production supervisor opens the batch, fills the batch card (raw materials with batch numbers and shifts, additives, catalysts, equipment, process params). Setting status to Started (IN_PROGRESS) stamps <code>productionStartedDate</code> and <b>deducts raw-material stock</b> per line.</li>
+<li>A stearic-acid batch is found contaminated → supervisor performs a <b>batch substitution</b>; the ledger reverses the old batch and consumes the substitute, recorded permanently.</li>
+<li>QA records the in-process test sheet per shift; on completion of 500 units the batch reaches COMPLETED, and QA saves the <b>Finished Goods Test Sheet</b> with result PASS → 500 units enter finished-goods inventory and the order becomes READY_FOR_DISPATCH.</li>
+<li>Store packs 500 units using 20 "Zinc Stearate Trans. Bag" (packing-material stock deducted).</li>
+<li>Dispatch creates a shipment for 500 with status Dispatched → order becomes COMPLETED; finished-goods stock is written out.</li>
+<li>Every step above wrote an AuditLog row visible to admin on the Activity Log screen.</li>
+</ol>
+<h1>Phase 2 - Project Structure (Every File)</h1>
+
+<h2>2.1 Repository Layout</h2>
+<pre>
+Nimbasia/
+  backend/                  Node.js + Express + Prisma API (MySQL)
+    api/index.js            Vercel serverless entry (re-exports src/app.js)
+    prisma/                 schema.prisma, 50+ migrations, seed scripts
+    scripts/                One-off data-repair scripts
+    src/
+      config/               env.js, prisma.js, masterData.js
+      controllers/          Thin HTTP handlers (one per module)
+      middleware/           auth, roles, zod validation, error handling
+      routes/               Express routers (one per module)
+      services/             All business logic and DB access
+      utils/                Numbering, catalogs, caching, selects, validators
+    test/                   Node test files (node:test style)
+  frontend-hostinger/       ACTIVE React 18 + Vite 5 + Tailwind 3 SPA (PWA)
+    public/                 Icons, manifest, sw.js, .htaccess
+    src/
+      api/                  axiosClient.js, apiBaseUrl.js
+      components/           Layout, common/, erp/, masterdata/, production/
+      config/               navigation.js, shipToLocations.js, statusConfig.js
+      context/              AuthContext.jsx
+      hooks/                useIsMobile, useMasterData, useProductionRecord, useKnownItemIds
+      pages/                33 route pages
+      styles/erp.css        Design-system CSS
+      utils/                17 pure helper modules
+    test/                   11 unit-test files
+  frontend/                 LEGACY duplicate of the frontend (older copy; NOT in scope; do not develop here)
+  README.md, QUICK_TEST.md, TEST_NETWORK.md, IMPLEMENTATION_SUMMARY.md, Nimbasia_Process_Guide.docx
+</pre>
+
+<h2>2.2 Backend Files — purpose, dependencies, status</h2>
+<table>
+<tr><th>File</th><th>Purpose / Execution flow</th><th>Depends on</th><th>Status</th></tr>
+<tr><td>src/server.js</td><td>Process entry for self-hosted runs. Optionally runs a Prisma connectivity check (<code>PRISMA_STARTUP_CHECK</code>), listens on <code>0.0.0.0:PORT</code>, wires SIGINT/SIGTERM graceful shutdown that closes the HTTP server then Prisma.</td><td>app.js, config/env.js, config/prisma.js</td><td>Active</td></tr>
+<tr><td>api/index.js</td><td>3-line Vercel serverless entry: <code>export default app</code>.</td><td>src/app.js</td><td>Active (Vercel only)</td></tr>
+<tr><td>src/app.js</td><td>Builds the Express app: CORS with wildcard-origin matcher (denies by omitting headers, never throws), helmet, morgan, 1 MB JSON limit, compression (skippable via <code>x-no-compression</code>), health endpoints (/, /api, /api/health), mounts all 18 routers, 404 + error middleware last.</td><td>all routes, env.js, errorMiddleware</td><td>Active — core</td></tr>
+<tr><td>src/config/env.js</td><td>Loads dotenv; exports port (default 5001), dbUrl, jwtSecret (fails fast in production if &lt;32 chars; dev fallback <code>dev_secret_change_me</code> with a loud warning), jwtExpiresIn (default 7d), clientOrigin default list, prismaStartupCheck flag.</td><td>dotenv</td><td>Active</td></tr>
+<tr><td>src/config/prisma.js</td><td>Creates the PrismaClient through <code>createRetryablePrismaClientProxy</code> (auto-reconnect on recoverable Rust panics); exports prisma, closePrisma, reconnectPrisma.</td><td>@prisma/client, utils/prismaClientProxy.js</td><td>Active</td></tr>
+<tr><td>src/config/masterData.js</td><td>Static seed catalog: roles, statuses, units (KG/MT/LTR), modes of enquiry, assigned persons, supervisors, ~45 products, finished-goods catalog (15), raw-materials catalog (20), packing-materials catalog (39). Exposed as {value,label} options; seeds the MasterDataItem table on first use.</td><td>—</td><td>Active</td></tr>
+<tr><td>src/middleware/authMiddleware.js</td><td>Bearer-token check → verify JWT → load user → compare the token's <code>pwc</code> (passwordChangedAt ms) against DB; mismatch = 401 "password changed" (global token revocation on password change). Attaches public user to <code>req.user</code>.</td><td>jwt.js, prisma, selects.js</td><td>Active</td></tr>
+<tr><td>src/middleware/roleMiddleware.js</td><td><code>allowRoles(...roles)</code>: 401 if no user; <b>admin always passes</b>; otherwise role must be listed else 403.</td><td>—</td><td>Active</td></tr>
+<tr><td>src/middleware/validateMiddleware.js</td><td><code>validateBody(zodSchema)</code>: safeParse body; on failure 400 with <code>errors</code> = flattened field errors; on success stores <code>req.validatedBody</code>.</td><td>zod schemas</td><td>Active</td></tr>
+<tr><td>src/middleware/errorMiddleware.js</td><td>Maps Prisma codes to HTTP (P2002/P2003→409, P2025→404, P2000/P2011→400, P1001/2/8/17 &amp; init/panic→503); only exposes raw messages for deliberate &lt;500 errors — 5xx returns a generic message and logs the real error.</td><td>—</td><td>Active</td></tr>
+<tr><td>src/routes/*.js (18 files)</td><td>Each router: <code>router.use(authMiddleware)</code> then per-endpoint <code>allowRoles</code> + <code>validateBody</code> + controller. Full endpoint/permission matrix in Phase 11.</td><td>middleware, controllers, validators</td><td>Active</td></tr>
+<tr><td>src/controllers/*.js (18 files)</td><td>Thin: parse params (via <code>toPositiveIntOrThrow</code>), call service, res.json. List controllers wrap services with <code>prismaListFallback</code> (missing-table P2021 → empty result).</td><td>services, utils</td><td>Active</td></tr>
+<tr><td>src/services/authService.js</td><td>loginUser: constant-time legacy-password check (sha256 + timingSafeEqual), bcrypt compare for hashed accounts, transparent bcrypt migration on successful legacy login, signs JWT with pwc claim.</td><td>bcryptjs, jwt.js</td><td>Active</td></tr>
+<tr><td>src/services/userService.js</td><td>CRUD users; bcrypt(10) hashing; password change sets <code>passwordChangedAt</code> (revokes existing tokens); duplicate email → 409.</td><td>prisma, pagination</td><td>Active</td></tr>
+<tr><td>src/services/enquiryService.js</td><td>Create (multi-product rows share one enquiry number; urgent path auto-creates order+production), list (filters + 12s cache), approve/reject (one-shot; reject needs reason; accept creates order), edit (multi-product edit can split rows; blocked if an order is linked), delete (blocked if order linked).</td><td>dispatchService.createOrderFromEnquiry, productionService.buildProductionCreateData, auditService, productCatalog</td><td>Active — core</td></tr>
+<tr><td>src/services/orderService.js</td><td>Create order from an ACCEPTED enquiry only (manual path must use MOR); list with cache; moveOrderToProduction (location-fields gate); update/delete blocked once production or dispatch exists.</td><td>productionService, customerCatalog, businessNumbers</td><td>Active — core</td></tr>
+<tr><td>src/services/manualOrderRequestService.js</td><td>MOR lifecycle: create (MOR_0001 numbering; fractional qty rounded up), approve (creates order immediately if dispatch date present), reject, set dispatch date (creates the order for an approved MOR).</td><td>customerCatalog, businessNumbers, audit</td><td>Active</td></tr>
+<tr><td>src/services/productionService.js (1151 lines)</td><td>The largest service: start production (order gate + location gate), list (urgent first then FIFO), update (status-change limit 2; produced-quantity drives PARTIALLY_PRODUCED/COMPLETED; raw-material consumption dedup via reverse-then-re-deduct), complete, finished-goods test sheet (PASS → stock inward + order READY_FOR_DISPATCH), in-process test sheet (record-keeping only), batch substitution (optimistic concurrency + stock check + duplicate guard), delete (reverses consumption; resets order to CREATED only if last batch).</td><td>inventoryService, auditService, selects</td><td>Active — core</td></tr>
+<tr><td>src/services/dispatchService.js (990 lines)</td><td>Dispatch dashboard (ready orders + shipments + "pending dispatch date" queue built from ACCEPTED enquiries and APPROVED MORs without orders), createOrderFromEnquiry (shared with enquiry approval), create/update/delete dispatch with the packed/stock/remaining caps, ledger sync via <code>syncDispatchOutward</code>, order-status sync (READY→PARTIALLY_DISPATCHED→COMPLETED).</td><td>inventoryService, customerCatalog, businessNumbers</td><td>Active — core</td></tr>
+<tr><td>src/services/packingService.js</td><td>Packing queue (same eligibility as dispatch) with packed/remaining math; createPackingRecord validates against remaining order qty, available finished goods, and packing-material stock; writes packing-material OUT ledger row.</td><td>inventoryService, audit</td><td>Active</td></tr>
+<tr><td>src/services/poService.js</td><td>PO lifecycle: find-or-create supplier (+SO-001 supplier codes), pricing stripped for non-admin/accounts (<code>canSetPricing</code>/<code>stripPricingForNonPricer</code>), status machine DRAFT→SENT_TO_SUPPLIER→PARTIALLY/FULLY_RECEIVED→CLOSED, accounts pinned to the single SENT_TO_SUPPLIER transition, pricing-complete gate before release, totalAmount recomputed from received qty.</td><td>businessNumbers, audit, selects</td><td>Active — core</td></tr>
+<tr><td>src/services/grnService.js</td><td>GRN create (PO must be SENT_TO_SUPPLIER/PARTIALLY_RECEIVED; items validated against PO), QC sheet (only in DRAFT; approver ≠ analyst), confirm (QC must be PASS; qty &gt; 0; ≤ ordered +2%; increments PO receivedQty; sets PO status; writes IN ledger rows; marks GRN CONFIRMED).</td><td>poService.calculateReceivedTotal, audit</td><td>Active — core</td></tr>
+<tr><td>src/services/inventoryService.js</td><td>Ledger math: getAvailableInventoryQty (net of IN/ADJUSTMENT_IN minus OUT/ADJUSTMENT_OUT, optionally per batch), batch summaries and batch options (vendor/grade from GRN history), stock register (opening/production/dispatch/consume-by-shift/closing per item+batch per day), raw-material inventory listing with metadata joins, manual adjustments (reason mandatory), opening-stock import (delta-based, preserves history).</td><td>prisma groupBy, audit</td><td>Active — core</td></tr>
+<tr><td>src/services/bomService.js</td><td>Bill of Materials per product+grade: list/get/lookup/upsert (replace items)/delete/import (grouped rows).</td><td>audit, selects</td><td>Active</td></tr>
+<tr><td>src/services/masterDataService.js</td><td>Creates and seeds 4 raw-SQL tables (MasterDataItem, EnquiryMaster, CustomerMaster, SupplierMaster) on first use; 30s in-process cache; editable categories list; CU-001/SO-001 code generation; soft delete (isActive=0); bulk import with per-row errors; UI label remapping (e.g. PENDING→"Not Started").</td><td>masterData.js config</td><td>Active — core</td></tr>
+<tr><td>src/services/dashboardService.js</td><td>KPI counts (enquiries, pending approvals, orders by status), enquiry→order conversion rate, 6-month trend via raw GROUP BY month, status-mix chart data; 10s cache.</td><td>prisma raw SQL</td><td>Active</td></tr>
+<tr><td>src/services/auditService.js</td><td>Raw-SQL audit table (auto-create), recordAuditEvent (never throws — logs a warning on failure), listAuditLogs with search/pagination, retention purge (AUDIT_LOG_RETENTION_DAYS, default 30) run on every list call and via the cron endpoint.</td><td>prisma raw SQL</td><td>Active — core</td></tr>
+<tr><td>src/services/customerService.js</td><td>Prisma-model Customer + CustomerAddress CRUD. <b>Note:</b> instantiates its own <code>new PrismaClient()</code> instead of the shared proxy, and uses <code>mode:"insensitive"</code> which MySQL Prisma does not support (see Bug Analysis).</td><td>@prisma/client</td><td>Active (new; partially wired)</td></tr>
+<tr><td>src/services/mysqlHealthService.js</td><td>Parses DATABASE_URL and pings MySQL directly via mysql2 — admin diagnostics endpoint.</td><td>mysql2</td><td>Active</td></tr>
+<tr><td>src/utils/businessNumbers.js</td><td>All document numbering: ENQ_0001, SO_001 (group), SO_0001 (order), MOR_0001, PO-001, GRN-YYYY-0001, SO-001 supplier codes, plus normalizers and extractors.</td><td>—</td><td>Active</td></tr>
+<tr><td>src/utils/selects.js (569 lines)</td><td>Central Prisma <code>select</code> shapes per entity (USER_PUBLIC_SELECT, ENQUIRY_LIST_SELECT, ORDER_LIST_SELECT, PRODUCTION_LIST/DETAIL_SELECT, DISPATCH_LIST_SELECT, PO/GRN/BOM/MOR selects) — keeps payloads lean and consistent.</td><td>—</td><td>Active</td></tr>
+<tr><td>src/utils/validators.js (511 lines)</td><td>Every zod request schema (documented field-by-field in Phase 17).</td><td>zod, enquiryProducts</td><td>Active — core</td></tr>
+<tr><td>src/utils/enquiryProducts.js</td><td>Normalizes the products payload (string, CSV, array of strings/objects) into rows {product, grade, quantity, unit_of_measurement}; formats display strings; picks primary product.</td><td>—</td><td>Active</td></tr>
+<tr><td>src/utils/productCatalog.js</td><td><code>ensureProductsExist</code>: every product on an enquiry/order must exist in the master products or finished-goods catalog else 400.</td><td>masterDataService</td><td>Active</td></tr>
+<tr><td>src/utils/customerCatalog.js</td><td>Fuzzy CustomerMaster lookup by name/code (handles "Name (CODE)" and "Name - CODE" formats) used to auto-fill order addresses.</td><td>prisma raw SQL</td><td>Active</td></tr>
+<tr><td>src/utils/responseCache.js</td><td>In-memory TTL cache with stable key stringification, in-flight request coalescing, and prefix invalidation.</td><td>—</td><td>Active</td></tr>
+<tr><td>src/utils/prismaClientProxy.js</td><td>Proxy around PrismaClient that detects recoverable Rust panic errors and transparently recreates the client and retries once.</td><td>@prisma/client</td><td>Active</td></tr>
+<tr><td>src/utils/prismaListFallback.js</td><td>P2021 (table missing) → empty list in the right shape, so a not-yet-migrated deployment degrades gracefully.</td><td>—</td><td>Active</td></tr>
+<tr><td>src/utils/routeParams.js</td><td><code>toPositiveIntOrThrow</code>: consistent 400 for malformed numeric route params.</td><td>—</td><td>Active</td></tr>
+<tr><td>src/utils/pagination.js</td><td><code>buildPagination</code>: page/limit/skip/take with per-endpoint max caps; limit 0 = unpaginated.</td><td>—</td><td>Active</td></tr>
+<tr><td>src/utils/commerce.js / orderUnits.js / jwt.js</td><td>Price (non-negative) and ISO-4217 currency normalizers; unit normalizer (KGS→KG, TON→MT, LITRE→LTR); HS256 JWT sign/verify.</td><td>—</td><td>Active</td></tr>
+<tr><td>prisma/schema.prisma</td><td>19 models + 11 enums (full detail Phase 10). Datasource MySQL.</td><td>—</td><td>Active — core</td></tr>
+<tr><td>prisma/migrations/ (50+)</td><td>Chronological schema history Apr 2026 → Jul 2026; includes data backfills (sales group numbers, status-change counts) and <code>nimbasia_safe_migration.sql</code> for shared hosting.</td><td>—</td><td>Active</td></tr>
+<tr><td>prisma/seed.js + seedConfig.js</td><td>Wipes operational tables + AuditLog, deletes legacy @fms.com users, upserts 4 bootstrap logins (admin/sales/production/dispatch @gmail.com, password 123456).</td><td>bcryptjs</td><td>Active (destructive — see Warnings)</td></tr>
+<tr><td>prisma/seed-test-data.js / seed-customers.js</td><td>Developer test fixtures / customer-table seeds (new, untracked in git).</td><td>—</td><td>Dev utility</td></tr>
+<tr><td>scripts/renumberPurchaseOrders.js, backfillSupplierCodes.js, reformatOrderNumbers.js, safe_add_produced_quantity.js</td><td>One-off data-repair scripts run via npm scripts.</td><td>prisma</td><td>Maintenance</td></tr>
+<tr><td>backend/database.sql</td><td>Idempotent SQL for the customer tables on shared-hosting MySQL.</td><td>—</td><td>Deployment aid</td></tr>
+<tr><td>backend/fuzzy.py</td><td>Standalone Python GST-reconciliation script. Not imported anywhere in the app.</td><td>—</td><td><b>Orphan/utility</b></td></tr>
+<tr><td>backend/*.log</td><td>Runtime logs accidentally in repo.</td><td>—</td><td><b>Should be gitignored</b></td></tr>
+<tr><td>test/*.test.js (18 files)</td><td>Unit tests for auth, audit retention, dispatch caps, enquiry split, order units, production flow, role middleware, sales numbers, seeds, env config, prisma proxy.</td><td>node:test</td><td>Active</td></tr>
+</table>
+
+<h2>2.3 Frontend (frontend-hostinger) Files</h2>
+<table>
+<tr><th>File</th><th>Purpose</th><th>Status</th></tr>
+<tr><td>src/main.jsx</td><td>Mounts &lt;BrowserRouter&gt;&lt;AuthProvider&gt;&lt;AppErrorBoundary&gt;&lt;App/&gt;; registers service worker.</td><td>Active</td></tr>
+<tr><td>src/App.jsx</td><td>All routing: lazy-loaded pages, role-guarded route groups, role-based home redirect (production→/production, dispatch→/dispatch, purchase/accounts→/purchase-orders, else Dashboard), print route without Layout, legacy /pending-export-date redirect.</td><td>Active — core</td></tr>
+<tr><td>src/context/AuthContext.jsx</td><td>Login/logout; persists <code>fms_token</code> + <code>fms_user</code> in localStorage; listens for the global <code>fms-auth-expired</code> event to force re-login.</td><td>Active — core</td></tr>
+<tr><td>src/api/axiosClient.js</td><td>Axios instance; request interceptor attaches Bearer token; response interceptor: any non-login 401 clears storage and dispatches <code>fms-auth-expired</code>.</td><td>Active — core</td></tr>
+<tr><td>src/api/apiBaseUrl.js</td><td>Resolves VITE_API_URL; rewrites 3 legacy Render URLs to https://manage.nimbasia.com/api; falls back to relative /api (dev proxy → localhost:5001).</td><td>Active</td></tr>
+<tr><td>src/components/ProtectedRoute.jsx</td><td>Redirects unauthenticated to /login; wrong role to /; admin bypasses all role lists.</td><td>Active</td></tr>
+<tr><td>src/components/Layout.jsx + erp/ (ErpNavbar, ErpSidebar, ErpBottomNav, ErpCard, ErpIcons)</td><td>App shell: top navbar (user menu, change password), collapsible role-filtered sidebar, mobile bottom navigation, card grid components, inline SVG icon set.</td><td>Active</td></tr>
+<tr><td>src/components/common/*</td><td>Alert, AppErrorBoundary (catches render crashes), Card, GlobalNotification (window-event toast bus), MobileListCard, SearchableSelect (type-ahead dropdown used everywhere), StatusBadge, Toolbar (unified list-page toolbar), VirtualizedTableBody (windowed rows for big tables), LoadingSpinner.</td><td>Active — reusable</td></tr>
+<tr><td>src/components/masterdata/*</td><td>MasterDataHeader, Customer/Supplier tables + modals + Excel ImportToolbar for the two master screens.</td><td>Active</td></tr>
+<tr><td>src/components/production/ProductionStepNav.jsx, ProductionBatchPicker.jsx</td><td>Step navigation across the 9-step batch-card wizard; batch picker to start log entries from list pages.</td><td>Active</td></tr>
+<tr><td>src/config/navigation.js</td><td>Sidebar tree with per-item role lists (see Phase 4); helpers getNavItemsByRole / getFlatNavItemsByRole.</td><td>Active</td></tr>
+<tr><td>src/config/shipToLocations.js</td><td>Hard-coded 4 Nimbasia plants with GSTIN/PAN/address for PO Ship-To.</td><td>Active</td></tr>
+<tr><td>src/config/statusConfig.js</td><td>GRN status badge colors.</td><td>Active</td></tr>
+<tr><td>src/hooks/useMasterData.js</td><td>Fetches /api/master-data once and shares options across forms.</td><td>Active</td></tr>
+<tr><td>src/hooks/useProductionRecord.js</td><td>Loads a production record + parses the MFG JSON blob for the wizard pages; save helpers.</td><td>Active</td></tr>
+<tr><td>src/hooks/useIsMobile.js / useKnownItemIds.js</td><td>Viewport breakpoint hook; inventory item-id autocomplete source.</td><td>Active</td></tr>
+<tr><td>src/utils/*</td><td>apiError (message extraction), approvalFilters, auditLog (activity-log formatting), businessNumbers (mirror of backend formats), commerce, customerLookup, dataSync, dispatchHistory/Ordering/StatusOptions, enquiryProducts (mirror), errorMessages, exportExcel (SheetJS export used by list pages), followUps (12-day sample reminder), mobileRecent, productionMfg (MFG blob helpers), recordOrdering, userValidation.</td><td>Active — reusable</td></tr>
+<tr><td>src/pages/ (33 pages)</td><td>Documented screen-by-screen in Phase 6.</td><td>Active</td></tr>
+<tr><td>public/sw.js + manifest.webmanifest + icons</td><td>PWA install support; sw caching shell. Many icon PNG variants (several unused duplicates).</td><td>Active / partially redundant</td></tr>
+<tr><td>public/.htaccess</td><td>Apache SPA rewrite for Hostinger shared hosting (all routes → index.html).</td><td>Active (prod)</td></tr>
+<tr><td>vite.config.js</td><td>React plugin; dev server port 5174 with /api proxy → http://localhost:5001.</td><td>Active</td></tr>
+<tr><td>test/*.test.js (11 files)</td><td>Unit tests for apiBaseUrl, approvalFilters, auditLog, dataSync, dispatch utils, errorMessages, navigation roles, recordOrdering, userValidation.</td><td>Active</td></tr>
+</table>
+<div class="warn"><b>Legacy code:</b> the top-level <code>frontend/</code> directory is an older copy of the same app (missing newer files such as ProductionBatchPicker, dataSync, dispatchHistory). It is excluded from this documentation's scope per instruction; it should eventually be deleted to avoid divergent edits. Nothing imports across the two frontends.</div>
+
+<h1>Phase 3 - System Architecture</h1>
+
+<h2>3.1 High-Level Architecture</h2>
+<pre>
+ User (Sales / Production / Dispatch / Purchase / Accounts / Admin)
+   |
+   v
+ Browser (desktop or mobile PWA)
+   |
+   v
+ React SPA  (frontend-hostinger, served by Hostinger Apache + .htaccess SPA rewrite)
+   |  React Router v6 routes -> ProtectedRoute (auth + role guard)
+   |  AuthContext (localStorage: fms_token / fms_user)
+   v
+ Axios client (Bearer JWT; base URL https://manage.nimbasia.com/api or /api dev proxy)
+   |
+   v
+ Express app (backend/src/app.js)
+   |-- CORS (wildcard-capable origin allowlist)      helmet, morgan, compression, 1MB JSON limit
+   |-- authMiddleware (JWT + pwc revocation check)
+   |-- allowRoles(...) per endpoint (admin override)
+   |-- validateBody(zod schema)
+   v
+ Controllers (thin)  ->  Services (all business rules, transactions, caching)
+   |                         |-- responseCache (in-memory TTL + prefix invalidation)
+   |                         |-- auditService.recordAuditEvent (raw SQL, never throws)
+   v                         v
+ Prisma ORM (retryable client proxy) + raw SQL for the 5 raw-managed tables
+   |
+   v
+ MySQL 8 (19 Prisma models + MasterDataItem, EnquiryMaster, CustomerMaster,
+          SupplierMaster, AuditLog raw tables)
+
+ External surfaces: none at runtime (no third-party APIs, no object storage,
+ no mail/SMS gateways). Cron scheduler (e.g. Vercel cron / external curl)
+ calls GET /api/cron/audit-retention with CRON_SECRET.
+</pre>
+
+<h2>3.2 Mermaid — System Architecture</h2>
+<pre>
+flowchart TD
+  U[User] --> B[Browser / PWA]
+  B --> FE[React SPA - frontend-hostinger]
+  FE --> RR[React Router + ProtectedRoute]
+  RR --> AX[Axios client - JWT Bearer]
+  AX --> EX[Express app.js]
+  EX --> MW1[CORS/Helmet/Compression]
+  MW1 --> MW2[authMiddleware JWT+pwc]
+  MW2 --> MW3[allowRoles RBAC]
+  MW3 --> MW4[validateBody zod]
+  MW4 --> C[Controllers]
+  C --> S[Services - business rules]
+  S --> CACHE[(In-memory response cache)]
+  S --> AUD[auditService]
+  S --> P[Prisma retryable proxy]
+  AUD --> DB[(MySQL)]
+  P --> DB
+  CRON[External cron] -->|CRON_SECRET| EX
+</pre>
+
+<h2>3.3 Connection explanations</h2>
+<table>
+<tr><th>Connection</th><th>How and why</th></tr>
+<tr><td>Browser → SPA</td><td>Static assets from Hostinger; .htaccess rewrites all paths to index.html so deep links work; manifest + sw.js allow install-to-home-screen.</td></tr>
+<tr><td>SPA → API</td><td>All data flows through the single axios client. 401 anywhere (except the login call itself) triggers a global logout event — one consistent session-expiry path.</td></tr>
+<tr><td>Routing → Auth</td><td>Route access is enforced twice: in the client (ProtectedRoute + role-filtered navigation) for UX, and authoritatively on the server (allowRoles) — client checks are convenience only.</td></tr>
+<tr><td>Controllers → Services</td><td>Controllers never touch Prisma; every business rule lives in a service so it is testable and shared (e.g. <code>createOrderFromEnquiry</code> is used by both enquiry approval and dispatch-date entry).</td></tr>
+<tr><td>Services → Cache</td><td>List endpoints cache for 10–30 s keyed by filter set; every write invalidates its own prefix plus all downstream module prefixes (enquiry writes invalidate orders/production/dispatch/dashboard), because approvals cascade records across modules.</td></tr>
+<tr><td>Services → MySQL</td><td>Prisma for the 19 modeled tables; raw parameterized SQL for the 5 bootstrap-managed tables (they are created with CREATE TABLE IF NOT EXISTS at runtime so shared hosting without migration access still works).</td></tr>
+</table>
+
+<h1>Phase 4 - User Roles &amp; Permissions</h1>
+
+<h2>4.1 Role Inventory (enum Role in schema.prisma)</h2>
+<table>
+<tr><th>Role</th><th>Purpose</th><th>Landing page</th><th>Sidebar groups visible</th></tr>
+<tr><td><b>admin</b></td><td>Full control + user management. <code>allowRoles</code> and ProtectedRoute both grant admin an unconditional bypass — admin can do everything below plus everything restricted.</td><td>Dashboard</td><td>All: Dashboard, Sales, Purchasing, Production, Dispatch, Administration</td></tr>
+<tr><td><b>sales</b></td><td>Owns the demand side: enquiries, approvals, orders, manual order requests, dashboard.</td><td>Dashboard</td><td>Dashboard, Sales (Enquiries/Approval/Orders)</td></tr>
+<tr><td><b>production</b></td><td>Runs the factory: production batches, batch cards, QC sheets, packing; can raise POs (without pricing) and view inventory; can post stock adjustments and opening-stock imports.</td><td>/production</td><td>Purchasing (POs only), Production (all), Packing</td></tr>
+<tr><td><b>dispatch</b></td><td>Ships goods: dispatch dashboard, dispatch-date queue, packing; read manual order requests.</td><td>/dispatch</td><td>Production group (Packing only), Dispatch group</td></tr>
+<tr><td><b>purchase</b></td><td>Raises purchase requisitions — supplier, items, quantities — but <b>never sees or sets pricing</b> and cannot release a PO. Read-only GRNs and inventory.</td><td>/purchase-orders</td><td>Purchasing (POs, Goods Receipts, Raw Materials)</td></tr>
+<tr><td><b>accounts</b></td><td>Owns the money side of POs: unit price, tax, currency, discount, freight — and performs exactly one lifecycle action: releasing the priced PO to the supplier (DRAFT→SENT_TO_SUPPLIER). Read-only GRNs and inventory.</td><td>/purchase-orders</td><td>Purchasing (POs, Goods Receipts, Raw Materials)</td></tr>
+</table>
+
+<h2>4.2 Permission Matrix (authoritative — from route files)</h2>
+<table>
+<tr><th>Capability</th><th>admin</th><th>sales</th><th>production</th><th>dispatch</th><th>purchase</th><th>accounts</th></tr>
+<tr><td>Dashboard summary</td><td>Yes</td><td>Yes</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+<tr><td>Enquiries: list/create/edit/approve/delete</td><td>Yes</td><td>Yes</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+<tr><td>Manual order requests: list</td><td>Yes</td><td>Yes</td><td>-</td><td>Yes</td><td>-</td><td>-</td></tr>
+<tr><td>Manual order requests: create / approve / reject</td><td>Yes</td><td>Yes</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+<tr><td>MOR: set dispatch date (creates order)</td><td>Yes</td><td>-</td><td>-</td><td>Yes</td><td>-</td><td>-</td></tr>
+<tr><td>Orders: list/create/edit/delete/move-to-production</td><td>Yes</td><td>Yes</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+<tr><td>Production: list/detail/create/edit/complete/delete, QC sheets, substitutions</td><td>Yes</td><td>-</td><td>Yes</td><td>-</td><td>-</td><td>-</td></tr>
+<tr><td>BOM: list/lookup/get</td><td>Yes</td><td>-</td><td>Yes</td><td>-</td><td>-</td><td>-</td></tr>
+<tr><td>BOM: save/import/delete</td><td>Yes</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+<tr><td>Packing: queue + record packing</td><td>Yes</td><td>-</td><td>Yes</td><td>Yes</td><td>-</td><td>-</td></tr>
+<tr><td>Dispatch: dashboard/create/edit/delete, enquiry dispatch-date conversion</td><td>Yes</td><td>-</td><td>-</td><td>Yes</td><td>-</td><td>-</td></tr>
+<tr><td>Purchase orders: list/view/suppliers</td><td>Yes</td><td>-</td><td>Yes</td><td>-</td><td>Yes</td><td>Yes</td></tr>
+<tr><td>Purchase orders: create/edit (pricing fields stripped unless admin/accounts)</td><td>Yes</td><td>-</td><td>Yes</td><td>-</td><td>Yes (no pricing)</td><td>Yes (with pricing)</td></tr>
+<tr><td>PO status change</td><td>Yes (any valid transition)</td><td>-</td><td>-</td><td>-</td><td>-</td><td>Only DRAFT→SENT_TO_SUPPLIER</td></tr>
+<tr><td>PO delete (DRAFT only)</td><td>Yes</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+<tr><td>GRN: list/view</td><td>Yes</td><td>-</td><td>-</td><td>-</td><td>Yes</td><td>Yes</td></tr>
+<tr><td>GRN: create / QC sheet / confirm</td><td>Yes only</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+<tr><td>Inventory: raw materials / item ids / batches / stock register (read)</td><td>Yes</td><td>-</td><td>Yes</td><td>-</td><td>Yes</td><td>Yes</td></tr>
+<tr><td>Inventory: adjustments / opening-stock import</td><td>Yes</td><td>-</td><td>Yes</td><td>-</td><td>-</td><td>-</td></tr>
+<tr><td>Master data: read</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td><td>- (route lists only 4 roles, but see note)</td><td>-</td></tr>
+<tr><td>Master data: create rows / import / delete (customer &amp; supplier masters, category values)</td><td>Yes only</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+<tr><td>Customers API (list/create/addresses)</td><td colspan="6">Any authenticated user (no allowRoles on customerRoutes — see Bug Analysis)</td></tr>
+<tr><td>Users: list/create/edit/delete</td><td>Yes only</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+<tr><td>Change own password (PATCH /users/me/password)</td><td colspan="6">All roles</td></tr>
+<tr><td>Audit logs (Activity Log)</td><td>Yes only</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+<tr><td>MySQL diagnostics</td><td>Yes only</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
+</table>
+<div class="note"><b>Business reason for the purchase/accounts split:</b> a requisitioner who can also price and release orders can commit company funds unchecked. The split is enforced server-side in <code>poService.stripPricingForNonPricer</code> (pricing fields are silently dropped from non-pricer payloads, not trusted) and in <code>updatePurchaseOrderStatus</code> (accounts pinned to one transition).</div>
+<div class="note"><b>Note on master-data reads for purchase/accounts:</b> <code>masterDataRoutes</code> GET allows admin, sales, production, dispatch. The PO form (used by purchase/accounts) loads suppliers from <code>/api/purchase-orders/suppliers</code> instead, so purchasing still works — but any UI relying on /api/master-data would 403 for these two roles.</div>
+<h1>Phase 5 - Module Documentation</h1>
+
+<h2>5.1 Authentication Module</h2>
+<table>
+<tr><td><b>Objective</b></td><td>Identify the user and establish their role for every subsequent request.</td></tr>
+<tr><td><b>Navigation</b></td><td>/login (auto-redirect target for all unauthenticated access)</td></tr>
+<tr><td><b>Users</b></td><td>All six roles</td></tr>
+<tr><td><b>Inputs</b></td><td>email, password</td></tr>
+<tr><td><b>Outputs</b></td><td>JWT (7-day default expiry) + user object stored in localStorage</td></tr>
+<tr><td><b>APIs</b></td><td>POST /api/auth/login; PATCH /api/users/me/password</td></tr>
+<tr><td><b>Tables</b></td><td>User</td></tr>
+<tr><td><b>Business rules</b></td><td>Rate limit 10 failed attempts / 15 min / IP (successes don't count); legacy plain-text accounts auto-migrate to bcrypt on first successful login; changing a password revokes all previously issued tokens via the pwc claim.</td></tr>
+<tr><td><b>Errors</b></td><td>401 "Invalid email or password" (same message for unknown user and wrong password — prevents user enumeration); 429 rate-limit message.</td></tr>
+</table>
+
+<h2>5.2 Dashboard Module</h2>
+<table>
+<tr><td><b>Objective</b></td><td>Give sales/management a live pulse: total enquiries, pending approvals, order pipeline by status, enquiry→order conversion rate, 6-month enquiry/order trend, order status mix.</td></tr>
+<tr><td><b>Navigation</b></td><td>/ (home for admin and sales)</td></tr>
+<tr><td><b>APIs / Tables</b></td><td>GET /api/dashboard(/summary) → dashboardService (Enquiry, Order counts + raw monthly GROUP BY)</td></tr>
+<tr><td><b>Business rules</b></td><td>Conversion rate = orders with enquiryId / total enquiries (1 decimal). 10-second cache.</td></tr>
+</table>
+
+<h2>5.3 Enquiry Module</h2>
+<table>
+<tr><td><b>Objective</b></td><td>Capture and track every sales lead so nothing is forgotten; feed the approval pipeline.</td></tr>
+<tr><td><b>Navigation</b></td><td>Sales → Enquiries (/enquiries)</td></tr>
+<tr><td><b>Users</b></td><td>admin, sales</td></tr>
+<tr><td><b>Preconditions</b></td><td>Products must exist in master data; company selectable from customer master or typed.</td></tr>
+<tr><td><b>Inputs</b></td><td>enquiry date, mode of enquiry, company, product rows (product+grade+qty+UoM), price+currency (optional), expected timeline, stage, urgent flag, notes for production.</td></tr>
+<tr><td><b>Outputs</b></td><td>Enquiry rows sharing an ENQ_nnnn number; if urgent: also an Order + PENDING Production, atomically.</td></tr>
+<tr><td><b>APIs</b></td><td>GET/POST /api/enquiries, PUT /:id (status), PUT /:id/edit, DELETE /:id</td></tr>
+<tr><td><b>Business rules</b></td><td>≥1 product; every product validated against catalog; multi-product enquiry = one row per product sharing the number; stage SAMPLED stamps sampledAt starting a 12-day follow-up clock (UI reminder via utils/followUps.js); editing to multiple products splits rows but is refused if an order is already linked; delete refused if an order is linked.</td></tr>
+<tr><td><b>Errors</b></td><td>400 invalid product / missing fields; 409 "Cannot split an enquiry with a linked order"; 400 "Cannot delete enquiry with linked order".</td></tr>
+</table>
+
+<h2>5.4 Approval Module</h2>
+<table>
+<tr><td><b>Objective</b></td><td>Management gate between a lead and a committed sales order.</td></tr>
+<tr><td><b>Navigation</b></td><td>Sales → Approval (/approval)</td></tr>
+<tr><td><b>APIs</b></td><td>PUT /api/enquiries/:id with {status: ACCEPTED|REJECTED, rejection_reason?}</td></tr>
+<tr><td><b>Business rules</b></td><td>Only from PENDING, exactly once ("Status update is allowed only once"); rejection reason mandatory (max 190 chars); ACCEPT auto-creates the order via <code>createOrderFromEnquiry</code> (address auto-filled from CustomerMaster, quantity rounded up, urgency propagated, dispatchDate = expected timeline); audit event APPROVE_ENQUIRY / REJECT_ENQUIRY.</td></tr>
+</table>
+
+<h2>5.5 Order Module</h2>
+<table>
+<tr><td><b>Objective</b></td><td>The committed sales order — the contract production fulfils and dispatch ships against.</td></tr>
+<tr><td><b>Navigation</b></td><td>Sales → Orders (/orders)</td></tr>
+<tr><td><b>APIs</b></td><td>GET/POST /api/orders, PUT /:id, DELETE /:id, PUT /:id/status ({status: IN_PRODUCTION})</td></tr>
+<tr><td><b>Business rules</b></td><td>POST requires enquiry_id of an ACCEPTED enquiry without an existing order (manual orders must come via MOR); edit/delete refused once any production or dispatch exists; move-to-production requires City, Pincode, State, Country filled and a non-dispatch-lifecycle status; numbering SO_0001 / ORD-0001 assigned after insert from the row id.</td></tr>
+<tr><td><b>Errors</b></td><td>400 "Cannot create order unless enquiry status is ACCEPTED"; 409 "Order already exists for this enquiry"; 400 "Cannot edit order after production/dispatch starts"; 400 "Fill required location fields before production: …".</td></tr>
+</table>
+
+<h2>5.6 Manual Order Request Module</h2>
+<table>
+<tr><td><b>Objective</b></td><td>Controlled path for orders that have no enquiry (e.g. repeat phone orders), still requiring an approval step.</td></tr>
+<tr><td><b>Navigation</b></td><td>Created from the Orders page ("Manual Order" flow); dispatch date set from Dispatch → Dispatch Date.</td></tr>
+<tr><td><b>APIs</b></td><td>GET/POST /api/manual-orders, PUT /:id/status, PUT /:id/dispatch-date</td></tr>
+<tr><td><b>Business rules</b></td><td>MOR_0001 numbering (max existing + 1); expected timeline mandatory; approve/reject once only; APPROVED + dispatch date → order created (TSO/TMP placeholder numbers finalized to SO_xxxx/ORD-xxxx); the request is then locked (status ORDER_CREATED, orderId set).</td></tr>
+</table>
+
+<h2>5.7 Production Module</h2>
+<table>
+<tr><td><b>Objective</b></td><td>Digital batch card: plan, execute, and record each manufacturing batch, deducting raw materials and creating finished goods.</td></tr>
+<tr><td><b>Navigation</b></td><td>Production → Production (/production), then per-batch wizard /production/:id/* (Overview, Batch Setup, Raw Materials, Additives, Catalyst, Equipment, Process Params, Operation Log, In-Process Testing, QC Test Sheet), plus list views Quality Check, Operation Log, In-Process Testing.</td></tr>
+<tr><td><b>Users</b></td><td>admin, production</td></tr>
+<tr><td><b>Preconditions</b></td><td>Order in CREATED/IN_PRODUCTION with complete location fields.</td></tr>
+<tr><td><b>Key data</b></td><td>assignedPersonnel, deliveryDate, productSpecs, capacity, batchNo, particleSize, ACM/Classifier/Blower RPM, producedQuantity, status, state, and the MFG JSON blob (materials with batch numbers + shifts, equipment checklist, process parameters, operation batch logs).</td></tr>
+<tr><td><b>APIs</b></td><td>GET /api/production, GET /:id, POST /, PUT /:id/edit, PUT /:id (complete), POST /:id/qc, POST /:id/in-process-test, POST /:id/substitute-batch, GET /:id/substitutions, DELETE /:id</td></tr>
+<tr><td><b>Business rules</b></td><td>(1) Queue order: urgent first, then FIFO. (2) Status can change at most twice and never after COMPLETED. (3) Leaving PENDING stamps productionStartedDate and deducts raw-material stock (reverse-then-re-deduct keeps ledger drift-free on edits). (4) produced_quantity ≤ order quantity; = order quantity auto-completes; &gt;0 → PARTIALLY_PRODUCED. (5) Completing sets order READY_FOR_DISPATCH but does NOT create stock. (6) Finished-goods stock enters only when the FG test sheet is saved with PASS (delta-synced, reversible on PASS→FAIL correction). (7) Batch substitution: optimistic-concurrency check on the row, substitute stock must cover qty, duplicate substitution refused, both ledger rows linked in BatchSubstitution. (8) Delete refused after dispatch; reverses consumption; resets order to CREATED only if it was the last batch.</td></tr>
+</table>
+
+<h2>5.8 BOM Module</h2>
+<table>
+<tr><td><b>Objective</b></td><td>Standard recipe per product+grade so batch cards can prefill materials (qtyPerUnit × capacity).</td></tr>
+<tr><td><b>APIs</b></td><td>GET /api/bom, GET /lookup?product&amp;grade, GET /:id, POST / (admin), POST /import (admin), DELETE /:id (admin)</td></tr>
+<tr><td><b>Business rules</b></td><td>Unique (product, grade); items categorized rm/additives/catalysts; save replaces the full item list; Excel import groups rows by product+grade.</td></tr>
+</table>
+
+<h2>5.9 Purchasing Module (PO)</h2>
+<table>
+<tr><td><b>Objective</b></td><td>Formal supplier ordering with duty segregation and a printable PO document.</td></tr>
+<tr><td><b>Navigation</b></td><td>Purchasing → Purchase Orders (/purchase-orders, /new, /:id, /:id/edit, /:id/print)</td></tr>
+<tr><td><b>APIs</b></td><td>GET /api/purchase-orders, GET /suppliers, POST /, GET /:id, PUT /:id, PATCH /:id/status, DELETE /:id</td></tr>
+<tr><td><b>Business rules</b></td><td>Supplier find-or-create with SO-001 auto codes; PO-001 numbering; bill-to default "NIMBASIA STABILIZERS"; ship-to one of the 4 plants; only DRAFT editable/deletable; status machine DRAFT→SENT_TO_SUPPLIER→PARTIALLY_RECEIVED→FULLY_RECEIVED→CLOSED; release blocked until every item is priced (ordered total &gt; 0); pricing fields stripped server-side for purchase/production; totalAmount = Σ receivedQty × unitPrice (value received, not ordered).</td></tr>
+</table>
+
+<h2>5.10 GRN Module</h2>
+<table>
+<tr><td><b>Objective</b></td><td>Record physical receipt of purchased goods, QC them, and post accepted stock to inventory.</td></tr>
+<tr><td><b>Navigation</b></td><td>Purchasing → Goods Receipts (/grns, /grns/new, /grns/:id)</td></tr>
+<tr><td><b>APIs</b></td><td>GET /api/grns, POST / (admin), GET /:id, POST /:id/qc (admin), POST /:id/confirm (admin)</td></tr>
+<tr><td><b>Business rules</b></td><td>PO must be SENT_TO_SUPPLIER or PARTIALLY_RECEIVED; GRN-YYYY-nnnn numbering; QC sheet only editable in DRAFT, approver must differ from any analyst; confirm requires QC PASS, all quantities &gt; 0 and cumulative ≤ ordered +2%; confirm increments PO receivedQty, recomputes PO status/total, writes IN ledger rows (with batchNo, warehouse label), and locks the GRN (CONFIRMED).</td></tr>
+</table>
+
+<h2>5.11 Inventory Module</h2>
+<table>
+<tr><td><b>Objective</b></td><td>Single append-only ledger for all stock movement of raw materials, packing materials and finished goods.</td></tr>
+<tr><td><b>Navigation</b></td><td>Purchasing → Raw Materials (/raw-materials) — includes the Stock Register view and adjustment/import tools.</td></tr>
+<tr><td><b>APIs</b></td><td>GET /api/inventory/raw-materials, /item-ids, /item-batches?item_id, /stock-register?date, POST /adjustments, POST /import</td></tr>
+<tr><td><b>Business rules</b></td><td>Net stock = (IN + ADJUSTMENT_IN) − (OUT + ADJUSTMENT_OUT), optionally per batch; adjustments require a ≥3-char reason and are audit-logged; opening-stock import writes only the delta vs current stock (ledger stays a true history); stock register buckets the day's movements into Opening / Production / Dispatch / Consume A/B/C shifts / Closing per item+batch.</td></tr>
+</table>
+
+<h2>5.12 Packing Module</h2>
+<table>
+<tr><td><b>Objective</b></td><td>Make "packed" an enforced, material-consuming fact rather than a checkbox, and gate dispatch on it.</td></tr>
+<tr><td><b>Navigation</b></td><td>Production → Packing (/packing)</td></tr>
+<tr><td><b>APIs</b></td><td>GET /api/packing, POST /api/packing</td></tr>
+<tr><td><b>Business rules</b></td><td>Queue = orders READY_FOR_DISPATCH/PARTIALLY_DISPATCHED with ≥1 COMPLETED batch; packed qty ≤ remaining order qty AND ≤ available finished-goods stock; packing-material qty ≤ its available stock; each record writes an OUT ledger row for the packing material.</td></tr>
+</table>
+
+<h2>5.13 Dispatch Module</h2>
+<table>
+<tr><td><b>Objective</b></td><td>Ship packed goods (fully or partially), keep order status and finished-goods stock in sync, and convert approved-but-unordered work into orders by setting a dispatch date.</td></tr>
+<tr><td><b>Navigation</b></td><td>Dispatch → Dispatch (/dispatch); Dispatch → Dispatch Date (/pending-dispatch-date)</td></tr>
+<tr><td><b>APIs</b></td><td>GET /api/dispatch, POST /, PUT /:id, DELETE /:id, PUT /dispatch-date/:enquiryId, PUT /dispatch-date/manual/:requestId</td></tr>
+<tr><td><b>Business rules</b></td><td>Dispatchable qty = min(remaining order qty, available finished-goods stock, packed-not-yet-dispatched); shipment status DELIVERED allowed only when the dispatch clears the full remaining quantity; order status auto-syncs (0 → READY_FOR_DISPATCH, partial → PARTIALLY_DISPATCHED, full → COMPLETED); ledger OUT rows delta-synced per dispatch row (edits down create ADJUSTMENT_IN corrections); deleting a dispatch reverses its outward and re-syncs the order.</td></tr>
+</table>
+
+<h2>5.14 Master Data, Users, Activity Log Modules</h2>
+<table>
+<tr><td><b>Master Data</b></td><td>/master-data (admin): editable option lists (products, assignedPersons, supervisors, modeOfEnquiry, units, countryCodes), Enquiry Master combinations, Customer Master (CU-nnn codes, GSTN, address) with Excel import and soft delete. /supplier-data (admin): Supplier Master (SO-nnn codes, GSTN, PAN) with import/delete. Consumed app-wide through GET /api/master-data and the useMasterData hook.</td></tr>
+<tr><td><b>Users</b></td><td>/users (admin): create/edit/delete users, assign one of six roles, reset passwords (which force-revokes the user's sessions). Everyone: change own password from the navbar menu.</td></tr>
+<tr><td><b>Activity Log</b></td><td>/activity-log (admin): searchable, paginated audit trail (action, entity, actor, note, old/new values); rows older than the retention window (30 days default) are purged automatically.</td></tr>
+</table>
+
+<h1>Phase 6 - Screen Documentation</h1>
+<p>All screens share: the ERP shell (navbar with user menu + change-password modal, role-filtered sidebar, mobile bottom nav), toast notifications via GlobalNotification, a LoadingSpinner state, an empty state ("No records"), and API-error banners via utils/apiError. Tables collapse to MobileListCard stacks below the mobile breakpoint (useIsMobile). List pages use the unified Toolbar (search box, filter dropdowns, Excel export where noted) and client or server pagination. Behavior below is per screen; UI-element wiring is stated from the routes, hooks and backend contracts each page calls.</p>
+
+<table>
+<tr><th>Screen / URL</th><th>Roles</th><th>Purpose &amp; key elements</th><th>APIs called</th></tr>
+<tr><td><b>Login</b> /login</td><td>public</td><td>Email + password form; error banner on 401/429; redirect message shown after session expiry; logo branding. Buttons: Sign In.</td><td>POST /auth/login</td></tr>
+<tr><td><b>Dashboard</b> /</td><td>admin, sales</td><td>KPI stat cards (total enquiries, pending approvals, orders by status, conversion %), 6-month trend chart, order status-mix chart, quick links.</td><td>GET /dashboard/summary</td></tr>
+<tr><td><b>Enquiries</b> /enquiries</td><td>admin, sales</td><td>List with search (company/product/number/person), status + stage + assigned + date filters, urgent badge, sample follow-up reminder (12-day), Excel export. New/Edit enquiry modal: multi-product rows (SearchableSelect from catalog, grade, qty, UoM), enquiry date, mode, company (customer-master aware), price+currency, expected timeline, stage, urgent toggle, notes. Buttons: New Enquiry, Save, Edit, Delete (confirm), Export.</td><td>GET/POST/PUT/DELETE /enquiries, GET /master-data</td></tr>
+<tr><td><b>Approval</b> /approval</td><td>admin, sales</td><td>Pending-enquiry queue with full detail; Approve button (confirm) and Reject button opening a mandatory-reason dialog. Filters via utils/approvalFilters.</td><td>GET /enquiries?status=PENDING, PUT /enquiries/:id</td></tr>
+<tr><td><b>Orders</b> /orders</td><td>admin, sales</td><td>Order list (status filter, client filter, date, search; Excel export). Row actions: Edit (only before production/dispatch), Delete (same gate), Move to Production (blocked until city/pincode/state/country present — inline location editor), view linked enquiry. Manual Order Request creation + MOR list with Approve/Reject.</td><td>GET/POST/PUT/DELETE /orders, PUT /orders/:id/status, GET/POST/PUT /manual-orders</td></tr>
+<tr><td><b>Production list</b> /production</td><td>admin, production</td><td>Batch queue: urgent first then FIFO; status labels Not Started / Started / Partially Produced / Hold / Completed; produced-vs-order quantity; search/company/date/status filters; row opens the batch overview; Complete action; batch picker (ProductionBatchPicker) to jump into a wizard step for a chosen batch.</td><td>GET /production, PUT /production/:id(/edit)</td></tr>
+<tr><td><b>Production Overview</b> /production/:id</td><td>admin, production</td><td>Batch summary header (order, product, specs, status, produced qty, dates) + ProductionStepNav to the 8 wizard steps + substitution history.</td><td>GET /production/:id, GET /production/:id/substitutions</td></tr>
+<tr><td><b>Batch Setup</b> /production/:id/batch-setup</td><td>admin, production</td><td>Batch number, capacity, particle size, assigned personnel, delivery date, product specs, status/state changes (max 2 status changes), produced quantity entry.</td><td>PUT /production/:id/edit</td></tr>
+<tr><td><b>Raw Materials / Additives / Catalyst</b> /production/:id/raw-materials|additives|catalyst</td><td>admin, production</td><td>One shared page component (ProductionMaterialStepPage) parameterized per section: rows of item (from inventory item-ids), vendor, grade, batch number (picker fed by /inventory/item-batches with live available qty), qty, shift A/B/C; BOM lookup prefill; Substitute Batch action per row (reason, substitute item/batch) with concurrency-protected server swap.</td><td>GET /inventory/item-ids, GET /inventory/item-batches, GET /bom/lookup, PUT /production/:id/edit, POST /production/:id/substitute-batch</td></tr>
+<tr><td><b>Equipment</b> /production/:id/equipment</td><td>admin, production</td><td>Equipment checklist rows (name, id/spec, remarks) stored in the MFG blob.</td><td>PUT /production/:id/edit</td></tr>
+<tr><td><b>Process Params</b> /production/:id/process-params</td><td>admin, production</td><td>Process parameter rows (parameter, target, actual, remarks) + ACM/Classifier/Blower/Pulveriser RPM.</td><td>PUT /production/:id/edit</td></tr>
+<tr><td><b>Operation Log</b> /production/:id/operation-log</td><td>admin, production</td><td>Chronological batch log entries (time, operation, operator, remarks) in the MFG blob; list page /operation-log aggregates across batches with the batch picker.</td><td>PUT /production/:id/edit; GET /production</td></tr>
+<tr><td><b>In-Process Testing</b> /production/:id/in-process-testing (+ list /in-process-testing)</td><td>admin, production</td><td>Shift sampling grid: analysis date, shift, lot, reactor, sampling by/time, FFA, ash, moisture, appearance, melting point, analysis by, FFA inform time, remarks. Record-keeping only (does not gate anything).</td><td>POST /production/:id/in-process-test</td></tr>
+<tr><td><b>QC Test Sheet (FG)</b> /production/:id/qc-test-sheet (+ list /quality-check)</td><td>admin, production</td><td>Finished-goods test rows (sample date, shift, sampling by/time, black particle, bulk density, sieve residue, analysis by, remarks) + overall result PASS/FAIL/PENDING + approved by. Saving PASS posts produced qty into finished-goods stock and flips the order to READY_FOR_DISPATCH. Save allowed only when batch is COMPLETED or PARTIALLY_PRODUCED.</td><td>POST /production/:id/qc, GET /production/:id</td></tr>
+<tr><td><b>Production Complete</b> /production/complete/:id</td><td>admin, production</td><td>Completion confirmation with optional completion date.</td><td>PUT /production/:id</td></tr>
+<tr><td><b>Packing</b> /packing</td><td>admin, production, dispatch</td><td>Packing queue cards/table: order, product, order qty, packed, dispatched, remaining-to-pack, remaining-to-dispatch; Pack action opens a form (packed qty, packing material from packing catalog, material qty, packed by, remarks) with the three stock caps enforced server-side; packing history per order.</td><td>GET/POST /packing, GET /master-data (packing materials), GET /inventory/raw-materials</td></tr>
+<tr><td><b>Dispatch</b> /dispatch</td><td>admin, dispatch</td><td>Combined dashboard: ready-to-dispatch orders (with delivered/remaining) and shipment rows (status Packed/Dispatched/Delivered filters, client, date, search; paginated mode). New Dispatch form (order, qty capped at min of the three limits, date YYYY-MM-DD, packing done, shipment status, remarks); Edit and Delete per shipment; DELIVERED only when it closes the order.</td><td>GET/POST/PUT/DELETE /dispatch</td></tr>
+<tr><td><b>Dispatch Date</b> /pending-dispatch-date</td><td>admin, dispatch</td><td>Queue of ACCEPTED enquiries and APPROVED manual requests that have no order yet; entering a dispatch date converts each into a real order (address auto-filled).</td><td>GET /dispatch (dispatchDateOrders), PUT /dispatch/dispatch-date/:enquiryId, PUT /dispatch/dispatch-date/manual/:requestId</td></tr>
+<tr><td><b>Purchase Orders</b> /purchase-orders</td><td>admin, production, purchase, accounts</td><td>PO list: status chips, supplier/search/date filters, received-value total, pagination. Buttons: New PO, View, Edit (DRAFT only), Print, Delete (admin, DRAFT only), status actions per role.</td><td>GET /purchase-orders</td></tr>
+<tr><td><b>PO Form</b> /purchase-orders/new, /:id/edit</td><td>same</td><td>Supplier SearchableSelect (auto-fills contact/GST/PAN/address; creates supplier if new), category, bill-to, ship-to (4 plants), order + expected delivery dates, department, notes, discount + freight (admin/accounts only — hidden/stripped otherwise), item grid (description from item catalog, category, UoM, grade, qty, price/tax/currency only for pricers, expected delivery days, remark ≤191).</td><td>GET /purchase-orders/suppliers, POST/PUT /purchase-orders</td></tr>
+<tr><td><b>PO Detail</b> /purchase-orders/:id</td><td>same</td><td>Full PO with items, received progress per item, GRNs against it, status timeline; action buttons per role (accounts: Send to Supplier — enabled only when priced; admin: any valid transition, Delete if DRAFT).</td><td>GET /purchase-orders/:id, PATCH /purchase-orders/:id/status</td></tr>
+<tr><td><b>PO Print</b> /purchase-orders/:id/print</td><td>same</td><td>Print-ready PO document (no app shell): company letterhead from shipToLocations (GSTIN/PAN), supplier block, item table with taxes, totals, terms; window.print().</td><td>GET /purchase-orders/:id</td></tr>
+<tr><td><b>GRN List / Form / Detail</b> /grns, /grns/new, /grns/:id</td><td>list+detail: admin, purchase, accounts; form: admin</td><td>List with status filter (Draft/Confirmed badges from statusConfig). Form: pick PO (only receivable ones), received date/by, vehicle ref, warehouse location, per-item received qty against ordered. Detail: items, QC test sheet editor (sampling rows, overall result, approved-by ≠ analyst), Confirm button (enabled when QC PASS) that posts stock.</td><td>GET/POST /grns, GET /grns/:id, POST /grns/:id/qc, POST /grns/:id/confirm</td></tr>
+<tr><td><b>Raw Materials</b> /raw-materials</td><td>admin, production, purchase, accounts (adjust/import: admin+production)</td><td>Stock-on-hand table (item, category, UoM, grade, batch, total in/out, net qty — low stock first), search + category/UoM/grade filters, summary tiles; Stock Register tab by date (opening/production/dispatch/shift consumption/closing per item+batch); Manual Adjustment dialog (IN/OUT + mandatory reason); Opening-stock Excel import (delta-based).</td><td>GET /inventory/raw-materials, /stock-register, POST /inventory/adjustments, POST /inventory/import</td></tr>
+<tr><td><b>Master Data</b> /master-data</td><td>admin</td><td>Tabs: option categories (add value to products/persons/supervisors/modes/units/countryCodes), Enquiry Master rows, Customer Master table (add/edit modal, Excel import toolbar, soft delete).</td><td>GET /master-data, POST /master-data/:category, POST /master-data/enquiry-master/rows, POST/DELETE customer-master rows, POST import</td></tr>
+<tr><td><b>Supplier Data</b> /supplier-data</td><td>admin</td><td>Supplier Master table + modal + Excel import + soft delete (SO-nnn codes, GSTN, PAN, contacts, address).</td><td>POST/DELETE /master-data/supplier-master/rows, POST import</td></tr>
+<tr><td><b>Users</b> /users</td><td>admin</td><td>User table (name, email, role, created); Add/Edit modal (role dropdown of 6 roles, password ≥6); Delete with confirm.</td><td>GET/POST/PUT/DELETE /users</td></tr>
+<tr><td><b>Activity Log</b> /activity-log</td><td>admin</td><td>Paginated audit table: timestamp, actor (name/role), action, entity type/id, note, expandable old/new JSON; free-text search + action/entity filters.</td><td>GET /audit-logs</td></tr>
+<tr><td><b>NotFound</b> *</td><td>any</td><td>404 page with link home.</td><td>—</td></tr>
+</table>
+<div class="note"><b>Loading / empty / error states:</b> every page renders LoadingSpinner while fetching, an empty-state message when the list is empty, and a red Alert with the server's message (extracted by utils/apiError.js; falls back to friendly text from utils/errorMessages.js) on failure. Responsive behavior: tables become stacked cards on mobile; the sidebar becomes a drawer; a bottom quick-nav appears (ErpBottomNav).</div>
+<h1>Phase 7 - Field-Level Documentation</h1>
+<p>Fields below are the authoritative set from <code>schema.prisma</code> and the zod schemas in <code>utils/validators.js</code>. "Column" = database column; MySQL VARCHAR(191) is Prisma's String default. Where a UI label differs from the API field, both are shown.</p>
+
+<h2>7.1 Enquiry fields</h2>
+<table>
+<tr><th>Field (API)</th><th>Label</th><th>Column</th><th>Type</th><th>Required</th><th>Validation</th><th>Meaning / Example</th></tr>
+<tr><td>enquiry_date</td><td>Enquiry Date</td><td>Enquiry.enquiryDate</td><td>DateTime?</td><td>Yes (create)</td><td>string ≥4; accepts DD-MM-YYYY or ISO (parseDateInput)</td><td>Date the lead arrived. 2026-07-01</td></tr>
+<tr><td>mode_of_enquiry</td><td>Mode of Enquiry</td><td>modeOfEnquiry</td><td>String?</td><td>No</td><td>Dropdown from master (Phone, Whatsapp, Website, We Reached Out, Walk-in, Other)</td><td>Channel of the lead</td></tr>
+<tr><td>company_name</td><td>Company</td><td>companyName</td><td>String</td><td>Yes</td><td>≥2 chars; SearchableSelect fed by companyNames (customer master merged)</td><td>"ABC Polymers Pvt Ltd"</td></tr>
+<tr><td>products[]</td><td>Products</td><td>product (display string) + products (JSON)</td><td>String + Json</td><td>≥1 row</td><td>Each row: product ≥1 (must exist in products/finishedGoodsCatalog — ensureProductsExist), grade ≥1, qty optional (float), UoM optional</td><td>[{product:"ZINC STEARATE", grade:"ZS-101", quantity:"500", unit_of_measurement:"KG"}]</td></tr>
+<tr><td>quantity</td><td>Quantity</td><td>quantity</td><td>Float</td><td>Derived</td><td>positive; fractional allowed (e.g. 2.5)</td><td>Per-row quantity stored on each split row</td></tr>
+<tr><td>price / currency</td><td>Price / Currency</td><td>price Float?, currency String?</td><td></td><td>No</td><td>price ≥0; currency exactly 3 letters, uppercased ISO (normalizeCurrencyInput)</td><td>185.5 / "INR", "USD"</td></tr>
+<tr><td>unit_of_measurement</td><td>UoM</td><td>unitOfMeasurement</td><td>String?</td><td>No</td><td>Free/master; unified across rows if identical (deriveUnitOfMeasurement)</td><td>"KG"</td></tr>
+<tr><td>expected_timeline</td><td>Expected Timeline</td><td>expectedTimeline</td><td>DateTime?</td><td>Yes (create)</td><td>≥2 chars, parsed date</td><td>When the customer wants delivery; also becomes the auto-order's dispatch date</td></tr>
+<tr><td>assigned_person</td><td>Assigned Person</td><td>assignedPerson</td><td>String</td><td>Auto</td><td>Server overrides with the logged-in user's name (user.name) if present</td><td>"Sharun Mittal"</td></tr>
+<tr><td>stage</td><td>Stage</td><td>stage</td><td>enum EnquiryStage</td><td>Default GENERAL</td><td>GENERAL | SAMPLED | QUOTED; SAMPLED stamps sampledAt (12-day follow-up)</td><td>Sales progress</td></tr>
+<tr><td>is_urgent</td><td>Urgent</td><td>isUrgent</td><td>Boolean</td><td>Default false</td><td>true/"true"/1 accepted</td><td>Skips approval; auto-creates order + production</td></tr>
+<tr><td>notes_for_production</td><td>Notes for Production</td><td>notesForProduction</td><td>String?</td><td>No</td><td>—</td><td>Handling instructions</td></tr>
+<tr><td>status</td><td>Status</td><td>status</td><td>enum EnquiryStatus</td><td>Default PENDING</td><td>PENDING|ACCEPTED|HOLD|REJECTED; set only via approval endpoint</td><td>Approval state</td></tr>
+<tr><td>rejection_reason</td><td>Rejection Reason</td><td>rejectionReason</td><td>String?</td><td>When rejecting</td><td>trimmed, 1–190 chars, mandatory on REJECT</td><td>"Price not workable"</td></tr>
+<tr><td>—</td><td>Enquiry No</td><td>enquiryNumber</td><td>String?</td><td>Auto</td><td>ENQ_&lt;4-digit first-row id&gt;; shared by all rows of one submission</td><td>ENQ_0042</td></tr>
+<tr><td colspan="7">Auto/audit: id (PK), createdAt, updatedAt, createdById (FK User, Restrict), approvedById (FK User, SetNull), customerId/customerAddressId (nullable FKs, currently not populated by the create path). Search uses companyName/product/enquiryNumber/assignedPerson; filters: status, stage, assigned, expectedTimeline date.</td></tr>
+</table>
+
+<h2>7.2 Order fields</h2>
+<table>
+<tr><th>Field</th><th>Column</th><th>Type</th><th>Required</th><th>Validation / Source</th><th>Meaning</th></tr>
+<tr><td>enquiry_id</td><td>enquiryId (unique FK)</td><td>Int?</td><td>Yes for API create</td><td>Enquiry must exist, be ACCEPTED, have no order</td><td>1:1 link to source enquiry; null for MOR-created orders</td></tr>
+<tr><td>product / grade</td><td>product, grade</td><td>String</td><td>Yes</td><td>product ≥2 + catalog check; grade ≥1 ("NA" for auto-created)</td><td>What to make</td></tr>
+<tr><td>quantity</td><td>quantity</td><td>Int</td><td>Yes</td><td>positive integer; enquiry floats rounded UP (Math.ceil)</td><td>Whole units ordered</td></tr>
+<tr><td>price / currency</td><td>price, currency</td><td>Float? / String?</td><td>No</td><td>same normalizers; inherited from enquiry when omitted</td><td>Commercial terms</td></tr>
+<tr><td>unit</td><td>unit</td><td>enum Unit</td><td>Yes</td><td>KG | MT | LTR (normalizeOrderUnit maps KGS/TON/LITRE etc.)</td><td>Unit of measure</td></tr>
+<tr><td>packing_type / packing_size</td><td>packingType, packingSize</td><td>String</td><td>Yes (API), "NA" for auto-created</td><td>≥1 char</td><td>e.g. "Paper Bag" / "25 KG"</td></tr>
+<tr><td>delivery_date</td><td>deliveryDate</td><td>DateTime</td><td>Yes</td><td>≥4 chars parsed</td><td>Committed delivery</td></tr>
+<tr><td>client_name</td><td>clientName</td><td>String</td><td>Yes ≥2</td><td>CustomerMaster lookup auto-fills address block</td><td>Buyer</td></tr>
+<tr><td>address/city/pincode/state/country_code</td><td>address, city, pincode, state, countryCode</td><td>String?</td><td>Optional at create; city/pincode/state/country REQUIRED before Move-to-Production</td><td>city/state ≥2, pincode ≥4, country ≥2</td><td>Delivery location gate</td></tr>
+<tr><td>dispatch_date</td><td>dispatchDate</td><td>DateTime?</td><td>Set by dispatch-date flow</td><td>—</td><td>Planned dispatch</td></tr>
+<tr><td>status</td><td>status</td><td>enum OrderStatus</td><td>Default CREATED</td><td>CREATED → IN_PRODUCTION → READY_FOR_DISPATCH → PARTIALLY_DISPATCHED → COMPLETED (DISPATCHED legacy)</td><td>Lifecycle (auto-managed after CREATED)</td></tr>
+<tr><td>isUrgent</td><td>isUrgent</td><td>Boolean</td><td>Propagated</td><td>from enquiry</td><td>Production queue priority</td></tr>
+<tr><td>Numbers</td><td>salesGroupNumber, salesOrderNumber (unique), orderNo (unique)</td><td>String</td><td>Auto</td><td>SO_001 (per enquiry group), SO_0001, ORD-0001 — finalized post-insert from id</td><td>Business identifiers</td></tr>
+<tr><td colspan="6">Auto: id, orderDate (default now), remarks, createdAt/updatedAt, createdById. Used in search: salesOrderNumber, salesGroupNumber, orderNo, clientName, product, grade, enquiry number/company.</td></tr>
+</table>
+
+<h2>7.3 Production fields</h2>
+<table>
+<tr><th>Field</th><th>Column</th><th>Type</th><th>Validation / Default</th><th>Meaning</th></tr>
+<tr><td>order_id</td><td>orderId FK</td><td>Int</td><td>required; order CREATED/IN_PRODUCTION + location gate</td><td>Parent order (many batches per order)</td></tr>
+<tr><td>status</td><td>status</td><td>enum</td><td>PENDING default; UI labels: Not Started/Started/Partially Produced/Hold/Completed; max 2 changes; frozen after COMPLETED</td><td>Batch state</td></tr>
+<tr><td>statusChangeCount</td><td>statusChangeCount</td><td>Int</td><td>auto-incremented on real status change (raw SQL); fallback counts audit rows if column missing</td><td>Enforces the 2-change rule</td></tr>
+<tr><td>assigned_personnel</td><td>assignedPersonnel</td><td>String</td><td>default clientName or "Production Team"</td><td>Supervisor (master: supervisors)</td></tr>
+<tr><td>delivery_date</td><td>deliveryDate</td><td>DateTime</td><td>default = order deliveryDate</td><td>Batch target date</td></tr>
+<tr><td>product_specs</td><td>productSpecs</td><td>String</td><td>default "&lt;product&gt; (&lt;grade&gt;)"</td><td>Spec line</td></tr>
+<tr><td>capacity</td><td>capacity</td><td>Int</td><td>positive int; default order quantity</td><td>Batch size target</td></tr>
+<tr><td>batch_no</td><td>batchNo</td><td>String?</td><td>trimmed</td><td>Manufacturing batch code</td></tr>
+<tr><td>particle_size</td><td>particleSize</td><td>String</td><td>default "NA"</td><td>Milling spec</td></tr>
+<tr><td>acm_rpm / classifier_rpm / blower_rpm</td><td>acmRpm, classifierRpm, blowerRpm</td><td>Int</td><td>positive ints; default 1000</td><td>Machine settings (Air Classifier Mill line)</td></tr>
+<tr><td>raw_materials</td><td>rawMaterials</td><td>LongText (JSON)</td><td>the MFG blob: {rm[], additives[], catalysts[], equipment[], processParams[], batchLogs[], pulveriserRpm} — each material row {name, vendor, grade, batch_no, qty, shift}</td><td>Complete digital batch card</td></tr>
+<tr><td>produced_quantity</td><td>producedQuantity</td><td>Int default 0</td><td>0 ≤ n ≤ order.quantity; = qty auto-COMPLETED; &gt;0 → PARTIALLY_PRODUCED</td><td>Actual output so far</td></tr>
+<tr><td>productionStartedDate / productionCompletionDate</td><td>same</td><td>DateTime?</td><td>auto-stamped when leaving PENDING / on completion (fallback: completion stamps start too)</td><td>Duration reporting</td></tr>
+<tr><td>state / remarks</td><td>state String?, remarks LongText?</td><td></td><td>free text</td><td>Free-form stage note / remarks</td></tr>
+</table>
+
+<h2>7.4 Purchase Order &amp; item fields</h2>
+<table>
+<tr><th>Field</th><th>Column</th><th>Required / Validation</th><th>Meaning</th></tr>
+<tr><td>supplier_name (+supplier_email/phone/address/pincode/gst_no/pan_no)</td><td>Supplier.name etc. via find-or-create</td><td>name ≥1; email valid if given</td><td>Supplier master data updated inline from the PO form</td></tr>
+<tr><td>category / department</td><td>category, department</td><td>optional</td><td>Purchasing category (e.g. RM/PM/Consumables)</td></tr>
+<tr><td>po_number_with_category</td><td>poNumberWithCategory</td><td>optional; defaults to PO number</td><td>Display number like "PO-012/RM"</td></tr>
+<tr><td>bill_to / ship_to</td><td>billTo (default "NIMBASIA STABILIZERS"), shipTo</td><td>ship_to one of the 4 plant values</td><td>Legal entity + receiving plant</td></tr>
+<tr><td>order_date / expected_delivery_date</td><td>orderDate (default now), expectedDeliveryDate</td><td>parsed dates</td><td>Commercial dates</td></tr>
+<tr><td>total_discount / freight</td><td>totalDiscount (default 0), freight</td><td>discount ≥0; <b>admin/accounts only — stripped otherwise</b></td><td>Money fields</td></tr>
+<tr><td>items[].item_description</td><td>PurchaseOrderItem.itemId</td><td>required ≥1</td><td>Item name (free text, matches inventory itemId convention)</td></tr>
+<tr><td>items[].quantity_ordered</td><td>qty (Float)</td><td>positive</td><td>Ordered qty</td></tr>
+<tr><td>items[].unit_price / tax_percent / currency</td><td>unitPrice, taxPercent (≤100), currency (default INR)</td><td><b>pricer-only</b>; preserved from existing items when a non-pricer edits</td><td>Pricing</td></tr>
+<tr><td>items[].uom / grade / category / exp_days_delivery / batch_no / outward_key / remark(≤191)</td><td>same-named columns</td><td>optional</td><td>Item metadata</td></tr>
+<tr><td>receivedQty / receivedAt</td><td>receivedQty (default 0)</td><td>incremented only by GRN confirm; cap ordered +2%</td><td>Receipt progress</td></tr>
+<tr><td>status</td><td>status</td><td>DRAFT→SENT_TO_SUPPLIER→PARTIALLY_RECEIVED→FULLY_RECEIVED→CLOSED</td><td>Lifecycle</td></tr>
+<tr><td>totalAmount</td><td>totalAmount</td><td>computed = Σ receivedQty × unitPrice (rounded 2dp)</td><td>Received value</td></tr>
+</table>
+
+<h2>7.5 GRN, QC-sheet, Dispatch, Packing, Inventory, MOR, BOM, User fields (summary)</h2>
+<table>
+<tr><th>Entity</th><th>Fields (API → column) and rules</th></tr>
+<tr><td>GRN</td><td>po_id (required, receivable PO), received_date (default now), received_by, vehicle_ref, warehouse_location, remarks; items[]: po_item_id (must belong to PO), quantity_received ≥0 (must be &gt;0 at confirm). grnNumber auto GRN-YYYY-nnnn. status DRAFT→CONFIRMED.</td></tr>
+<tr><td>QcTestSheet(+Item)</td><td>sheet_number, overall_result PENDING/PASS/FAIL, approved_by (≠ any analysis_by, case-insensitive); items: sr_no, sampling_date, product_name (required), batch_no, mfg/expiry dates, supplier, sample_qty, test_parameter, result, analysis_by/date, remarks. approvedAt auto when result ≠ PENDING.</td></tr>
+<tr><td>FinishedGoodsTestSheet(+Item)</td><td>product_name, grade, batch_no, overall_result, approved_by; items: sr_no, sample_date, shift, sampling_by/time, black_particle, bulk_density, sieve_residue, analysis_by, remarks. PASS drives stock inward of producedQuantity.</td></tr>
+<tr><td>InProcessTestSheet(+Item)</td><td>product_name, grade, batch_no; items: analysis_date, shift, lot_no, reactor_no, sampling_by/time, free_fatty_acid, ash, moisture, appearance, melting_point, analysis_by, ffa_inform_time, remarks. Pure log.</td></tr>
+<tr><td>Dispatch</td><td>order_id (required), dispatch_quantity (positive int, ≤ min(remaining, stock, packed-undelivered)), dispatch_date (strict YYYY-MM-DD regex), packing_done (bool), shipment_status PACKING/SHIPPED/DELIVERED (labels Packed/Dispatched/Delivered; DELIVERED only if it clears remaining), remarks.</td></tr>
+<tr><td>PackingRecord</td><td>order_id, packed_quantity (positive float ≤ remaining &amp; ≤ FG stock), packing_material_item_id (≥1; from packing catalog), packing_material_qty (positive ≤ material stock), packed_by (default actor name), remarks.</td></tr>
+<tr><td>InventoryTransaction</td><td>type IN/OUT/ADJUSTMENT_IN/ADJUSTMENT_OUT (string, not enum), itemId, quantity Float, warehouseLocation, reference ("GRN-…", "Production #n", "Dispatch #n", "Packing for Order #n", "Manual Adjustment", "Excel Import - Opening Stock"), grnId/grnItemId, batchNo, shift A/B/C, category/uom/grade, importBatch, remarks. Append-only — rows are never updated or deleted.</td></tr>
+<tr><td>ManualOrderRequest</td><td>products[] (like enquiry), grade, quantity (rounded up to int), unit (normalized), packing_type/size (default "NA"), delivery_date or dispatch_date (one required), client_name (required ≥2), address/city/pincode/state/country_code, remarks. requestNumber MOR_0001; status REQUESTED→APPROVED/REJECTED→ORDER_CREATED.</td></tr>
+<tr><td>BillOfMaterial(+Item)</td><td>product+grade unique pair; items: category rm/additives/catalysts, name, vendor, grade (material grade, required), qty_per_unit (positive float), remark.</td></tr>
+<tr><td>User</td><td>name ≥2, email unique valid, password ≥6 (bcrypt-10 stored), role enum(6), passwordChangedAt (token revocation anchor).</td></tr>
+<tr><td>CustomerMaster / SupplierMaster</td><td>customer_name / supplier_name required; gstn, pan_no (supplier), country, country_code, cust_initials, s_no_code, customer_code (auto CU-001) / supplier_code (auto SO-001, unique), contact_person(+number), company_email, address, pincode, state, city; soft-delete isActive.</td></tr>
+</table>
+
+<h1>Phase 8 - Button-Level Documentation</h1>
+<table>
+<tr><th>Button</th><th>Screen</th><th>Visible to</th><th>Enabled when</th><th>Confirm?</th><th>API → backend flow → DB effect</th><th>Success / Error feedback</th></tr>
+<tr><td>Sign In</td><td>Login</td><td>all</td><td>email+password filled</td><td>No</td><td>POST /auth/login → loginUser → (legacy hash migration) → JWT</td><td>Redirect by role / 401 banner, 429 after 10 fails</td></tr>
+<tr><td>New Enquiry → Save</td><td>Enquiries</td><td>admin, sales</td><td>form valid (≥1 product row)</td><td>No</td><td>POST /enquiries → createEnquiry txn → Enquiry rows (+Order+Production if urgent) → caches invalidated</td><td>Toast; field errors highlighted from zod details</td></tr>
+<tr><td>Edit Enquiry → Save</td><td>Enquiries</td><td>admin, sales</td><td>always (server gates)</td><td>No</td><td>PUT /enquiries/:id/edit → updateEnquiry (may split rows)</td><td>409 if linked order and multi-product</td></tr>
+<tr><td>Delete Enquiry</td><td>Enquiries</td><td>admin, sales</td><td>no linked order</td><td>Yes</td><td>DELETE /enquiries/:id → audit DELETE_ENQUIRY → row deleted</td><td>400 "Cannot delete enquiry with linked order"</td></tr>
+<tr><td>Approve</td><td>Approval</td><td>admin, sales</td><td>status PENDING</td><td>Yes</td><td>PUT /enquiries/:id {ACCEPTED} → txn: enquiry ACCEPTED + Order created + audit</td><td>Toast with new order; 400 if already decided</td></tr>
+<tr><td>Reject</td><td>Approval</td><td>admin, sales</td><td>reason entered</td><td>Reason dialog</td><td>PUT /enquiries/:id {REJECTED, rejection_reason} → enquiry REJECTED + audit</td><td>400 if reason missing</td></tr>
+<tr><td>Move to Production</td><td>Orders</td><td>admin, sales</td><td>city/pincode/state/country filled; not in dispatch lifecycle</td><td>Yes</td><td>PUT /orders/:id/status → moveOrderToProduction → Production created PENDING + Order IN_PRODUCTION + audit START_PRODUCTION</td><td>400 lists missing location fields</td></tr>
+<tr><td>Edit / Delete Order</td><td>Orders</td><td>admin, sales</td><td>no production &amp; no dispatch rows</td><td>Delete: yes</td><td>PUT/DELETE /orders/:id (+audit)</td><td>400 "after production/dispatch starts"</td></tr>
+<tr><td>Approve / Reject MOR</td><td>Orders (MOR tab)</td><td>admin, sales</td><td>status REQUESTED</td><td>Yes</td><td>PUT /manual-orders/:id/status; APPROVED with dispatch date → order created in txn</td><td>400 "only once"</td></tr>
+<tr><td>Save (batch wizard steps)</td><td>Production wizard</td><td>admin, production</td><td>parse-valid</td><td>No</td><td>PUT /production/:id/edit → buildProductionUpdateData; consumption re-sync if materials changed or leaving PENDING</td><td>400 for status-limit / completed-frozen / qty over order</td></tr>
+<tr><td>Substitute Batch</td><td>Material steps</td><td>admin, production</td><td>row has batch no</td><td>Dialog (substitute + reason)</td><td>POST /production/:id/substitute-batch → stock check → ADJUSTMENT_IN + OUT ledger rows → blob row swapped → BatchSubstitution + audit</td><td>409 stale row / insufficient stock / duplicate</td></tr>
+<tr><td>Save In-Process Sheet</td><td>In-Process Testing</td><td>admin, production</td><td>≥1 row</td><td>No</td><td>POST /production/:id/in-process-test → upsert sheet+items + audit</td><td>Toast</td></tr>
+<tr><td>Save QC Sheet (FG)</td><td>QC Test Sheet</td><td>admin, production</td><td>batch COMPLETED or PARTIALLY_PRODUCED</td><td>No</td><td>POST /production/:id/qc → upsert; PASS → FG stock IN + order READY_FOR_DISPATCH; audit</td><td>400 if batch not produced yet</td></tr>
+<tr><td>Complete Production</td><td>Production list / Complete page</td><td>admin, production</td><td>not already COMPLETED</td><td>Yes</td><td>PUT /production/:id → COMPLETED + dates + order READY_FOR_DISPATCH + audit</td><td>400 "already completed"</td></tr>
+<tr><td>Delete Production</td><td>Production</td><td>admin, production</td><td>order has no dispatches</td><td>Yes</td><td>DELETE /production/:id → reverse consumption + zero FG inward + delete; order → CREATED if last batch</td><td>400 "after dispatch starts"</td></tr>
+<tr><td>Pack</td><td>Packing</td><td>admin, production, dispatch</td><td>order in packing queue</td><td>Form</td><td>POST /packing → 3 stock validations → PackingRecord + packing-material OUT + audit</td><td>400 with the exact cap exceeded</td></tr>
+<tr><td>New Dispatch → Save</td><td>Dispatch</td><td>admin, dispatch</td><td>qty ≤ shown cap</td><td>No</td><td>POST /dispatch → caps + DELIVERED rule → Dispatch row + order status sync + FG OUT sync + audit</td><td>409 no stock / nothing packed; 400 over cap</td></tr>
+<tr><td>Edit / Delete Dispatch</td><td>Dispatch</td><td>admin, dispatch</td><td>—</td><td>Delete: yes</td><td>PUT/DELETE /dispatch/:id → re-cap → ledger delta correction → order re-sync</td><td>same errors</td></tr>
+<tr><td>Set Dispatch Date</td><td>Dispatch Date</td><td>admin, dispatch</td><td>date entered</td><td>Yes</td><td>PUT /dispatch/dispatch-date/:enquiryId or /manual/:requestId → order created from enquiry/MOR</td><td>409 order exists; 400 not approved</td></tr>
+<tr><td>New PO → Save</td><td>PO Form</td><td>admin, production, purchase, accounts</td><td>supplier + ≥1 item</td><td>No</td><td>POST /purchase-orders → supplier upsert → PO DRAFT + items (pricing stripped for non-pricers) + audit</td><td>Toast with PO-nnn</td></tr>
+<tr><td>Send to Supplier</td><td>PO Detail</td><td>accounts, admin</td><td>status DRAFT and every item priced</td><td>Yes</td><td>PATCH /purchase-orders/:id/status {SENT_TO_SUPPLIER} → transition check + pricing gate</td><td>400 "Add pricing to all items before generating the PO"; 403 for accounts on any other transition</td></tr>
+<tr><td>Mark Received / Close</td><td>PO Detail</td><td>admin</td><td>valid transition</td><td>Yes</td><td>PATCH status → PARTIALLY/FULLY_RECEIVED (normally via GRN) / CLOSED</td><td>400 invalid transition</td></tr>
+<tr><td>Delete PO</td><td>PO list/detail</td><td>admin</td><td>DRAFT only</td><td>Yes</td><td>DELETE /purchase-orders/:id (cascade deletes items)</td><td>400 non-draft</td></tr>
+<tr><td>Print</td><td>PO Detail</td><td>PO roles</td><td>always</td><td>No</td><td>navigates to /purchase-orders/:id/print → window.print()</td><td>—</td></tr>
+<tr><td>New GRN → Save</td><td>GRN Form</td><td>admin</td><td>PO receivable + ≥1 item</td><td>No</td><td>POST /grns → DRAFT GRN + items snapshotting PO pricing</td><td>400 PO not in Sent status</td></tr>
+<tr><td>Save QC Sheet (GRN)</td><td>GRN Detail</td><td>admin</td><td>GRN DRAFT</td><td>No</td><td>POST /grns/:id/qc → maker≠checker rule → upsert</td><td>400 approver = analyst</td></tr>
+<tr><td>Confirm GRN</td><td>GRN Detail</td><td>admin</td><td>DRAFT + QC PASS</td><td>Yes</td><td>POST /grns/:id/confirm → txn: qty caps → PO receivedQty += → PO status/total → IN ledger rows → GRN CONFIRMED + audit</td><td>409 QC not passed; 400 over 2% tolerance</td></tr>
+<tr><td>Adjust Stock</td><td>Raw Materials</td><td>admin, production</td><td>reason ≥3 chars</td><td>Dialog</td><td>POST /inventory/adjustments → ADJUSTMENT_IN/OUT row + audit</td><td>Toast with delta</td></tr>
+<tr><td>Import Opening Stock</td><td>Raw Materials</td><td>admin, production</td><td>parsed Excel rows valid</td><td>Preview</td><td>POST /inventory/import → per-row delta adjustments + per-row audit; row errors returned</td><td>Summary imported/skipped/failed</td></tr>
+<tr><td>Export to Excel</td><td>most list pages</td><td>page's roles</td><td>rows loaded</td><td>No</td><td>client-side via utils/exportExcel.js (SheetJS) — no API</td><td>.xlsx download</td></tr>
+<tr><td>Add Value / Add Row / Import / Delete</td><td>Master Data, Supplier Data</td><td>admin</td><td>value present</td><td>Delete: yes</td><td>POST /master-data/:category, .../rows, .../import, DELETE .../rows/:id → raw-SQL upsert / isActive=0</td><td>400 read-only category / invalid category</td></tr>
+<tr><td>Add / Edit / Delete User</td><td>Users</td><td>admin</td><td>valid form</td><td>Delete: yes</td><td>POST/PUT/DELETE /users → bcrypt hash; password edit revokes sessions</td><td>409 duplicate email</td></tr>
+<tr><td>Change Password</td><td>Navbar menu</td><td>all</td><td>current + new ≥6</td><td>No</td><td>PATCH /users/me/password → verify current → hash + passwordChangedAt (logs out other sessions)</td><td>400 wrong current password</td></tr>
+<tr><td>Logout</td><td>Navbar</td><td>all</td><td>always</td><td>No</td><td>client-only: clears localStorage, navigates /login (JWT is stateless — remains technically valid until expiry)</td><td>—</td></tr>
+</table>
+
+<h1>Phase 9 - Complete Business Flows</h1>
+
+<h2>9.1 Login</h2>
+<pre>
+flowchart LR
+  A[User opens app] --> B{Token in localStorage?}
+  B -- no --> C[/login form/]
+  C --> D[POST /api/auth/login]
+  D -- 401 --> C
+  D -- 429 rate limited --> C
+  D -- 200 --> E[Store fms_token + fms_user]
+  E --> F{Role?}
+  F -- production --> G[/production/]
+  F -- dispatch --> H[/dispatch/]
+  F -- purchase/accounts --> I[/purchase-orders/]
+  F -- admin/sales --> J[/Dashboard/]
+</pre>
+
+<h2>9.2 Enquiry → Approval → Order (core sales flow)</h2>
+<pre>
+flowchart TD
+  S[Sales creates enquiry ENQ_nnnn] --> U{Urgent?}
+  U -- yes --> AO[Auto: Order CREATED->IN_PRODUCTION + Production PENDING, same txn]
+  U -- no --> P[Status PENDING in Approval queue]
+  P --> D{Decision (once only)}
+  D -- REJECT + reason --> R[REJECTED + rejectionReason + audit]
+  D -- ACCEPT --> O[createOrderFromEnquiry: SO number, address from CustomerMaster,
+                     qty rounded up, status CREATED]
+  O --> L{Location fields complete?}
+  L -- no --> LE[Sales fills city/pincode/state/country]
+  LE --> L
+  L -- yes --> MP[Move to Production -> Production PENDING, Order IN_PRODUCTION]
+</pre>
+
+<h2>9.3 Production → QC → Stock</h2>
+<pre>
+flowchart TD
+  A[Batch PENDING 'Not Started'] -->|status change 1| B[IN_PROGRESS 'Started'
+     productionStartedDate stamped
+     RM/additives/catalysts OUT ledger rows per batch+shift]
+  B --> C{produced_quantity updates}
+  C -- 0 < q < order qty --> PP[PARTIALLY_PRODUCED]
+  C -- q = order qty --> CO[COMPLETED + completion date]
+  PP --> CO
+  B -. materials edited .-> RV[reverse consumption (ADJUSTMENT_IN)
+      then re-deduct fresh OUT rows]
+  B -. bad batch .-> SUB[Batch substitution: return original batch,
+      consume substitute, BatchSubstitution record]
+  CO --> FG[Save Finished Goods Test Sheet]
+  PP --> FG
+  FG -- PASS --> ST[IN ledger row for producedQuantity
+      Order -> READY_FOR_DISPATCH]
+  FG -- FAIL/PENDING --> NS[No stock; inward zeroed if previously passed]
+</pre>
+
+<h2>9.4 Packing → Dispatch</h2>
+<pre>
+flowchart TD
+  Q[Order READY_FOR_DISPATCH / PARTIALLY_DISPATCHED
+    with a COMPLETED batch] --> PK[Pack: qty <= remaining AND <= FG stock;
+    packing material qty <= its stock -> material OUT row]
+  PK --> DQ[Dispatch: qty <= min(remaining order,
+    FG stock, packed - already dispatched)]
+  DQ --> SS{Shipment status}
+  SS -- DELIVERED only if it clears the remaining qty --> OK
+  DQ --> SY[Order sync: 0 -> READY, partial -> PARTIALLY_DISPATCHED,
+    full -> COMPLETED]
+  DQ --> LG[FG OUT ledger row 'Dispatch #id' (delta-synced on edits)]
+</pre>
+
+<h2>9.5 Purchase → GRN → Raw-material stock</h2>
+<pre>
+flowchart TD
+  R[purchase/production raises PO DRAFT
+    (no pricing fields accepted)] --> PR[accounts/admin prices items,
+    discount, freight]
+  PR --> G{All items priced?}
+  G -- no --> PR
+  G -- yes --> SS[accounts: Send to Supplier
+    (their only allowed transition)]
+  SS --> GR[admin creates GRN DRAFT against the PO]
+  GR --> QC[QC test sheet (approver must differ from analyst)]
+  QC -- PASS --> CF[Confirm GRN: qty>0, cumulative <= ordered+2%
+     -> PO receivedQty += , PO PARTIALLY/FULLY_RECEIVED,
+        IN ledger rows with batchNo, GRN CONFIRMED]
+  QC -- FAIL/PENDING --> HOLD[Confirm blocked (409)]
+  CF --> CL[admin closes PO when done]
+</pre>
+
+<h2>9.6 Reports, Logout</h2>
+<p><b>Reports flow:</b> list screens are the operational reports (filters → server query → optional Excel export client-side). The Stock Register is the only computed report: pick a date → GET /inventory/stock-register?date → ledger aggregation → table. <b>Logout:</b> client clears localStorage and routes to /login; any later 401 (expired/foreign token) triggers the same cleanup globally via the fms-auth-expired event.</p>
+<h1>Phase 10 - Database Documentation</h1>
+<p>MySQL via Prisma. 19 Prisma models + 5 runtime-created raw tables. All Prisma FKs use explicit onDelete rules; the raw tables are created with <code>CREATE TABLE IF NOT EXISTS</code> at first use so the app self-heals on fresh databases.</p>
+
+<h2>10.1 ER Diagram (Mermaid source)</h2>
+<pre>
+erDiagram
+  User ||--o{ Enquiry : "created/approved"
+  User ||--o{ Order : creates
+  User ||--o{ ManualOrderRequest : "created/approved"
+  User ||--o{ PurchaseOrder : creates
+  User ||--o{ AuditLog : acts
+  User ||--o{ BatchSubstitution : creates
+  Customer ||--o{ CustomerAddress : has
+  Customer ||--o{ Enquiry : linked
+  Customer ||--o{ Order : linked
+  Enquiry ||--o| Order : "becomes (1:1)"
+  ManualOrderRequest ||--o| Order : "becomes (1:1)"
+  Order ||--o{ Production : "batches"
+  Order ||--o{ Dispatch : shipments
+  Order ||--o{ PackingRecord : packs
+  Production ||--o| FinishedGoodsTestSheet : has
+  Production ||--o| InProcessTestSheet : has
+  Production ||--o{ BatchSubstitution : substitutions
+  FinishedGoodsTestSheet ||--o{ FinishedGoodsTestSheetItem : rows
+  InProcessTestSheet ||--o{ InProcessTestSheetItem : rows
+  BillOfMaterial ||--o{ BillOfMaterialItem : items
+  Supplier ||--o{ PurchaseOrder : receives
+  PurchaseOrder ||--o{ PurchaseOrderItem : items
+  PurchaseOrder ||--o{ GoodsReceiptNote : grns
+  GoodsReceiptNote ||--o{ GrnItem : items
+  GoodsReceiptNote ||--o| QcTestSheet : qc
+  QcTestSheet ||--o{ QcTestSheetItem : rows
+  PurchaseOrderItem ||--o{ GrnItem : "received as"
+  GoodsReceiptNote ||--o{ InventoryTransaction : posts
+  BatchSubstitution ||--|| InventoryTransaction : reversal
+  BatchSubstitution ||--|| InventoryTransaction : consumption
+</pre>
+
+<h2>10.2 Table Catalog</h2>
+<table>
+<tr><th>Table</th><th>Purpose / business reason</th><th>Key columns (type — rule)</th><th>Relations &amp; cascade</th><th>Written by</th></tr>
+<tr><td><b>User</b></td><td>Accounts + RBAC.</td><td>id PK; name; email unique; password (bcrypt); role enum(admin,sales,production,dispatch,purchase,accounts); passwordChangedAt (token revocation); createdAt. Indexes (createdAt,id), (role,createdAt).</td><td>Restrict on enquiry/order/PO creators (a user with records cannot be deleted); SetNull on approvals/audit.</td><td>userService, seed.js</td></tr>
+<tr><td><b>Customer</b> / <b>CustomerAddress</b></td><td>Normalized customer + multi-address book (newer subsystem alongside the raw CustomerMaster).</td><td>Customer: id, name unique. Address: customerId FK, address, city, pincode, state, countryCode, isDefault.</td><td>Address Cascade on customer delete; Enquiry/Order/MOR link SetNull.</td><td>customerService (routes /api/customers)</td></tr>
+<tr><td><b>Enquiry</b></td><td>Sales leads; one row per product of a submission sharing enquiryNumber.</td><td>id PK; enquiryNumber; companyName; product (display), products Json; quantity Float; price/currency; unitOfMeasurement; enquiryDate; modeOfEnquiry; customerType/enquiryType/incoTerm/country/port/lastTransaction (international fields, currently write-through only); expectedTimeline; assignedPerson; notesForProduction; status enum default PENDING; stage enum default GENERAL; sampledAt; isUrgent; rejectionReason; createdById FK Restrict; approvedById FK SetNull.</td><td>Order 1:1 (Order.enquiryId unique, Restrict).</td><td>enquiryService</td></tr>
+<tr><td><b>Order</b></td><td>Committed sales order.</td><td>id PK; enquiryId unique FK?; salesGroupNumber; salesOrderNumber unique; orderNo unique; product; grade; quantity Int; price/currency; unit enum(KG,MT,LTR); packingType/Size; deliveryDate; clientName; address block; dispatchDate; status enum default CREATED; isUrgent; orderDate; createdById FK Restrict.</td><td>Restrict from Production/Dispatch/PackingRecord (cannot delete an order with children via FK).</td><td>orderService, dispatchService.createOrderFromEnquiry, manualOrderRequestService</td></tr>
+<tr><td><b>ManualOrderRequest</b></td><td>Approval-gated no-enquiry orders.</td><td>id; requestNumber (MOR_nnnn, duplicates allowed across product rows); product/grade/quantity Int/unit/packing; dispatchDate; clientName + address block; status enum default REQUESTED; orderId unique FK SetNull; createdById Restrict; approvedById SetNull. Indexes (status,createdAt),(requestNumber),(customerId).</td><td>1:1 to Order.</td><td>manualOrderRequestService</td></tr>
+<tr><td><b>Production</b></td><td>One manufacturing batch.</td><td>id; orderId FK Restrict; status enum default PENDING; statusChangeCount Int; state; assignedPersonnel; deliveryDate; productSpecs; capacity Int; batchNo; particleSize; acm/classifier/blowerRpm Int; rawMaterials LONGTEXT (MFG JSON); remarks LONGTEXT; productionStarted/CompletionDate; producedQuantity Int default 0.</td><td>FG/In-process sheets Cascade; BatchSubstitution Cascade.</td><td>productionService, enquiryService (urgent)</td></tr>
+<tr><td><b>InProcessTestSheet(+Item)</b></td><td>Shift sampling log during the batch.</td><td>sheet: productionId unique FK Cascade; productName/grade/batchNo. Items: analysisDate, shift, lotNo, reactorNo, samplingBy/Time, freeFattyAcid, ash, moisture, appearance, meltingPoint, analysisBy, ffaInformTime, remarks.</td><td>Items Cascade; full replace on save.</td><td>productionService.saveInProcessTestSheet</td></tr>
+<tr><td><b>FinishedGoodsTestSheet(+Item)</b></td><td>Release QC for the batch — gates stock.</td><td>productionId unique FK Cascade; overallResult enum default PENDING; approvedBy/At. Items: srNo, sampleDate, shift, samplingBy/Time, blackParticle, bulkDensity, sieveResidue, analysisBy, remarks.</td><td>Items Cascade; full replace on save.</td><td>productionService.saveFinishedGoodsTestSheet</td></tr>
+<tr><td><b>Dispatch</b></td><td>One shipment against an order (partials allowed).</td><td>id; orderId FK Restrict; dispatchedQuantity Int; dispatchDate; packingDone Bool; shipmentStatus enum(PACKING,SHIPPED,DELIVERED); remarks.</td><td>—</td><td>dispatchService</td></tr>
+<tr><td><b>PackingRecord</b></td><td>Enforced packing fact consuming packing material.</td><td>id; orderId FK Restrict; packedQuantity Float; packingMaterialItemId; packingMaterialQty Float; packedBy; remarks.</td><td>—</td><td>packingService</td></tr>
+<tr><td><b>Supplier</b></td><td>Supplier register (find-or-create from PO form).</td><td>id; name unique; supplierCode (SO-nnn); contactPerson; phone; email; address; pincode; gstNo; panNo.</td><td>PO Restrict.</td><td>poService.findOrCreateSupplier</td></tr>
+<tr><td><b>PurchaseOrder(+Item)</b></td><td>Supplier order with price segregation.</td><td>PO: poNumber unique (PO-nnn); poNumberWithCategory; category; billTo; shipTo; supplierId FK Restrict; orderDate; expectedDeliveryDate; totalDiscount; freight; status enum default DRAFT; totalAmount (received value); notes TEXT; department; createdById Restrict. Item: uniqueKey unique; poId FK <b>Cascade</b>; poNumber; supplier (denormalized name); itemId; category/uom/grade; currency default INR; unitPrice/taxPercent default 0; expDaysDelivery; qty Float; receivedQty Float default 0; outwardKey; batchNo; remark; receivedAt.</td><td>Items die with the PO; GRNs Restrict PO deletion (only DRAFT deletable anyway).</td><td>poService, grnService (receivedQty)</td></tr>
+<tr><td><b>GoodsReceiptNote(+GrnItem)</b></td><td>Receipt document; stock posts on confirm.</td><td>GRN: grnNumber unique (GRN-YYYY-nnnn); poId FK Restrict; receivedDate/By; vehicleRef; warehouseLocation; status enum default DRAFT; remarks TEXT. Item: grnId Cascade; poItemId Restrict; itemId; category/grade/uom; currency/unitPrice/taxPercent (snapshot); batchNo; quantityOrdered; quantityReceived default 0; remarks.</td><td>QcTestSheet Cascade; InventoryTransaction.grnId SetNull.</td><td>grnService</td></tr>
+<tr><td><b>QcTestSheet(+Item)</b></td><td>Incoming QC per GRN.</td><td>grnId unique Cascade; sheetNumber; overallResult enum default PENDING; approvedBy/At. Items: 13 result columns (see Phase 7.5).</td><td>Items Cascade.</td><td>grnService.saveQcTestSheet</td></tr>
+<tr><td><b>InventoryTransaction</b></td><td>THE stock ledger — append-only.</td><td>id; type String (IN, OUT, ADJUSTMENT_IN, ADJUSTMENT_OUT); itemId; quantity Float; warehouseLocation; reference; grnId/grnItemId; category/uom/grade; batchNo; shift; importBatch; remarks; createdAt. Indexes (itemId), (itemId,batchNo), (grnId).</td><td>grn SetNull; 1:1 back-links from BatchSubstitution.</td><td>grnService (IN), productionService (OUT + corrections + FG IN), dispatchService (OUT + corrections), packingService (OUT), inventoryService (adjustments, imports)</td></tr>
+<tr><td><b>BatchSubstitution</b></td><td>Permanent record of a batch swap in a production job.</td><td>productionId Cascade; section; original item/batch/vendor/grade; quantity Int; substitute item/batch/vendor/grade; reason; reversalTransactionId unique FK; consumptionTransactionId unique FK; createdById Restrict.</td><td>Links the exact pair of ledger rows.</td><td>productionService.substituteProductionBatch</td></tr>
+<tr><td><b>BillOfMaterial(+Item)</b></td><td>Recipe per product+grade.</td><td>unique(product,grade); items: category, name, vendor, grade, qtyPerUnit Float, remark; bomId Cascade.</td><td>—</td><td>bomService</td></tr>
+<tr><td><b>AuditLog</b> (raw)</td><td>Who did what, with before/after values; 30-day retention.</td><td>action; entityType; entityId; actorId FK SetNull; actorName/Role (denormalized so history survives user deletion); oldValue/newValue LONGTEXT JSON; note; createdAt. Indexes (entityType,entityId), (action,createdAt), (createdAt).</td><td>—</td><td>auditService (raw INSERT)</td></tr>
+<tr><td><b>MasterDataItem / EnquiryMaster / CustomerMaster / SupplierMaster</b> (raw)</td><td>Configurable dropdown values and the customer/supplier registers used across sales and purchasing; soft-delete via isActive.</td><td>See DDL in masterDataService.js §Phase 2. Unique keys: (category,value); (mode,company,product,person); customerCode; supplierCode.</td><td>—</td><td>masterDataService (raw upserts)</td></tr>
+</table>
+
+<h3>Insert / Update / Delete flows per table (summary)</h3>
+<ul>
+<li><b>Insert-then-finalize pattern:</b> Order, PO, GRN and MOR-created orders are inserted with TMP-/TSO- placeholder numbers, then immediately updated with the id-derived business number — guarantees uniqueness without a counter table.</li>
+<li><b>Replace-children pattern:</b> all QC sheets and BOMs update via <code>deleteMany + create</code> of items inside the upsert.</li>
+<li><b>Ledger discipline:</b> InventoryTransaction is never updated/deleted; corrections are new ADJUSTMENT rows (reversal, delta sync, opening-stock delta).</li>
+<li><b>Sample records:</b> Enquiry {enquiryNumber:"ENQ_0042", companyName:"ABC Polymers", product:"ZINC STEARATE - ZS101 - 500 KG", status:"ACCEPTED"}; InventoryTransaction {type:"OUT", itemId:"Stearic Acid", quantity:120, batchNo:"SA-2607", shift:"A", reference:"Production #17"}.</li>
+</ul>
+
+<h1>Phase 11 - API Documentation</h1>
+<p>Base URL <code>/api</code>. All endpoints except the three health endpoints, login and the cron endpoint require <code>Authorization: Bearer &lt;JWT&gt;</code>. Content type JSON (limit 1 MB). Errors: <code>{message, errors?}</code> where <code>errors</code> is a map of field → messages for zod failures. Status codes used: 200/201, 400 validation/business rule, 401 auth, 403 role, 404 not found, 409 conflict, 429 login throttle, 500/503 server/database. List endpoints accept <code>page</code> and <code>limit</code> (limit omitted/0 = full list; caps: 100 default, 500 audit/PO, 200 inventory) and return either an array or <code>{items, pagination:{page,limit,total,totalPages}}</code>.</p>
+
+<table>
+<tr><th>Endpoint</th><th>Method</th><th>Roles (+admin always)</th><th>Body / query (validated by)</th><th>Behavior (controller → service)</th></tr>
+<tr><td>/auth/login</td><td>POST</td><td>public (rate-limited 10/15min/IP)</td><td>{email, password≥6} loginSchema</td><td>authController.login → loginUser → {token, user}</td></tr>
+<tr><td>/users</td><td>GET/POST</td><td>admin</td><td>createUserSchema</td><td>list (paginated) / create (409 dup email)</td></tr>
+<tr><td>/users/:id</td><td>PUT/DELETE</td><td>admin</td><td>updateUserSchema</td><td>update (password change revokes tokens) / delete (404)</td></tr>
+<tr><td>/users/me/password</td><td>PATCH</td><td>any authenticated</td><td>{current_password, new_password≥6}</td><td>changePassword (400 wrong current)</td></tr>
+<tr><td>/enquiries</td><td>GET</td><td>admin, sales</td><td>?status&amp;stage&amp;q&amp;assigned&amp;date&amp;page&amp;limit</td><td>listEnquiries (12s cache)</td></tr>
+<tr><td>/enquiries</td><td>POST</td><td>admin, sales</td><td>createEnquirySchema</td><td>createEnquiry (multi-row txn; urgent auto-chain)</td></tr>
+<tr><td>/enquiries/:id</td><td>PUT</td><td>admin, sales</td><td>{status: ACCEPTED|REJECTED, rejection_reason?}</td><td>updateEnquiryStatus (one-shot; ACCEPT creates order)</td></tr>
+<tr><td>/enquiries/:id/edit</td><td>PUT</td><td>admin, sales</td><td>updateEnquirySchema (partial)</td><td>updateEnquiry (may split rows; 409 with linked order)</td></tr>
+<tr><td>/enquiries/:id</td><td>DELETE</td><td>admin, sales</td><td>—</td><td>deleteEnquiry (400 with linked order)</td></tr>
+<tr><td>/manual-orders</td><td>GET / POST</td><td>GET: admin,sales,dispatch; POST: admin,sales</td><td>createManualOrderRequestSchema</td><td>list / create MOR_nnnn rows</td></tr>
+<tr><td>/manual-orders/:id/status</td><td>PUT</td><td>admin, sales</td><td>{status: APPROVED|REJECTED}</td><td>approve (creates order if dispatch date) / reject; once only</td></tr>
+<tr><td>/manual-orders/:id/dispatch-date</td><td>PUT</td><td>admin, dispatch</td><td>{dispatch_date}</td><td>creates the order for an APPROVED MOR (409 if order exists)</td></tr>
+<tr><td>/orders</td><td>GET / POST</td><td>admin, sales</td><td>?status&amp;q&amp;client&amp;date / createOrderSchema</td><td>list (cache) / create from ACCEPTED enquiry</td></tr>
+<tr><td>/orders/:id</td><td>PUT / DELETE</td><td>admin, sales</td><td>updateOrderSchema</td><td>edit/delete blocked once production/dispatch exists</td></tr>
+<tr><td>/orders/:id/status</td><td>PUT</td><td>admin, sales</td><td>{status:"IN_PRODUCTION"}</td><td>moveOrderToProduction (location gate)</td></tr>
+<tr><td>/production</td><td>GET / POST</td><td>admin, production</td><td>?q&amp;status&amp;company&amp;date / createProductionSchema</td><td>queue (urgent→FIFO) / start batch</td></tr>
+<tr><td>/production/:id</td><td>GET / PUT / DELETE</td><td>admin, production</td><td>completeProductionSchema (PUT = complete)</td><td>detail (P2021-tolerant) / complete / delete (reverses ledger)</td></tr>
+<tr><td>/production/:id/edit</td><td>PUT</td><td>admin, production</td><td>updateProductionSchema</td><td>field edits + status rules + consumption sync</td></tr>
+<tr><td>/production/:id/qc</td><td>POST</td><td>admin, production</td><td>saveFinishedGoodsTestSheetSchema</td><td>FG sheet upsert; PASS → stock + order READY</td></tr>
+<tr><td>/production/:id/in-process-test</td><td>POST</td><td>admin, production</td><td>saveInProcessTestSheetSchema</td><td>in-process sheet upsert</td></tr>
+<tr><td>/production/:id/substitute-batch</td><td>POST</td><td>admin, production</td><td>substituteProductionBatchSchema</td><td>atomic batch swap (409 stale/insufficient/duplicate)</td></tr>
+<tr><td>/production/:id/substitutions</td><td>GET</td><td>admin, production</td><td>—</td><td>substitution history</td></tr>
+<tr><td>/bom, /bom/lookup?product&amp;grade, /bom/:id</td><td>GET</td><td>admin, production</td><td>—</td><td>list / recipe lookup / detail</td></tr>
+<tr><td>/bom, /bom/import, /bom/:id</td><td>POST / POST / DELETE</td><td>admin</td><td>saveBomSchema / importBomSchema</td><td>upsert / bulk import / delete</td></tr>
+<tr><td>/packing</td><td>GET / POST</td><td>admin, production, dispatch</td><td>createPackingRecordSchema</td><td>queue with packed math / record packing (3 caps)</td></tr>
+<tr><td>/dispatch</td><td>GET</td><td>admin, dispatch</td><td>?q&amp;status&amp;client&amp;date&amp;paginated=1</td><td>dashboard: readyOrders + dispatches + dispatchDateOrders</td></tr>
+<tr><td>/dispatch</td><td>POST</td><td>admin, dispatch</td><td>createDispatchSchema (date regex YYYY-MM-DD)</td><td>createDispatch (caps + DELIVERED rule + syncs)</td></tr>
+<tr><td>/dispatch/:id</td><td>PUT / DELETE</td><td>admin, dispatch</td><td>updateDispatchSchema</td><td>edit (re-cap + ledger delta) / delete (reverse + resync)</td></tr>
+<tr><td>/dispatch/dispatch-date/:enquiryId</td><td>PUT</td><td>admin, dispatch</td><td>{dispatch_date}</td><td>convert ACCEPTED enquiry → order</td></tr>
+<tr><td>/dispatch/dispatch-date/manual/:requestId</td><td>PUT</td><td>admin, dispatch</td><td>{dispatch_date}</td><td>convert APPROVED MOR → order</td></tr>
+<tr><td>/purchase-orders/suppliers</td><td>GET</td><td>production, purchase, accounts</td><td>—</td><td>supplier id+name list (must precede /:id route)</td></tr>
+<tr><td>/purchase-orders</td><td>GET / POST</td><td>production, purchase, accounts</td><td>?status&amp;supplier&amp;q&amp;date_from&amp;date_to / createPurchaseOrderSchema</td><td>list (received totals) / create DRAFT (pricing stripped for non-pricers)</td></tr>
+<tr><td>/purchase-orders/:id</td><td>GET / PUT / DELETE</td><td>GET+PUT: same three; DELETE: admin</td><td>updatePurchaseOrderSchema</td><td>detail / edit DRAFT only / delete DRAFT only</td></tr>
+<tr><td>/purchase-orders/:id/status</td><td>PATCH</td><td>accounts (admin via override)</td><td>{status} updatePOStatusSchema</td><td>transition machine; accounts pinned to SENT_TO_SUPPLIER; pricing gate</td></tr>
+<tr><td>/grns</td><td>GET / POST</td><td>GET: purchase, accounts; POST: admin</td><td>?status&amp;po_id&amp;q / createGRNSchema</td><td>list / create DRAFT against receivable PO</td></tr>
+<tr><td>/grns/:id</td><td>GET</td><td>purchase, accounts</td><td>—</td><td>detail with items, QC, PO</td></tr>
+<tr><td>/grns/:id/qc / /grns/:id/confirm</td><td>POST</td><td>admin</td><td>saveQcTestSheetSchema / —</td><td>QC upsert (maker≠checker) / confirm (posts stock)</td></tr>
+<tr><td>/inventory/raw-materials, /item-ids, /item-batches?item_id, /stock-register?date</td><td>GET</td><td>admin, production, purchase, accounts</td><td>?search&amp;category&amp;uom&amp;grade</td><td>stock on hand / item autocomplete / batch options with availability / daily register</td></tr>
+<tr><td>/inventory/adjustments / /inventory/import</td><td>POST</td><td>admin, production</td><td>stockAdjustmentSchema / importInventoryOpeningStockSchema</td><td>manual adjustment / delta-based bulk import</td></tr>
+<tr><td>/master-data</td><td>GET</td><td>admin, sales, production, dispatch</td><td>—</td><td>full options snapshot + enquiry/customer/supplier masters (30s cache)</td></tr>
+<tr><td>/master-data/:category</td><td>POST</td><td>admin</td><td>{value, label?}</td><td>add option (only 6 editable categories)</td></tr>
+<tr><td>/master-data/enquiry-master/rows, /customer-master/rows(+/import, DELETE /:id), /supplier-master/rows(+/import, DELETE /:id)</td><td>POST/DELETE</td><td>admin</td><td>respective schemas</td><td>raw-SQL upserts, bulk import with per-row errors, soft delete</td></tr>
+<tr><td>/customers, /customers/:id, /customers/:customerId/addresses, /customers/addresses/:id</td><td>GET/POST/PATCH/DELETE</td><td><b>any authenticated user</b></td><td>ad-hoc controller checks (no zod)</td><td>Customer + address CRUD (newer subsystem)</td></tr>
+<tr><td>/audit-logs</td><td>GET</td><td>admin</td><td>?q&amp;action&amp;entityType&amp;page&amp;limit(≤500)</td><td>runs retention purge then lists</td></tr>
+<tr><td>/dashboard, /dashboard/summary</td><td>GET</td><td>admin, sales</td><td>—</td><td>KPI summary (10s cache)</td></tr>
+<tr><td>/diagnostics/mysql</td><td>GET</td><td>admin</td><td>—</td><td>direct mysql2 ping of DATABASE_URL</td></tr>
+<tr><td>/cron/audit-retention</td><td>GET</td><td>CRON_SECRET header (x-cron-secret or Bearer)</td><td>—</td><td>retention purge; 403 without the secret</td></tr>
+<tr><td>/, /api, /api/health</td><td>GET</td><td>public</td><td>—</td><td>liveness JSON</td></tr>
+</table>
+
+<h3>Example request/response</h3>
+<pre>
+POST /api/dispatch
+Authorization: Bearer eyJ...
+{ "order_id": 57, "dispatch_quantity": 200, "dispatch_date": "2026-07-12",
+  "packing_done": true, "shipment_status": "SHIPPED", "remarks": "Part 1 of 2" }
+
+201 → { "id": 91, "orderId": 57, "dispatchedQuantity": 200, "dispatchDate": "2026-07-12T00:00:00.000Z",
+        "packingDone": true, "shipmentStatus": "SHIPPED", "remarks": "Part 1 of 2", "createdAt": "..." }
+
+400 → { "message": "Dispatch quantity cannot exceed available packed quantity (150)." }
+409 → { "message": "No packed quantity available for this order yet — pack it before dispatching." }
+</pre>
+
+<h1>Phase 12 - Code Flow (key function traces)</h1>
+<table>
+<tr><th>Function</th><th>Called by</th><th>Input → Output</th><th>Rules / exceptions / performance notes</th></tr>
+<tr><td>authService.loginUser</td><td>authController ← POST /auth/login</td><td>(email, password) → {token, user}</td><td>Constant-time legacy compare; silent bcrypt migration; JWT carries pwc. Throws 401 on any mismatch (identical message).</td></tr>
+<tr><td>authMiddleware</td><td>every protected route</td><td>Bearer header → req.user</td><td>One DB read per request (User by id) — hot path; pwc mismatch = forced re-login.</td></tr>
+<tr><td>createEnquiry</td><td>enquiryController</td><td>payload+user → row(s)</td><td>Interactive txn (15s timeout); N inserts + N number-updates for N products; urgent path adds order+production per row. Product catalog check does a master-data load (cached 30s).</td></tr>
+<tr><td>updateEnquiryStatus</td><td>enquiryController ← PUT /:id</td><td>(id, status, approver, reason) → enquiry</td><td>Single-shot guard; ACCEPT delegates to createOrderFromEnquiry inside the txn; audit row inside txn.</td></tr>
+<tr><td>createOrderFromEnquiry</td><td>enquiry approval, dispatch-date flow, urgent chain</td><td>(enquiry, dispatchDate, actor, tx) → order</td><td>Column-existence probe for dispatchDate (INFORMATION_SCHEMA, cached); CustomerMaster fuzzy lookup; sales-group resolution scans orders of the same enquiry number; qty Math.ceil.</td></tr>
+<tr><td>startProductionFromOrder</td><td>moveOrderToProduction, createProduction</td><td>(order, actor, payload, client) → {production, order}</td><td>Status + location gates; defaults from order (capacity=qty, RPM=1000); order flips IN_PRODUCTION.</td></tr>
+<tr><td>updateProduction</td><td>productionController ← PUT /:id/edit</td><td>(id, payload, actor) → production</td><td>Status-change counter (raw SQL column or audit-count fallback); produced-quantity bounds + auto status; leavingPending stamps start date; consumption re-sync = reverseProductionConsumption (grouped by item+batch+shift) then createMany of fresh OUT rows — idempotent under repeated edits.</td></tr>
+<tr><td>saveFinishedGoodsTestSheet</td><td>productionController ← POST /:id/qc</td><td>(id, payload, actor) → production detail</td><td>Allowed only for COMPLETED/PARTIALLY_PRODUCED; syncFinishedGoodsInward writes only the delta vs prior inward (PASS→FAIL zeroes it); order promoted to READY_FOR_DISPATCH on PASS if still IN_PRODUCTION.</td></tr>
+<tr><td>substituteProductionBatch</td><td>productionController</td><td>(id, payload, actor) → {production, substitution}</td><td>Optimistic concurrency vs the MFG row; getAvailableInventoryQty(substitute, batch) must cover qty; duplicate-substitution guard; txn creates the reversal+consumption pair and links them in BatchSubstitution.</td></tr>
+<tr><td>createDispatch / updateDispatch / deleteDispatch</td><td>dispatchController</td><td>payload → dispatch</td><td>Caps recomputed excluding the row being edited; syncDispatchOutward writes ledger deltas; syncOrderDispatchStatus recomputes the order status from the SUM of dispatches. All inside a 30s txn.</td></tr>
+<tr><td>confirmGRN</td><td>grnController</td><td>id → grn</td><td>Whole flow in one txn: QC gate, per-item caps (+2%), receivedQty increments, PO status/total recompute, createMany IN rows, GRN locked.</td></tr>
+<tr><td>getAvailableInventoryQty</td><td>dispatch, packing, substitution, imports</td><td>(itemId, batchNo?) → number</td><td>Single groupBy on the ledger — O(distinct types); indexed by (itemId,batchNo).</td></tr>
+<tr><td>getStockRegister</td><td>inventoryController</td><td>date → rows</td><td>Two groupBys (before-day opening, in-day by shift); ADJUSTMENT_IN with a shift nets against that shift's consumption (reversal-aware).</td></tr>
+<tr><td>recordAuditEvent</td><td>every write service</td><td>event → void</td><td>Raw INSERT; failures logged and swallowed so auditing can never break business writes (trade-off: auditing is best-effort).</td></tr>
+<tr><td>getOrLoadCached</td><td>all list services</td><td>(key, ttl, loader) → data</td><td>Coalesces concurrent identical loads (stampede protection); prefix invalidation on writes.</td></tr>
+</table>
+
+<h1>Phase 13 - Master Data</h1>
+<table>
+<tr><th>Master</th><th>Exists?</th><th>Why / who maintains / where used</th></tr>
+<tr><td>Product</td><td>Yes (MasterDataItem "products" + finishedGoodsCatalog)</td><td>Admin adds via Master Data screen; validated on every enquiry/order product (ensureProductsExist); production specs; dispatch/packing stock lookups use the product name as inventory itemId.</td></tr>
+<tr><td>Customer (Buyer)</td><td>Yes — CustomerMaster (raw) + newer Customer/CustomerAddress tables</td><td>Admin maintains (rows + Excel import); auto-fills order delivery addresses (fuzzy name/code lookup); merges into companyNames dropdown. CU-nnn codes auto-generated.</td></tr>
+<tr><td>Vendor/Supplier</td><td>Yes — SupplierMaster (raw, admin screen) + Supplier (Prisma, auto-maintained from PO form)</td><td>PO supplier picker; GST/PAN print on the PO document; SO-nnn codes.</td></tr>
+<tr><td>Item / Category / Unit</td><td>Items are free-form ids unified across PO→GRN→ledger; categories via masters/PO items; units master (KG/MT/LTR) + UoM strings</td><td>Item ids autocomplete from the ledger (/inventory/item-ids).</td></tr>
+<tr><td>Employee-like lists</td><td>assignedPersons (sales owners) and supervisors (production)</td><td>Admin-editable dropdown categories.</td></tr>
+<tr><td>Warehouse / Location</td><td>Partially — warehouseLocation free text on GRN/ledger; SHIP_TO_LOCATIONS hard-coded 4 plants (frontend config)</td><td>Plant addresses/GSTIN print on POs; changing plants requires a code change.</td></tr>
+<tr><td>Company / Branch</td><td>Bill-to default "NIMBASIA STABILIZERS"; branches = the 4 ship-to plants</td><td>—</td></tr>
+<tr><td>Tax / GST</td><td>Per-PO-item taxPercent; GSTN captured on customer/supplier masters; no tax engine</td><td>Accounts enters tax % when pricing.</td></tr>
+<tr><td>State / City / Country</td><td>Free-text fields + countryCodes master (default only "IN")</td><td>Order location gate uses them as mandatory strings.</td></tr>
+<tr><td>Model / Mechanism / Seater / Shade</td><td><b>Do not exist</b> — not applicable to this business domain (chemical manufacturing, not furniture/vehicles).</td><td>—</td></tr>
+<tr><td>Enquiry Master</td><td>Yes — pre-approved combinations (mode, company, product, person)</td><td>Feeds/extends the dropdowns on the enquiry form.</td></tr>
+<tr><td>Packing materials / Raw materials catalogs</td><td>Yes — static lists in masterData.js seeded to MasterDataItem</td><td>Packing form material picker; BOM/material pickers.</td></tr>
+</table>
+
+<h1>Phase 14 - Transaction Flow</h1>
+<table>
+<tr><th>Action</th><th>Where it exists and what happens</th></tr>
+<tr><td>Create</td><td>All modules; numbered documents use insert-then-finalize; heavy flows are Prisma interactive transactions with audit rows inside.</td></tr>
+<tr><td>Edit</td><td>Enquiry (until order linked), Order (until production/dispatch), Production (status ≤2 changes, frozen after COMPLETED), PO (DRAFT only), GRN QC (DRAFT only), Dispatch (re-capped, ledger delta-corrected), Users, Masters.</td></tr>
+<tr><td>Delete</td><td>Enquiry (no order), Order (no production/dispatch), Production (no dispatch; reverses ledger), Dispatch (reverses ledger + resync), PO (DRAFT), BOM, User, master rows (soft delete). GRNs and QC sheets cannot be deleted; packing records cannot be deleted (only add — a correction requires a stock adjustment).</td></tr>
+<tr><td>Approve / Reject</td><td>Enquiry (once, reason on reject), MOR (once), PO release (accounts), QC results (PASS/FAIL with approver identity), GRN confirm.</td></tr>
+<tr><td>Cancel / Reopen / Close</td><td>No generic cancel/reopen exists. Close: PO FULLY_RECEIVED→CLOSED (admin). Orders complete automatically at full dispatch. Enquiry HOLD status exists in the enum but no endpoint sets it (see Bug Analysis).</td></tr>
+<tr><td>Inventory impact</td><td>Documented per flow in Phase 15; every stock movement carries a human-readable reference to its source document.</td></tr>
+<tr><td>Ledger (financial) impact</td><td>None — no accounting ledger exists; PO totalAmount is informational (received value).</td></tr>
+<tr><td>Audit + rollback</td><td>Every state change records an AuditLog event with old/new values; DB rollback via transactions; business "rollback" = reversal entries (never destructive edits) in inventory.</td></tr>
+</table>
+
+<h1>Phase 15 - Inventory Flow</h1>
+<table>
+<tr><th>Movement</th><th>Trigger</th><th>Ledger rows written</th></tr>
+<tr><td>GRN receipt</td><td>confirmGRN (QC PASS)</td><td>IN per item: qty received, batchNo, warehouse label, reference GRN-YYYY-nnnn</td></tr>
+<tr><td>Production consumption</td><td>batch leaves PENDING, or materials edited on an active batch</td><td>OUT per material row (item, batch, shift, rounded qty, ref "Production #id"); edits first write ADJUSTMENT_IN reversals grouped by item+batch+shift, then fresh OUTs</td></tr>
+<tr><td>Finished-goods inward</td><td>FG test sheet saved with PASS</td><td>IN for producedQuantity (delta vs prior inward; PASS→FAIL correction writes ADJUSTMENT_OUT)</td></tr>
+<tr><td>Packing</td><td>createPackingRecord</td><td>OUT of the packing material (ref "Packing for Order #id")</td></tr>
+<tr><td>Dispatch</td><td>create/update/delete dispatch</td><td>OUT of the finished good delta-synced to the row's dispatchedQuantity; downward edits write ADJUSTMENT_IN corrections</td></tr>
+<tr><td>Batch substitution</td><td>substituteProductionBatch</td><td>ADJUSTMENT_IN (original item+batch) + OUT (substitute item+batch), linked 1:1 from BatchSubstitution</td></tr>
+<tr><td>Manual adjustment</td><td>admin/production with reason</td><td>ADJUSTMENT_IN/OUT, ref "Manual Adjustment"</td></tr>
+<tr><td>Opening-stock import</td><td>Excel stock take</td><td>Delta adjustment per row toward the target qty (history preserved), tagged importBatch IMPORT-&lt;ts&gt;</td></tr>
+</table>
+<p><b>Available stock</b> = Σ(IN + ADJUSTMENT_IN) − Σ(OUT + ADJUSTMENT_OUT), per item or per item+batch. <b>Blocked stock:</b> not modeled — produced-but-not-QC-passed goods simply never enter the ledger, which is the blocking mechanism. <b>Valuation / FIFO / LIFO:</b> not implemented; the ledger tracks quantities only (unit prices live on PO/GRN items but are never rolled into stock value). Batch selection during production is manual (user picks the batch from availability), not automatic FIFO. <b>Returns / replacement / damage:</b> no dedicated flows — handled via manual adjustments with reasons; batch substitution covers in-production material swaps.</p>
+<h1>Phase 16 - Authentication &amp; Security</h1>
+<table>
+<tr><th>Concern</th><th>Implementation (verified in code)</th></tr>
+<tr><td>Login</td><td>POST /auth/login; zod-validated; express-rate-limit 10 failures / 15 min / IP (successes exempt).</td></tr>
+<tr><td>Password hashing</td><td>bcryptjs cost 10. Legacy plain-text accounts compared via SHA-256 digests + <code>timingSafeEqual</code> (constant-time) and transparently re-hashed to bcrypt on first successful login.</td></tr>
+<tr><td>JWT</td><td>HS256, secret from JWT_SECRET (production refuses to boot if &lt;32 chars), expiry JWT_EXPIRES_IN (default 7d). Payload: id, email, role, name, pwc.</td></tr>
+<tr><td>Token revocation</td><td>The <code>pwc</code> claim (passwordChangedAt ms) is checked against the DB on every request — changing a password instantly invalidates all outstanding tokens. There is <b>no refresh token</b>; sessions simply expire.</td></tr>
+<tr><td>Password reset / forgot password</td><td><b>Not implemented.</b> Users change their own password (must know the current one); admin resets via the Users screen.</td></tr>
+<tr><td>Authorization</td><td>allowRoles middleware per endpoint; admin universal bypass; deep rules in services (pricing stripping, accounts single transition, GRN admin-only writes). Client-side ProtectedRoute + role-filtered nav are UX only.</td></tr>
+<tr><td>SQL injection</td><td>Prisma parameterized everywhere; raw SQL uses tagged templates ($queryRaw) or parameterized $executeRawUnsafe with ? placeholders. The only string-interpolated SQL is table/column DDL from constants — no user input reaches SQL text. Audit LIKE search parameters are bound (%...% passed as params).</td></tr>
+<tr><td>XSS</td><td>React escaping (no dangerouslySetInnerHTML found); API is JSON-only; helmet sets standard headers. Tokens in localStorage are readable by any successful XSS — acceptable for an internal tool but noted in Improvements.</td></tr>
+<tr><td>CSRF</td><td>Not applicable in the classic sense: auth is a Bearer header (not cookies), so cross-site requests cannot attach credentials.</td></tr>
+<tr><td>CORS</td><td>Explicit allowlist with wildcard support (e.g. https://*.vercel.app); denial by header omission (never a 500); credentials: true.</td></tr>
+<tr><td>Rate limiting</td><td>Login only. Other endpoints unthrottled (internal tool).</td></tr>
+<tr><td>Error hygiene</td><td>5xx messages are generic; raw messages surface only for intentional &lt;500 errors; stack traces never leave the server (console only).</td></tr>
+<tr><td>Secrets</td><td>.env via dotenv (DATABASE_URL, JWT_SECRET, CRON_SECRET). <b>Warning:</b> backend/.env is present in the working tree — ensure it is gitignored and rotated if ever committed.</td></tr>
+<tr><td>Cron endpoint</td><td>GET /api/cron/audit-retention self-authenticates via CRON_SECRET (x-cron-secret or Bearer); 403 otherwise, including when the secret is unset.</td></tr>
+<tr><td>Session storage</td><td>localStorage fms_token/fms_user; global 401 interceptor logs out all tabs' state in the current tab; logout is client-side only (stateless JWT).</td></tr>
+</table>
+
+<h1>Phase 17 - Validations (complete inventory)</h1>
+<h2>17.1 Frontend</h2>
+<p>HTML5 required/typed inputs, SearchableSelect constraining to catalog values, quantity caps pre-filled from server data (e.g. dispatchable qty), userValidation.js (email/password checks on the Users form), date pickers emitting the formats the backend parses. Frontend validation is advisory; the server re-validates everything.</p>
+<h2>17.2 Backend (zod, per schema — utils/validators.js)</h2>
+<table>
+<tr><th>Schema</th><th>Rules (beyond types)</th></tr>
+<tr><td>loginSchema</td><td>email format; password ≥6</td></tr>
+<tr><td>create/updateUserSchema</td><td>name ≥2; email; password ≥6; role ∈ 6 roles</td></tr>
+<tr><td>changePasswordSchema</td><td>current required; new ≥6</td></tr>
+<tr><td>createEnquirySchema</td><td>enquiry_date ≥4; company ≥2; superRefine: ≥1 normalized product row; product rows: product ≥1, grade ≥1; price ≥0; currency = 3 chars; expected_timeline ≥2</td></tr>
+<tr><td>updateEnquiryStatusSchema</td><td>status ∈ {ACCEPTED, REJECTED}; rejection_reason 1–190, required when REJECTED (superRefine)</td></tr>
+<tr><td>createOrderSchema / updateOrderSchema</td><td>product ≥2, grade ≥1, quantity positive int, unit ≥1, packing ≥1, delivery_date ≥4, client ≥2, city ≥2, pincode ≥4, state ≥2, country ≥2 (address/country allow "")</td></tr>
+<tr><td>createManualOrderRequestSchema</td><td>client_name ≥2; ≥1 product; delivery_date or dispatch_date required (superRefine)</td></tr>
+<tr><td>moveOrderToProductionSchema</td><td>literal IN_PRODUCTION only</td></tr>
+<tr><td>create/updateProductionSchema</td><td>capacity/RPMs positive ints; produced_quantity ≥0 int; status ∈ {PENDING, IN_PROGRESS, HOLD, COMPLETED} (PARTIALLY_PRODUCED only via produced_quantity)</td></tr>
+<tr><td>completeProductionSchema</td><td>optional completion_date</td></tr>
+<tr><td>stockAdjustmentSchema</td><td>item ≥1; quantity &gt;0; direction IN/OUT; reason ≥3</td></tr>
+<tr><td>importInventoryOpeningStockSchema</td><td>≥1 row; each: item_id ≥1, quantity ≥0</td></tr>
+<tr><td>createDispatchSchema / updateDispatchSchema</td><td>order_id +int; dispatch_quantity +int; dispatch_date regex ^\d{4}-\d{2}-\d{2}$; shipment_status enum</td></tr>
+<tr><td>createPackingRecordSchema</td><td>packed_quantity &gt;0; material id ≥1; material qty &gt;0</td></tr>
+<tr><td>createPurchaseOrderSchema / update…</td><td>supplier_name ≥1; items ≥1; item: description ≥1, qty &gt;0, unit_price ≥0 (default 0), tax 0–100, remark ≤191; supplier_email format</td></tr>
+<tr><td>updatePOStatusSchema</td><td>status ∈ {DRAFT, SENT_TO_SUPPLIER, PARTIALLY_RECEIVED, FULLY_RECEIVED, CLOSED} (APPROVED enum value exists in DB but is not settable)</td></tr>
+<tr><td>createGRNSchema</td><td>po_id +int; items ≥1: po_item_id +int, quantity_received ≥0</td></tr>
+<tr><td>saveQcTestSheetSchema / FG / in-process sheets</td><td>≥1 test row; overall_result enum; per-row date formats ≥4 when present; QC item product_name required</td></tr>
+<tr><td>saveBomSchema / importBomSchema</td><td>category enum rm/additives/catalysts; grade required; qty_per_unit &gt;0</td></tr>
+<tr><td>substituteProductionBatchSchema</td><td>section enum; row_index ≥0; original/substitute item+batch ≥1; quantity +int</td></tr>
+<tr><td>master schemas</td><td>customer_name/supplier_name required (trimmed preprocessor); import = array ≥1 of the row schema</td></tr>
+</table>
+<h2>17.3 Business validations (service layer)</h2>
+<p>Documented inline in Phases 5, 8 and 12 — the authoritative list: enquiry one-shot approval + reason; product catalog membership; enquiry split/delete guards; order-from-ACCEPTED-only + 1:1 enquiry-order; order edit/delete freeze; location gate; production status-change limit + completion freeze; produced ≤ ordered; QC-gated FG stock; substitution concurrency/stock/duplicate guards; packing triple cap; dispatch triple cap + DELIVERED rule; PO DRAFT-only editing + pricing segregation + transition machine + pricing gate; GRN receivable-PO gate + maker≠checker + PASS-before-confirm + 2% over-receipt tolerance; adjustment reason; MOR one-shot decision. <b>Database validations:</b> unique keys (emails, order numbers, PO/GRN numbers, product+grade BOM, supplier name, customer/supplier codes), FK Restrict/Cascade/SetNull rules, NOT NULL columns, enum domains.</p>
+<h2>17.4 Cross-field validations</h2>
+<ul>
+<li>rejection_reason required iff status = REJECTED.</li>
+<li>MOR: delivery_date XOR dispatch_date (at least one).</li>
+<li>DELIVERED shipment status requires dispatch qty = remaining qty.</li>
+<li>QC approved_by must differ from every analysis_by (case-insensitive).</li>
+<li>Substitute batch must differ from the original item+batch pair.</li>
+<li>PO release requires Σ(qty × unitPrice) &gt; 0 across items.</li>
+</ul>
+
+<h1>Phase 18 - Reports</h1>
+<table>
+<tr><th>Report</th><th>Users</th><th>Filters / grouping / calculations</th><th>Export</th></tr>
+<tr><td>Dashboard KPIs + 6-month trend + status mix</td><td>admin, sales</td><td>Fixed 6-month window; conversion % = orders-with-enquiry / enquiries; monthly GROUP BY createdAt.</td><td>On-screen (charts)</td></tr>
+<tr><td>Stock on hand (Raw Materials)</td><td>admin, production, purchase, accounts</td><td>search/category/UoM/grade filters; totals in/out/net per item; low-stock-first sort; summary tiles.</td><td>Excel (client)</td></tr>
+<tr><td>Daily Stock Register</td><td>same</td><td>Per item+batch for a chosen date: opening, production(in), dispatch(out), consumption by shift A/B/C, closing.</td><td>Excel (client)</td></tr>
+<tr><td>Enquiry / Order / Production / Dispatch / PO / GRN lists</td><td>per-module roles</td><td>Module filters (status, stage, client, supplier, dates, search); these are the operational registers.</td><td>Excel via utils/exportExcel.js</td></tr>
+<tr><td>Activity Log</td><td>admin</td><td>action/entity/actor search; pagination to 500.</td><td>On-screen</td></tr>
+<tr><td>PO document</td><td>PO roles</td><td>Print-ready with letterhead, GSTIN, taxes.</td><td>Browser print/PDF</td></tr>
+</table>
+<p>No scheduled/emailed reports and no report builder exist.</p>
+
+<h1>Phase 19 - Notifications</h1>
+<table>
+<tr><th>Channel</th><th>Status</th></tr>
+<tr><td>Toast (in-app)</td><td>Yes — GlobalNotification listens to a window event bus; success/error toasts fired by pages after API calls.</td></tr>
+<tr><td>Alerts / banners</td><td>Yes — Alert component for form and page errors; login redirect message after session expiry; sample follow-up reminder (12-day) computed client-side (utils/followUps.js).</td></tr>
+<tr><td>Email / SMS / WhatsApp / Push</td><td><b>Not implemented.</b> No mail/SMS libraries in package.json; sw.js does not handle push events. All triggers/templates/recipients: N/A.</td></tr>
+</table>
+
+<h1>Phase 20 - Audit Log</h1>
+<p>Implemented in auditService.js against the raw AuditLog table. Captured on every event: <b>action</b> (e.g. CREATE_ORDER, APPROVE_ENQUIRY, REJECT_ENQUIRY, START_PRODUCTION, UPDATE_PRODUCTION, COMPLETE_PRODUCTION, SAVE_FINISHED_GOODS_TEST_SHEET, SAVE_IN_PROCESS_TEST_SHEET, SUBSTITUTE_PRODUCTION_BATCH, DELETE_*, CREATE_DISPATCH, UPDATE_DISPATCH, CREATE_PACKING_RECORD, CREATE/UPDATE/UPDATE_STATUS/DELETE (PO), CONFIRM (GRN), SAVE_QC_TEST_SHEET, INVENTORY_ADJUSTMENT, INVENTORY_OPENING_STOCK_IMPORT, SAVE_BOM…), <b>entityType + entityId</b>, <b>actor</b> (id FK + denormalized name and role so history survives user deletion), <b>oldValue / newValue</b> JSON snapshots, <b>note</b> (human sentence), <b>createdAt</b>.</p>
+<ul>
+<li><b>Created/Updated/Deleted/Approved by:</b> derivable from the action + actor columns; entities additionally carry createdById/approvedById FKs.</li>
+<li><b>History:</b> Activity Log screen (admin), searchable; per-entity history queryable by (entityType, entityId) index.</li>
+<li><b>Retention:</b> AUDIT_LOG_RETENTION_DAYS (default 30) purged on every list call and via the cron endpoint.</li>
+<li><b>Reliability caveat:</b> audit writes are best-effort (failures swallowed) and some (e.g. PO events) are written after the transaction commits, so an audit row can be lost on a crash between commit and audit write.</li>
+</ul>
+
+<h1>Phase 21 - Configuration</h1>
+<table>
+<tr><th>Item</th><th>Where</th><th>Meaning / default</th></tr>
+<tr><td>PORT</td><td>backend .env</td><td>HTTP port; default 5001 (README says 5000 — env.js wins)</td></tr>
+<tr><td>DATABASE_URL</td><td>.env</td><td>mysql://user:pass@host:3306/db</td></tr>
+<tr><td>JWT_SECRET / JWT_EXPIRES_IN</td><td>.env</td><td>≥32 chars mandatory in production / "7d"</td></tr>
+<tr><td>CLIENT_ORIGIN</td><td>.env</td><td>Comma list, * wildcards; defaults cover localhost:5174/4173, 192.168.1.*, app.nimbasia.com</td></tr>
+<tr><td>CRON_SECRET</td><td>.env</td><td>Shared secret for the retention cron endpoint</td></tr>
+<tr><td>AUDIT_LOG_RETENTION_DAYS</td><td>.env</td><td>Default 30</td></tr>
+<tr><td>PRISMA_STARTUP_CHECK</td><td>.env</td><td>"false" skips the boot connectivity check (diagnostics mode)</td></tr>
+<tr><td>NODE_ENV</td><td>env</td><td>production switches morgan format, JWT strictness, error verbosity</td></tr>
+<tr><td>VITE_API_URL</td><td>frontend .env.production</td><td>https://manage.nimbasia.com/api; empty in dev → /api proxy to localhost:5001</td></tr>
+<tr><td>Constants</td><td>code</td><td>SAMPLED_FOLLOW_UP_DAYS=12; MAX_PRODUCTION_STATUS_CHANGES=2; GRN over-receipt 1.02; cache TTLs 10–30s; login limiter 10/15min; JSON limit 1 MB; pagination caps 100/200/500</td></tr>
+<tr><td>Enums</td><td>schema.prisma</td><td>Role(6), EnquiryStatus(4), EnquiryStage(3), OrderStatus(6), ManualOrderRequestStatus(4), ProductionStatus(5), Unit(3), ShipmentStatus(3), PurchaseOrderStatus(7), GrnStatus(2), QcResult/FgQcResult(3)</td></tr>
+<tr><td>Cron / scheduler</td><td>external</td><td>Only /api/cron/audit-retention; no in-process schedulers. Feature flags: none.</td></tr>
+</table>
+
+<h1>Phase 22 - Deployment</h1>
+<h2>Local setup</h2>
+<pre>
+# Backend
+cd backend
+npm install                 # postinstall runs prisma generate
+cp .env.example .env        # set DATABASE_URL (MySQL), JWT_SECRET
+npx prisma migrate dev
+npm run seed                # WIPES operational data; creates admin@gmail.com/123456 (+sales/production/dispatch)
+npm run dev                 # nodemon on PORT (default 5001)
+
+# Frontend
+cd frontend-hostinger
+npm install
+npm run dev                 # Vite on 5174, /api proxied to localhost:5001
+</pre>
+<h2>Production</h2>
+<ul>
+<li><b>Backend option A (VPS/PM2):</b> backend/deploy.sh — git pull, npm install, prisma migrate deploy, pm2 restart nimbasia-backend. Set NODE_ENV=production, strong JWT_SECRET, CLIENT_ORIGIN=https://app.nimbasia.com, CRON_SECRET. Served at https://manage.nimbasia.com.</li>
+<li><b>Backend option B (Vercel serverless):</b> api/index.js exports the Express app; configure a Vercel cron hitting /api/cron/audit-retention with the secret.</li>
+<li><b>Frontend:</b> <code>npm run build</code> in frontend-hostinger; upload dist/ to Hostinger; public/.htaccess provides the SPA rewrite; VITE_API_URL baked at build time from .env.production.</li>
+<li><b>Fresh shared-hosting DB:</b> run <code>npx prisma migrate deploy</code> — the migrations in prisma/migrations are the single source of truth for the schema. (backend/database.sql only adds the customer tables to an existing DB; the 5 raw tables self-create at runtime.)</li>
+<li><b>No Docker / docker-compose / CI-CD pipelines exist in the repository.</b> Versions: Node 18+ (ESM, node:test), Prisma 6, Express 4, React 18, Vite 5, Tailwind 3, MySQL 8.</li>
+</ul>
+
+<h1>Phase 23 - Testing</h1>
+<h2>23.1 Existing automated tests</h2>
+<p>Backend (node:test, 18 files): auth flows incl. legacy migration, audit retention + initialization, dispatch caps, enquiry product handling + split, commerce/order-unit normalizers, order→production flow, production service rules, role middleware, sales numbering, seed config, env config, prisma proxy retry, mysql health parsing, API root. Frontend (11 files): apiBaseUrl legacy rewrites, approval filters, audit-log formatting, dataSync, dispatch history/ordering/status options, error messages, navigation role filtering, record ordering, user validation. No integration/E2E suite and no test runner script is defined in package.json (run via <code>node --test test/</code>).</p>
+<h2>23.2 Key scenarios to maintain (selection of the high-value cases)</h2>
+<table>
+<tr><th>Area</th><th>Cases (positive / negative / boundary)</th></tr>
+<tr><td>Auth</td><td>valid login per role; wrong password (same 401 text as unknown email); 11th failure → 429; expired token → 401 + global logout; password change invalidates old token (pwc); legacy account migrates to bcrypt.</td></tr>
+<tr><td>Enquiry/Approval</td><td>multi-product create shares number; urgent creates order+production atomically; approve twice → 400; reject without reason → 400; reason of exactly 190/191 chars; edit-split with linked order → 409; catalog-invalid product → 400.</td></tr>
+<tr><td>Order</td><td>create from PENDING enquiry → 400; second order for same enquiry → 409; move-to-production without pincode → 400 listing "Pincode"; edit after a production exists → 400; qty 7.5 enquiry → order qty 8.</td></tr>
+<tr><td>Production</td><td>3rd status change → 400; change after COMPLETED → 400; produced_quantity &gt; order qty → 400; = qty auto-completes; consumption re-sync after editing materials leaves net consumption exactly equal to the latest list; delete after dispatch → 400; delete last batch resets order to CREATED, non-last doesn't.</td></tr>
+<tr><td>QC / stock</td><td>FG sheet on PENDING batch → 400; PASS adds exactly producedQuantity; re-save PASS→FAIL zeroes inward; GRN confirm without PASS → 409; approver = analyst → 400; receipt at ordered×1.02 passes, above fails.</td></tr>
+<tr><td>Packing/Dispatch</td><td>pack over remaining/stock/material → 400 each; dispatch with nothing packed → 409; dispatch over min-cap → 400; DELIVERED with partial qty → 400; edit dispatch down writes ADJUSTMENT_IN; delete dispatch restores stock and reverts order status; sum of partial dispatches = order qty → COMPLETED.</td></tr>
+<tr><td>PO/GRN</td><td>purchase-role create with unit_price in body → stored price 0; accounts PATCH to CLOSED → 403; release unpriced PO → 400; edit non-DRAFT → 400; GRN for DRAFT PO → 400; GRN item from another PO → 400.</td></tr>
+<tr><td>RBAC</td><td>each role × each endpoint matrix (Phase 4.2); admin bypass; sales hitting /production → 403 (API) and redirect (UI).</td></tr>
+<tr><td>Regression / edge</td><td>pagination boundaries (page 0, limit 0, limit &gt; cap); date formats DD-MM-YYYY vs ISO; duplicate concurrent submissions (cache coalescing); ledger never negative after any documented sequence; P2021 missing-table fallback returns empty lists.</td></tr>
+</table>
+
+<h1>Phase 24 - Bug Analysis (found during this review)</h1>
+<table>
+<tr><th>#</th><th>Severity</th><th>Finding (file)</th><th>Suggested fix</th></tr>
+<tr><td>1</td><td>High</td><td><b>customerService.js</b> uses <code>mode: "insensitive"</code> in a Customer name filter — unsupported by Prisma on MySQL; GET /api/customers?q=… throws a PrismaClientValidationError (500-family response).</td><td>Remove <code>mode</code> (MySQL default collation is already case-insensitive).</td></tr>
+<tr><td>2</td><td>High</td><td><b>customerRoutes.js</b> has no <code>allowRoles</code> — any authenticated role (e.g. dispatch) can create customers and delete addresses; controllers also skip zod validation.</td><td>Add role guards + schemas consistent with other masters.</td></tr>
+<tr><td>3</td><td>High</td><td><b>customerService.js</b> creates its own <code>new PrismaClient()</code>, bypassing the shared retry proxy and adding a second connection pool.</td><td>Import the shared client from config/prisma.js.</td></tr>
+<tr><td>4</td><td>Medium</td><td><b>Race conditions in number generation:</b> getNextSalesGroupNumber / MOR numbers / supplier &amp; customer codes compute max+1 by scanning all rows without locking — two concurrent creates can collide (MOR requestNumber duplicates were even legalized by migration 20260420183000).</td><td>Use a counter table with atomic UPDATE … LAST_INSERT_ID(), or unique constraint + retry.</td></tr>
+<tr><td>5</td><td>Medium</td><td><b>Dispatch/packing stock caps are checked outside the write transaction</b> (getAvailableInventoryQty before $transaction) — two simultaneous dispatches of the last stock can both pass and drive the ledger negative.</td><td>Re-check inside the transaction (SELECT … FOR UPDATE on a stock summary, or re-run the groupBy inside tx and abort).</td></tr>
+<tr><td>6</td><td>Medium</td><td><b>Enquiry HOLD status and PO APPROVED status</b> exist in enums/DB but no endpoint can set them; updatePOStatusSchema omits APPROVED. Dead states confuse reporting.</td><td>Either implement or remove from enums.</td></tr>
+<tr><td>7</td><td>Medium</td><td><b>updateEnquiry</b> single-product path passes <code>payload.product</code> (possibly a raw string) straight to the update when products was undefined, and doesn't clear approval fields; also allows editing ACCEPTED enquiries' quantities after an order exists (order keeps stale qty).</td><td>Freeze commercially relevant fields once an order is linked.</td></tr>
+<tr><td>8</td><td>Medium</td><td><b>Packing consumes packing material even if the same order is packed twice erroneously; no packing-record delete/edit</b> — corrections require a manual stock adjustment that doesn't touch the PackingRecord, so the dispatch cap stays inflated.</td><td>Add packing-record void with material reversal.</td></tr>
+<tr><td>9</td><td>Low</td><td><b>seed.js is destructive</b> (deletes all enquiries/orders/productions/dispatches and the audit log) yet is chained into <code>npm run db:deploy</code> — a careless production deploy wipes operational data.</td><td>Split "ensure admin" from "wipe demo data"; guard with NODE_ENV.</td></tr>
+<tr><td>10</td><td>Low</td><td><b>Duplicate/near-duplicate product entries</b> in masterData.js ("ZINC STEARATE" and "Zinc Stearate", test value "ABC") — the case-insensitive catalog check tolerates it, but inventory itemIds are case-sensitive strings, so FG stock can split across two spellings.</td><td>Normalize casing; remove "ABC".</td></tr>
+<tr><td>11</td><td>Low</td><td><b>README is stale:</b> claims PostgreSQL, port 5000, 4 roles — actual: MySQL, 5001, 6 roles.</td><td>Update README.</td></tr>
+<tr><td>12</td><td>Low</td><td><b>In-memory caches (response cache, master-data cache, dispatchDate column probe)</b> are per-process: with &gt;1 instance (e.g. Vercel), writes on one instance leave stale reads up to TTL on others; ensureAuditLogTable/ensureMasterDataInitialized run per cold start.</td><td>Acceptable at current scale; document; consider Redis if scaled out.</td></tr>
+<tr><td>13</td><td>Low</td><td><b>Audit rows written post-commit</b> in some flows (PO create/update, MOR approve) can be lost on crash; recordAuditEvent swallows failures silently.</td><td>Move inside tx where feasible; add a metric/log counter.</td></tr>
+<tr><td>14</td><td>Low</td><td><b>backend/*.log files and .env tracked in the working tree</b>; frontend/ legacy duplicate invites divergent edits; many unused icon PNGs.</td><td>Gitignore/cleanup.</td></tr>
+<tr><td>15</td><td>Info</td><td><b>No DB-level pairing between Dispatch and inventory itemId:</b> dispatch outward uses order.product as itemId — renaming a product in master data orphans historical stock rows (netting breaks across names).</td><td>Introduce an item master with stable ids (see Improvements).</td></tr>
+</table>
+
+<h1>Phase 25 - Performance Review</h1>
+<ul>
+<li><b>N-row scans for numbering</b> (orders, MOR, supplier codes): O(all rows) per create — fine at thousands, degrade later (same fix as Bug #4).</li>
+<li><b>Dispatch full dashboard</b> loads all dispatchable orders + all dispatches + all orders for sales-group mapping in memory; the paginated mode still fetches everything then slices. Push filtering/pagination into SQL when volume grows.</li>
+<li><b>Ledger groupBys</b> are indexed and aggregate at the DB — good; the ledger only grows, so consider periodic snapshot/rollup rows after a few hundred thousand transactions.</li>
+<li><b>getRawMaterialInventory</b> loads every "IN" receipt to find last-received metadata — could be a MAX(createdAt) per item query.</li>
+<li><b>Caching:</b> 10–30s TTL in-memory caches with request coalescing on all hot lists; writes invalidate cross-module prefixes correctly. authMiddleware does one user SELECT per request (could cache briefly).</li>
+<li><b>Frontend:</b> all routes lazy-loaded (code splitting); VirtualizedTableBody windows large tables; Excel export is client-side (no server load); master data fetched once per session per 30s TTL. Bundle: xlsx is the heaviest dependency — consider dynamic import at export time.</li>
+<li><b>No N+1 query patterns found</b> (selects use nested Prisma select; GRN confirm loops per item inside one txn — acceptable for typical item counts).</li>
+<li><b>Payloads:</b> compression enabled &gt;1 KB; selects.js keeps list payloads trimmed.</li>
+</ul>
+
+<h1>Phase 26 - Improvements</h1>
+<table>
+<tr><th>Area</th><th>Recommendation</th></tr>
+<tr><td>Architecture</td><td>Extract the 5 raw-SQL tables into Prisma models (they predate migration access on shared hosting); introduce an Item master with stable IDs referenced by PO/GRN/ledger/BOM/product; delete the legacy frontend/.</td></tr>
+<tr><td>Security</td><td>Shorter JWT expiry + refresh tokens; password reset flow; per-endpoint rate limiting; role guards + validation on /customers; consider httpOnly cookie transport; secret rotation runbook.</td></tr>
+<tr><td>Data integrity</td><td>Counter-table numbering; in-transaction stock re-checks; DB CHECK constraints for non-negative quantities; convert InventoryTransaction.type to an enum.</td></tr>
+<tr><td>Scalability</td><td>Redis (or DB-backed) shared cache when moving to multiple instances; move dispatch dashboard composition into SQL; ledger rollups.</td></tr>
+<tr><td>Maintainability</td><td>Add npm test scripts + CI (GitHub Actions: lint, node --test, vite build); update README; TypeScript or JSDoc types on services; extract magic constants to config.</td></tr>
+<tr><td>UI/UX</td><td>Server-driven follow-up notifications (currently computed client-side); per-entity history view (audit is already queryable by entity); bulk actions on lists; barcode/QR on batch numbers.</td></tr>
+<tr><td>Database</td><td>Indexes on Order.status, Production.status, Dispatch.orderId (workloads filter these constantly); archive strategy for AuditLog beyond 30 days if compliance needs longer.</td></tr>
+<tr><td>APIs</td><td>OpenAPI spec generated from the zod schemas; consistent {items,pagination} envelope for all lists.</td></tr>
+<tr><td>Testing</td><td>Integration suite against a disposable MySQL (testcontainers) covering the Phase 23 matrix; Playwright smoke for the 6 role journeys.</td></tr>
+<tr><td>Deployment</td><td>Dockerfile + compose (api + mysql) for reproducible dev; CI/CD with migration gating; remove seed wipe from db:deploy.</td></tr>
+</table>
+<h1>Phase 27 - Complete User Manual</h1>
+
+<h2>27.1 Getting started (all users)</h2>
+<ol>
+<li>Open the app URL (production: https://app.nimbasia.com). On mobile you can "Add to Home Screen" — it installs as an app (PWA).</li>
+<li>Sign in with the email and password your administrator gave you. [Screenshot: Login page]</li>
+<li>You land on your role's home screen. The left sidebar (☰ on mobile) shows only what your role can use. The top-right menu lets you change your password or log out.</li>
+<li><b>Tip:</b> changing your password signs you out everywhere else automatically — that is intentional.</li>
+<li><b>Common mistake:</b> more than 10 wrong passwords in 15 minutes locks logins from your network for a few minutes — wait, don't keep retrying.</li>
+</ol>
+
+<h2>27.2 Sales user guide</h2>
+<h3>Recording an enquiry</h3>
+<ol>
+<li>Sales → Enquiries → <b>New Enquiry</b>.</li>
+<li>Pick the enquiry date and mode (Phone/WhatsApp/…), choose the company (start typing — existing customers appear), and add one row per product: product (from the catalogue), grade, quantity, unit. [Screenshot: Enquiry form]</li>
+<li>Set the expected timeline (this later becomes the planned dispatch date), optional price + 3-letter currency, and the stage (General / Sampled / Quoted).</li>
+<li>Tick <b>Urgent</b> only for genuine rush jobs — the system will immediately create the order and a production job without waiting for approval.</li>
+<li><b>Warning:</b> a product that isn't in the master catalogue will be rejected — ask an admin to add it under Master Data first.</li>
+<li><b>Tip:</b> when you mark a stage as Sampled, the list shows a follow-up reminder after 12 days.</li>
+</ol>
+<h3>Approving / rejecting (admin or sales)</h3>
+<ol>
+<li>Sales → Approval. Review the pending enquiry. <b>This decision can be made exactly once.</b></li>
+<li>Approve → the sales order is created automatically with the customer's address pre-filled.</li>
+<li>Reject → you must type a reason (kept on record and audit-logged).</li>
+</ol>
+<h3>Orders</h3>
+<ol>
+<li>Sales → Orders. Complete the delivery location (city, pincode, state, country) — production cannot start without it.</li>
+<li>Click <b>Move to Production</b>. After that, the order can no longer be edited or deleted.</li>
+<li>For an order without an enquiry, use the <b>Manual Order Request</b> flow; it must be approved, and dispatch sets its date to create the real order.</li>
+<li><b>FAQ:</b> "Why can't I edit the order?" — production or a dispatch already exists against it; corrections happen downstream (batch card / dispatch records).</li>
+</ol>
+
+<h2>27.3 Production user guide</h2>
+<ol>
+<li>Production → Production. Your queue is ordered urgent-first, then oldest-first. [Screenshot: Production queue]</li>
+<li>Open a batch → work through the steps: Batch Setup (batch no, capacity, personnel) → Raw Materials / Additives / Catalyst (pick items and <b>batch numbers from stock</b> — availability is shown; record the shift A/B/C) → Equipment → Process Params → Operation Log.</li>
+<li>Setting the batch to <b>Started</b> deducts raw-material stock. <b>You may change the batch status at most twice</b>, and never after Completed — plan the change.</li>
+<li>If a material batch is bad, use <b>Substitute Batch</b> on its row — never just retype the batch number; substitution returns the old stock, consumes the new, and keeps the traceability record.</li>
+<li>Record in-process test rows each shift (Production → In-Process Testing).</li>
+<li>Update <b>Produced Quantity</b> as output accumulates — reaching the order quantity completes the batch automatically.</li>
+<li>Save the <b>QC Test Sheet</b> with overall result. Only a <b>Pass</b> puts the goods into stock and makes the order dispatchable. The approver must be a different person from the analyst.</li>
+<li><b>Common mistake:</b> completing the batch but forgetting the QC sheet — dispatch will see "No finished goods stock available".</li>
+</ol>
+
+<h2>27.4 Packing &amp; Dispatch user guide</h2>
+<ol>
+<li>Production/Dispatch → Packing: pick the order, enter packed quantity and the packing material + quantity used. The system blocks over-packing versus order or stock. [Screenshot: Packing]</li>
+<li>Dispatch → Dispatch: <b>New Dispatch</b> — quantity is capped at the least of (remaining order, stock, packed-but-not-dispatched). Date must be YYYY-MM-DD.</li>
+<li>Choose the shipment status: Packed / Dispatched / <b>Delivered only when this shipment closes the whole remaining quantity</b>.</li>
+<li>Dispatch → Dispatch Date: approved enquiries and manual requests that still need an order — enter the dispatch date to create the order.</li>
+<li><b>FAQ:</b> "Dispatch says nothing is packed" — record packing first; packing is a tracked step, not a checkbox.</li>
+</ol>
+
+<h2>27.5 Purchasing guide (purchase / accounts)</h2>
+<ol>
+<li><b>purchase role:</b> Purchasing → Purchase Orders → New PO. Choose/enter the supplier (details auto-fill and update the register), the receiving plant (Ship To), and the items with quantities. You will not see price fields — that is by design.</li>
+<li><b>accounts role:</b> open the draft PO, enter unit prices, tax %, currency, discount and freight, then <b>Send to Supplier</b>. This is your only lifecycle action; it is blocked until every item is priced.</li>
+<li><b>admin:</b> when goods arrive, create the GRN against the PO, record received quantities (up to ordered +2%), complete the QC sheet (approver ≠ analyst), then <b>Confirm</b> — stock is posted and the PO progresses to Partially/Fully Received; Close it when done.</li>
+<li>Purchasing → Raw Materials shows live stock and the daily Stock Register; admins/production can post reasoned adjustments or import an opening stock take from Excel.</li>
+</ol>
+
+<h2>27.6 Administrator guide</h2>
+<ul>
+<li><b>Users:</b> create accounts with one of six roles; reset passwords (the user is signed out everywhere).</li>
+<li><b>Master Data:</b> add products/persons/supervisors/modes/units/country codes; maintain Customer Master (codes CU-nnn) and Supplier Master (SO-nnn) with Excel import; deletes are soft (rows deactivate).</li>
+<li><b>Activity Log:</b> the audit trail of every action, searchable; kept 30 days.</li>
+<li><b>Warnings:</b> never run <code>npm run seed</code> against production (it wipes operational data); keep JWT_SECRET and CRON_SECRET private and long.</li>
+</ul>
+
+<h1>Phase 28 - Developer Guide</h1>
+<h2>28.1 Conventions</h2>
+<table>
+<tr><th>Aspect</th><th>Convention in this codebase</th></tr>
+<tr><td>Language/module style</td><td>ES modules everywhere ("type":"module"); async/await; no TypeScript.</td></tr>
+<tr><td>API naming</td><td>REST-ish plural resources; snake_case request bodies; camelCase responses (Prisma shapes); business numbers formatted server-side.</td></tr>
+<tr><td>Layering</td><td>route → (auth, roles, zod) → controller (thin) → service (rules + Prisma + audit + cache) → DB. Controllers never import Prisma.</td></tr>
+<tr><td>Errors</td><td>Throw <code>new Error(msg)</code> with <code>error.statusCode</code>; let errorMiddleware translate. Prisma error codes are mapped centrally.</td></tr>
+<tr><td>DB access</td><td>Prisma with shared select shapes from utils/selects.js; interactive $transaction for multi-write flows; raw SQL only for the 5 bootstrap tables and column probes, always parameterized.</td></tr>
+<tr><td>Caching</td><td>getOrLoadCached(prefix-key, ttl, loader); every write calls invalidateCacheByPrefix for its module AND downstream modules.</td></tr>
+<tr><td>Audit</td><td>Call recordAuditEvent({action, entityType, entityId, user, oldValue, newValue, note, tx}) inside the transaction for any state change.</td></tr>
+<tr><td>Frontend</td><td>Pages under src/pages, lazy-loaded in App.jsx; data via the shared axios client; shared UI from components/common; role lists duplicated in App.jsx routes and navigation.js (keep in sync — navigationRoles.test.js guards it).</td></tr>
+</table>
+<h2>28.2 How to add a new module (checklist)</h2>
+<ol>
+<li>Model in schema.prisma → <code>npx prisma migrate dev --name add_x</code>.</li>
+<li>Select shape in utils/selects.js; zod schemas in utils/validators.js.</li>
+<li>Service in src/services/xService.js (rules, transactions, audit, cache invalidation).</li>
+<li>Controller + route file; mount in app.js with authMiddleware + allowRoles.</li>
+<li>Frontend: page in src/pages, lazy route + role group in App.jsx, sidebar entry in config/navigation.js (update navigationRoles.test.js).</li>
+<li>Tests: service rules in backend/test; any pure frontend helper in frontend-hostinger/test.</li>
+</ol>
+<h2>28.3 Debugging</h2>
+<ul>
+<li>morgan logs every request; 5xx bodies are generic — read the server console for the real error.</li>
+<li>DB connectivity: GET /api/diagnostics/mysql (admin) bypasses Prisma; PRISMA_STARTUP_CHECK=false boots the API in diagnostics mode.</li>
+<li>Missing tables (fresh DB) return empty lists by design (P2021 fallback) — run migrations if a list is unexpectedly empty.</li>
+<li>Stock questions: query InventoryTransaction by itemId/reference — the ledger is the single source of truth.</li>
+</ul>
+
+<h1>Phase 29 - Flowcharts (Mermaid sources)</h1>
+<p>Phase 3 (architecture), Phase 9 (login, sales, production/QC, packing/dispatch, purchasing) and Phase 10 (ER) contain the primary diagrams. Additional sources:</p>
+<pre>
+sequenceDiagram
+  autonumber
+  participant B as Browser
+  participant A as authMiddleware
+  participant R as allowRoles
+  participant V as validateBody
+  participant C as Controller
+  participant S as Service
+  participant D as MySQL
+  B->>A: request + Bearer JWT
+  A->>D: SELECT user (id) + passwordChangedAt
+  A-->>B: 401 if invalid/pwc mismatch
+  A->>R: req.user
+  R-->>B: 403 if role not allowed (admin bypass)
+  R->>V: body
+  V-->>B: 400 {errors} on zod failure
+  V->>C: validatedBody
+  C->>S: service call
+  S->>D: transaction (writes + AuditLog)
+  S-->>C: result (cache invalidated)
+  C-->>B: JSON
+</pre>
+<pre>
+stateDiagram-v2
+  [*] --> CREATED : order created (enquiry/MOR)
+  CREATED --> IN_PRODUCTION : move to production (location gate)
+  IN_PRODUCTION --> READY_FOR_DISPATCH : batch completed / FG QC PASS
+  READY_FOR_DISPATCH --> PARTIALLY_DISPATCHED : partial dispatch
+  PARTIALLY_DISPATCHED --> COMPLETED : dispatched = ordered
+  READY_FOR_DISPATCH --> COMPLETED : full dispatch
+  CREATED --> [*] : delete (only before production)
+</pre>
+<pre>
+stateDiagram-v2
+  [*] --> DRAFT : PO created (pricing stripped for non-pricers)
+  DRAFT --> SENT_TO_SUPPLIER : accounts/admin (all items priced)
+  SENT_TO_SUPPLIER --> PARTIALLY_RECEIVED : GRN confirm (partial)
+  SENT_TO_SUPPLIER --> FULLY_RECEIVED : GRN confirm (complete)
+  PARTIALLY_RECEIVED --> FULLY_RECEIVED : further GRNs
+  FULLY_RECEIVED --> CLOSED : admin
+  DRAFT --> [*] : delete (admin)
+</pre>
+<pre>
+flowchart LR
+  subgraph Error handling
+    E1[Service throws error.statusCode] --> EM[errorMiddleware]
+    E2[Prisma P-codes] --> EM
+    E3[zod failure 400 + field errors] --> EM
+    EM -->|<500| MSG[real message to client]
+    EM -->|>=500| GEN[generic message + console.error]
+  end
+</pre>
+
+<h1>Phase 30 - Glossary, Notes, Warnings, Best Practices, References</h1>
+<h2>Glossary</h2>
+<table>
+<tr><th>Term</th><th>Definition</th></tr>
+<tr><td>FMS</td><td>Internal name of this system (Flow/Factory Management System).</td></tr>
+<tr><td>ENQ / SO / MOR / PO / GRN</td><td>Enquiry, Sales Order, Manual Order Request, Purchase Order, Goods Receipt Note numbers.</td></tr>
+<tr><td>MFG blob</td><td>JSON batch card stored in Production.rawMaterials.</td></tr>
+<tr><td>Ledger</td><td>InventoryTransaction table — append-only stock history.</td></tr>
+<tr><td>pwc</td><td>JWT claim carrying passwordChangedAt for token revocation.</td></tr>
+<tr><td>Pricer</td><td>A user allowed to see/set PO pricing (admin or accounts).</td></tr>
+<tr><td>FIFO queue</td><td>Production ordering: urgent first, then oldest created first.</td></tr>
+<tr><td>Soft delete</td><td>isActive=0 on master rows (recoverable, keeps references valid).</td></tr>
+</table>
+<h2>Warnings</h2>
+<ul>
+<li><code>npm run seed</code> and <code>npm run db:deploy</code> DELETE all enquiries, orders, productions, dispatches, manual requests and the audit log. Never run against production data.</li>
+<li>Bootstrap credentials (admin@gmail.com / 123456 and the three sibling accounts) must be changed immediately after any deployment.</li>
+<li>The legacy <code>frontend/</code> folder must not be edited — only <code>frontend-hostinger/</code> is deployed.</li>
+<li>Do not hand-edit InventoryTransaction rows; use adjustments so history stays truthful.</li>
+</ul>
+<h2>Best practices for this codebase</h2>
+<ul>
+<li>Every new write path: transaction + audit event + cache invalidation (own prefix and downstream prefixes).</li>
+<li>Never trust client role checks — mirror every UI gate with allowRoles/service rules.</li>
+<li>Keep App.jsx route roles and navigation.js roles in lockstep (test exists).</li>
+<li>New document numbers must go through utils/businessNumbers.js.</li>
+</ul>
+<h2>References</h2>
+<ul>
+<li>README.md (partially stale — see Bug #11), QUICK_TEST.md, TEST_NETWORK.md, IMPLEMENTATION_SUMMARY.md, Nimbasia_Process_Guide.docx (business process guide).</li>
+<li>Prisma schema: backend/prisma/schema.prisma; migrations history in backend/prisma/migrations/.</li>
+<li>Production URLs: app https://app.nimbasia.com, API https://manage.nimbasia.com/api.</li>
+</ul>
+<h2>Explicitly undetermined items</h2>
+<ul>
+<li>Exact visual layout/labels of each JSX page were not transcribed element-by-element; screen documentation derives buttons and fields from the routes, hooks, payloads and backend contracts each page calls. Screenshot placeholders are marked in the User Manual.</li>
+<li>Runtime infrastructure details not in the repo (actual PM2/Vercel configuration, DNS, TLS termination, backup policy) cannot be determined from code.</li>
+<li>Whether the Customer/CustomerAddress subsystem is already used by any shipped UI could not be confirmed — no frontend page calls /api/customers in the current code; it appears to be in-progress work on this branch.</li>
+</ul>
+
+<p style="text-align:center;margin-top:40px;color:#666">— End of Document —</p>
+</body>
+</html>

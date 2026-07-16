@@ -1,5 +1,4 @@
 import prisma from "../config/prisma.js";
-import { recordAuditEvent } from "./auditService.js";
 import { buildPagination } from "../utils/pagination.js";
 
 const CREDIT_TYPES = new Set(["IN", "ADJUSTMENT_IN"]);
@@ -10,11 +9,16 @@ const DEBIT_TYPES = new Set(["OUT", "ADJUSTMENT_OUT"]);
 // Pass batchNo to scope the same calculation down to one specific batch line
 // (used by production batch substitution to check a substitute batch has
 // enough stock, and that the original batch's stock nets out after reversal).
-export async function getAvailableInventoryQty(itemId, batchNo) {
+// Pass `client` (a Prisma transaction client) to read the ledger inside the
+// same transaction that is about to write to it. Callers that gate a write on
+// available stock MUST do this — reading outside the transaction lets two
+// concurrent requests both see the same stock and each spend it, driving the
+// ledger negative.
+export async function getAvailableInventoryQty(itemId, batchNo, client = prisma) {
   const normalized = String(itemId || "").trim();
   if (!normalized) return 0;
 
-  const grouped = await prisma.inventoryTransaction.groupBy({
+  const grouped = await client.inventoryTransaction.groupBy({
     by: ["type"],
     where: {
       itemId: normalized,
@@ -97,6 +101,20 @@ export async function getItemBatchOptions(itemId) {
   return options;
 }
 
+// The most recent date on which any stock actually moved, as "YYYY-MM-DD", or
+// null if the ledger is empty. The register opens on this rather than on today,
+// because an empty "today" made the screen look broken every morning before the
+// first movement was logged.
+export async function getLatestStockMovementDate() {
+  const rows = await prisma.$queryRawUnsafe(
+    "SELECT DATE(MAX(createdAt)) AS d FROM InventoryTransaction"
+  );
+  const value = rows?.[0]?.d;
+  if (!value) return null;
+  // MySQL DATE() comes back as a Date at UTC midnight; slice the day key off.
+  return value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10);
+}
+
 // Daily stock movement register (Opening Stock / Production(received) /
 // Dispatch / Consume by shift / Closing Stock) per item+batch, computed
 // entirely from the InventoryTransaction ledger for the given date.
@@ -109,21 +127,32 @@ export async function getStockRegister(dateStr) {
   }
   const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
 
+  // Un-batched movement is still movement. Most of the ledger carries no batch
+  // number at all — production, packing, dispatch and manual adjustments never
+  // set one, and a GRN only has one if the buyer typed a batch on the PO line —
+  // so filtering those rows out left this register permanently empty. They now
+  // group under a single no-batch row per item.
   const [openingGrouped, todayGrouped] = await Promise.all([
     prisma.inventoryTransaction.groupBy({
       by: ["itemId", "batchNo", "type"],
-      where: { createdAt: { lt: startOfDay }, batchNo: { not: null } },
+      where: { createdAt: { lt: startOfDay } },
       _sum: { quantity: true }
     }),
     prisma.inventoryTransaction.groupBy({
-      by: ["itemId", "batchNo", "type", "shift"],
-      where: { createdAt: { gte: startOfDay, lt: endOfDay }, batchNo: { not: null } },
+      by: ["itemId", "batchNo", "type", "shift", "reference"],
+      where: { createdAt: { gte: startOfDay, lt: endOfDay } },
       _sum: { quantity: true }
     })
   ]);
 
+  // Opening stock is a starting balance the user declares, not production output.
+  // On any later day it already lands in the Opening column (it is prior-day
+  // history); on the very day it is entered it must do the same, or the register
+  // shows a 0 opening with the whole balance mislabelled as "Production".
+  const isOpeningStockReference = (reference) => /opening stock/i.test(String(reference || ""));
+
   const rowsByKey = new Map();
-  const keyOf = (itemId, batchNo) => `${itemId}::${batchNo}`;
+  const keyOf = (itemId, batchNo) => `${itemId}::${batchNo ?? ""}`;
   const getRow = (itemId, batchNo) => {
     const key = keyOf(itemId, batchNo);
     if (!rowsByKey.has(key)) {
@@ -153,11 +182,12 @@ export async function getStockRegister(dateStr) {
     } else if (row.type === "ADJUSTMENT_IN") {
       // Reversals carry the same shift as the consumption they're undoing,
       // so they net directly against that shift's consume total. Anything
-      // without a shift (manual adjustments, batch-substitution returns)
-      // is treated as a plain receipt.
+      // without a shift is a plain receipt — except an opening-stock entry,
+      // which is a starting balance and belongs in the Opening column.
       if (shift === "A") entry.consumeAShift -= qty;
       else if (shift === "B") entry.consumeBShift -= qty;
       else if (shift === "C") entry.consumeCShift -= qty;
+      else if (isOpeningStockReference(row.reference)) entry.openingStock += qty;
       else entry.production += qty;
     } else if (row.type === "OUT") {
       if (shift === "A") entry.consumeAShift += qty;
@@ -194,7 +224,9 @@ export async function getStockRegister(dateStr) {
     })
     .filter((row) => row.openingStock !== 0 || row.production !== 0 || row.dispatch !== 0 ||
       row.consumeAShift !== 0 || row.consumeBShift !== 0 || row.consumeCShift !== 0 || row.closingStock !== 0)
-    .sort((a, b) => a.itemId.localeCompare(b.itemId) || a.batchNo.localeCompare(b.batchNo));
+    // batchNo is null for the un-batched movement that makes up most of the
+    // ledger (see the groupBy above), so both keys compare defensively.
+    .sort((a, b) => (a.itemId || "").localeCompare(b.itemId || "") || (a.batchNo || "").localeCompare(b.batchNo || ""));
 }
 
 export async function getRawMaterialInventory(query = {}) {
@@ -235,14 +267,21 @@ export async function getRawMaterialInventory(query = {}) {
 
   // Only true GRN receipts ("IN") count toward "last received" metadata —
   // manual adjustments/reversals aren't real deliveries.
-  const receipts = await prisma.inventoryTransaction.findMany({
-    where:   { type: "IN" },
-    select:  { itemId: true, warehouseLocation: true, createdAt: true },
-    orderBy: { createdAt: "desc" }
-  });
+  //
+  // We only want the single latest receipt per item, so ask the database for
+  // exactly that. Fetching every IN row and keeping the first one seen per item
+  // means dragging the entire receipt history across the wire on every page
+  // load, and the ledger is append-only — it only ever gets bigger.
+  const receipts = await prisma.$queryRawUnsafe(
+    "SELECT `itemId`, `warehouseLocation`, `createdAt` FROM (" +
+    "  SELECT `itemId`, `warehouseLocation`, `createdAt`," +
+    "         ROW_NUMBER() OVER (PARTITION BY `itemId` ORDER BY `createdAt` DESC, `id` DESC) AS rn" +
+    "  FROM `InventoryTransaction` WHERE `type` = 'IN'" +
+    ") ranked WHERE rn = 1"
+  );
   for (const receipt of receipts) {
     const entry = stockMap.get(receipt.itemId);
-    if (entry && !entry.lastReceivedAt) {
+    if (entry) {
       entry.lastReceivedAt    = receipt.createdAt;
       entry.warehouseLocation = receipt.warehouseLocation || "";
     }
@@ -370,23 +409,32 @@ export async function createStockAdjustment(payload, actorUser) {
     throw error;
   }
 
-  const transaction = await prisma.inventoryTransaction.create({
-    data: {
-      type:      direction === "IN" ? "ADJUSTMENT_IN" : "ADJUSTMENT_OUT",
-      itemId,
-      quantity,
-      reference: "Manual Adjustment",
-      remarks:   reason
+  // An adjustment out cannot remove more than the item actually has — that would
+  // book negative stock, which is physically impossible and only ever a typo or
+  // a missing opening balance. The read and the write share one transaction so
+  // two concurrent adjustments can't both pass against the same stock. An
+  // adjustment *in* has nothing to check.
+  const transaction = await prisma.$transaction(async (tx) => {
+    if (direction === "OUT") {
+      const available = await getAvailableInventoryQty(itemId, undefined, tx);
+      if (quantity > available) {
+        const error = new Error(
+          `Cannot remove ${quantity} of ${itemId}: only ${available} in stock.`
+        );
+        error.statusCode = 400;
+        throw error;
+      }
     }
-  });
 
-  await recordAuditEvent({
-    action:     "INVENTORY_ADJUSTMENT",
-    entityType: "InventoryTransaction",
-    entityId:   transaction.id,
-    user:       actorUser,
-    newValue:   transaction,
-    note:       `${direction === "IN" ? "Added" : "Removed"} ${quantity} of "${itemId}": ${reason}`
+    return tx.inventoryTransaction.create({
+      data: {
+        type:      direction === "IN" ? "ADJUSTMENT_IN" : "ADJUSTMENT_OUT",
+        itemId,
+        quantity,
+        reference: "Manual Adjustment",
+        remarks:   reason
+      }
+    });
   });
 
   return transaction;
@@ -397,68 +445,105 @@ export async function createStockAdjustment(payload, actorUser) {
 // target directly, we diff it against current net stock and record just the
 // delta as an adjustment — so the ledger stays a true transaction history
 // instead of an absolute snapshot, and existing IN/OUT history is preserved.
-export async function importOpeningStock(rows, actorUser) {
+// `reference` labels the ledger entries so an audit can tell where a stock take
+// came from — the Excel importer by default, but also single opening balances
+// seeded when a product is added to the master.
+export async function importOpeningStock(rows, actorUser, { reference = "Excel Import - Opening Stock" } = {}) {
   const importBatch = `IMPORT-${Date.now()}`;
-  let imported = 0;
   let skipped = 0;
   const errors = [];
 
+  // Validate first, so one bad row doesn't cost a database round-trip.
+  const parsed = [];
   for (let index = 0; index < rows.length; index += 1) {
     const row = rows[index];
     try {
       const itemId = String(row.item_id || "").trim();
-      if (!itemId) {
-        throw new Error("Item ID is required.");
-      }
+      if (!itemId) throw new Error("Item ID is required.");
 
       const targetQty = Number(row.quantity);
       if (!Number.isFinite(targetQty) || targetQty < 0) {
         throw new Error("Quantity must be a non-negative number.");
       }
 
-      const batchNo = row.batch_no ? String(row.batch_no).trim() : undefined;
-      const currentQty = await getAvailableInventoryQty(itemId, batchNo);
-      const delta = Math.round((targetQty - currentQty) * 1e6) / 1e6;
-
-      if (delta === 0) {
-        skipped += 1;
-        continue;
-      }
-
-      const transaction = await prisma.inventoryTransaction.create({
-        data: {
-          type:       delta > 0 ? "ADJUSTMENT_IN" : "ADJUSTMENT_OUT",
-          itemId,
-          quantity:   Math.abs(delta),
-          category:   row.category || null,
-          uom:        row.uom || null,
-          grade:      row.grade || null,
-          batchNo:    batchNo || null,
-          reference:  "Excel Import - Opening Stock",
-          remarks:    `Stock take import: set to ${targetQty} (was ${currentQty})`,
-          importBatch
-        }
+      parsed.push({
+        row,
+        itemId,
+        targetQty,
+        batchNo: row.batch_no ? String(row.batch_no).trim() : undefined
       });
-
-      await recordAuditEvent({
-        action:     "INVENTORY_OPENING_STOCK_IMPORT",
-        entityType: "InventoryTransaction",
-        entityId:   transaction.id,
-        user:       actorUser,
-        newValue:   transaction,
-        note:       `Opening stock import set "${itemId}" to ${Math.round(targetQty)} (delta ${delta > 0 ? "+" : ""}${delta})`
-      });
-
-      imported += 1;
     } catch (error) {
       errors.push({ row: index + 1, message: error?.message || "Import failed" });
     }
   }
 
+  // Read the current stock for every item in the sheet in ONE query. The old
+  // code ran a groupBy per row and inserted per row, so a 500-row stock take
+  // cost ~1,000 serial round-trips.
+  const itemIds = [...new Set(parsed.map((p) => p.itemId))];
+  const grouped = itemIds.length
+    ? await prisma.inventoryTransaction.groupBy({
+        by: ["itemId", "batchNo", "type"],
+        where: { itemId: { in: itemIds } },
+        _sum: { quantity: true }
+      })
+    : [];
+
+  // Net stock per item, and per item+batch — mirroring getAvailableInventoryQty:
+  // a row with no batch number is compared against the item's total across all
+  // batches; a row with one is compared against just that batch.
+  const netByItem = new Map();
+  const netByItemBatch = new Map();
+  const batchKey = (itemId, batchNo) => `${itemId}::${batchNo || ""}`;
+
+  for (const g of grouped) {
+    const qty = g._sum.quantity || 0;
+    const signed = CREDIT_TYPES.has(g.type) ? qty : DEBIT_TYPES.has(g.type) ? -qty : 0;
+    netByItem.set(g.itemId, (netByItem.get(g.itemId) || 0) + signed);
+    const key = batchKey(g.itemId, g.batchNo);
+    netByItemBatch.set(key, (netByItemBatch.get(key) || 0) + signed);
+  }
+
+  const data = [];
+  for (const { itemId, targetQty, batchNo, row } of parsed) {
+    const key = batchKey(itemId, batchNo);
+    const currentQty = batchNo === undefined
+      ? (netByItem.get(itemId) || 0)
+      : (netByItemBatch.get(key) || 0);
+
+    const delta = Math.round((targetQty - currentQty) * 1e6) / 1e6;
+    if (delta === 0) {
+      skipped += 1;
+      continue;
+    }
+
+    // Apply the delta in memory so a later row for the same item/batch sees it,
+    // exactly as it would have when each row was written before the next was read.
+    netByItem.set(itemId, (netByItem.get(itemId) || 0) + delta);
+    netByItemBatch.set(key, (netByItemBatch.get(key) || 0) + delta);
+
+    data.push({
+      type:      delta > 0 ? "ADJUSTMENT_IN" : "ADJUSTMENT_OUT",
+      itemId,
+      quantity:  Math.abs(delta),
+      category:  row.category || null,
+      uom:       row.uom || null,
+      grade:     row.grade || null,
+      batchNo:   batchNo || null,
+      reference,
+      remarks:   `Stock take import: set to ${targetQty} (was ${currentQty})`,
+      importBatch
+    });
+  }
+
+  if (data.length > 0) {
+    await prisma.inventoryTransaction.createMany({ data });
+  }
+
   return {
     importBatch,
     total: rows.length,
-    imported,
+    imported: data.length,
     skipped,
     failed: errors.length,
     errors

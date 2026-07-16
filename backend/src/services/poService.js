@@ -1,9 +1,11 @@
 import prisma from "../config/prisma.js";
-import { recordAuditEvent } from "./auditService.js";
 import { buildPagination } from "../utils/pagination.js";
+import { buildMonthRange, recentDaysWhere } from "../utils/dateFilters.js";
 import { buildCacheKey, getOrLoadCached, invalidateCacheByPrefix } from "../utils/responseCache.js";
 import { PO_LIST_SELECT, PO_DETAIL_SELECT } from "../utils/selects.js";
 import { extractSupplierCodeSequence, formatPONumber, formatSupplierCode } from "../utils/businessNumbers.js";
+import { assertEntryDate } from "../utils/dateRules.js";
+import { resolveSupplierGstin } from "../utils/supplierCatalog.js";
 
 const PO_CACHE_PREFIX = "purchase-orders:list";
 const PO_CACHE_TTL_MS = 12 * 1000;
@@ -51,13 +53,14 @@ async function findOrCreateSupplier(supplierName, supplierDetails = {}) {
   let generatedSupplierCode = existing?.supplierCode || null;
 
   if (!providedSupplierCode && !generatedSupplierCode) {
-    const supplierCodes = await prisma.supplier.findMany({
-      select: { supplierCode: true }
-    });
-    const maxSequence = supplierCodes.reduce((max, row) => {
-      const sequence = extractSupplierCodeSequence(row.supplierCode);
-      return sequence > max ? sequence : max;
-    }, 0);
+    // Ask the database for the highest code rather than pulling every supplier
+    // back and scanning them in JS.
+    const rows = await prisma.$queryRawUnsafe(
+      "SELECT `supplierCode` FROM `Supplier` " +
+      "WHERE `supplierCode` REGEXP '^SO[-_][0-9]+$' " +
+      "ORDER BY CAST(SUBSTRING(`supplierCode`, 4) AS UNSIGNED) DESC LIMIT 1"
+    );
+    const maxSequence = extractSupplierCodeSequence(rows?.[0]?.supplierCode);
     generatedSupplierCode = formatSupplierCode(maxSequence + 1);
   }
 
@@ -110,11 +113,16 @@ function buildItemsCreateData(items, poId, supplierName, poNumber, existingItems
   });
 }
 
-// Requisition-only users (role !== admin) can create/edit the "what to order" fields,
-// but pricing (unit price, tax, currency, discount, freight) is admin-only — any pricing
-// values they submit are dropped here rather than trusted from the request body.
-function stripPricingForNonAdmin(items, isAdmin) {
-  if (isAdmin) return items;
+// Pricing (unit price, tax, currency, discount, freight) belongs to admin and
+// accounts. Everyone else — production, and the purchase role that raises the
+// requisition — can set the "what to order" fields only; any pricing values
+// they submit are dropped here rather than trusted from the request body.
+export function canSetPricing(user) {
+  return user?.role === "admin" || user?.role === "accounts";
+}
+
+function stripPricingForNonPricer(items, allowed) {
+  if (allowed) return items;
   return items.map((item) => {
     const { unit_price, tax_percent, currency, ...rest } = item;
     return rest;
@@ -122,8 +130,10 @@ function stripPricingForNonAdmin(items, isAdmin) {
 }
 
 export async function createPurchaseOrder(payload, user) {
-  const isAdmin = user.role === "admin";
-  const items = stripPricingForNonAdmin(payload.items, isAdmin);
+  assertEntryDate(payload.order_date, "Order date");
+
+  const isAdmin = canSetPricing(user);
+  const items = stripPricingForNonPricer(payload.items, isAdmin);
 
   const supplier = await findOrCreateSupplier(payload.supplier_name, {
     supplier_code:  payload.supplier_code,
@@ -170,13 +180,7 @@ export async function createPurchaseOrder(payload, user) {
     select: PO_DETAIL_SELECT
   });
 
-  await recordAuditEvent({
-    action: "CREATE",
-    entityType: "PurchaseOrder",
-    entityId: po.id,
-    user,
-    newValue: { poNumber, supplierId: supplier.id, totalAmount: 0 }
-  });
+
 
   invalidatePOCaches();
   return withReceivedTotal(updated);
@@ -185,14 +189,33 @@ export async function createPurchaseOrder(payload, user) {
 export async function listPurchaseOrders(query = {}) {
   const { page, limit, skip, take } = buildPagination(query, { defaultLimit: 10, maxLimit: 500 });
 
-  const where = {};
+  const where = {
+    // Mobile sends recent_days=45; desktop omits it.
+    ...recentDaysWhere("createdAt", query.recent_days)
+  };
 
   if (query.status && query.status !== "all") {
     where.status = query.status;
   }
 
+  // The accounts "pricing queue": a PO that has been raised but not yet priced.
+  // The stored totalAmount is a *received* total (zero for every DRAFT until a
+  // GRN lands), so it can't tell priced from unpriced. Pricing lives on the
+  // items instead — an unpriced PO is a DRAFT where no line has a unit price
+  // yet. This overrides any status filter.
+  if (query.pending_pricing === "1" || query.pending_pricing === "true") {
+    where.status = "DRAFT";
+    where.items = { none: { unitPrice: { gt: 0 } } };
+  }
+
   if (query.supplier) {
     where.supplier = { name: { contains: query.supplier } };
+  }
+
+  // Month = when the PO was raised.
+  const poMonth = buildMonthRange(query.month);
+  if (poMonth) {
+    where.orderDate = poMonth;
   }
 
   if (query.date_from || query.date_to) {
@@ -246,11 +269,19 @@ export async function getPurchaseOrder(id) {
     throw error;
   }
 
+  // Supplier rows are created ad hoc when a PO is raised and usually carry no
+  // GSTIN, while the real one sits in SupplierMaster. The GSTIN's state code is
+  // what decides SGST/CGST vs IGST on this PO, so a missing one is not cosmetic
+  // — it silently pushes an in-state supply into IGST.
+  if (po.supplier && !String(po.supplier.gstNo || "").trim()) {
+    po.supplier.gstNo = await resolveSupplierGstin(po.supplier);
+  }
+
   return withReceivedTotal(po);
 }
 
 export async function updatePurchaseOrder(id, payload, user) {
-  const isAdmin = user.role === "admin";
+  const isAdmin = canSetPricing(user);
   const existing = await prisma.purchaseOrder.findUnique({
     where: { id },
     include: { items: { orderBy: { id: "asc" } } }
@@ -267,6 +298,8 @@ export async function updatePurchaseOrder(id, payload, user) {
     error.statusCode = 400;
     throw error;
   }
+
+  assertEntryDate(payload.order_date, "Order date", { grandfathered: existing.orderDate });
 
   let supplierId = existing.supplierId;
   let supplierName = null;
@@ -288,7 +321,7 @@ export async function updatePurchaseOrder(id, payload, user) {
 
   const resolvedSupplierName = supplierName || (await prisma.supplier.findUnique({ where: { id: supplierId }, select: { name: true } }))?.name || "";
 
-  const items = payload.items ? stripPricingForNonAdmin(payload.items, isAdmin) : null;
+  const items = payload.items ? stripPricingForNonPricer(payload.items, isAdmin) : null;
 
   let totalAmount = existing.totalAmount;
   let itemsData = null;
@@ -327,14 +360,7 @@ export async function updatePurchaseOrder(id, payload, user) {
     });
   });
 
-  await recordAuditEvent({
-    action: "UPDATE",
-    entityType: "PurchaseOrder",
-    entityId: id,
-    user,
-    oldValue: { status: existing.status, totalAmount: existing.totalAmount },
-    newValue: { totalAmount }
-  });
+
 
   invalidatePOCaches();
   return withReceivedTotal(updated);
@@ -364,6 +390,14 @@ export async function updatePurchaseOrderStatus(id, newStatus, user) {
     throw error;
   }
 
+  // Accounts owns exactly one transition: releasing a priced PO to the
+  // supplier. Closing a PO, and everything else in the lifecycle, stays admin.
+  if (user.role === "accounts" && newStatus !== "SENT_TO_SUPPLIER") {
+    const error = new Error("Accounts can only send a priced purchase order to the supplier.");
+    error.statusCode = 403;
+    throw error;
+  }
+
   if (po.status === "DRAFT" && newStatus === "SENT_TO_SUPPLIER") {
     const items = await prisma.purchaseOrderItem.findMany({
       where: { poId: id },
@@ -382,14 +416,7 @@ export async function updatePurchaseOrderStatus(id, newStatus, user) {
     select: PO_DETAIL_SELECT
   });
 
-  await recordAuditEvent({
-    action: "UPDATE_STATUS",
-    entityType: "PurchaseOrder",
-    entityId: id,
-    user,
-    oldValue: { status: po.status },
-    newValue: { status: newStatus }
-  });
+
 
   invalidatePOCaches();
   return withReceivedTotal(updated);
@@ -412,13 +439,7 @@ export async function deletePurchaseOrder(id, user) {
 
   await prisma.purchaseOrder.delete({ where: { id } });
 
-  await recordAuditEvent({
-    action: "DELETE",
-    entityType: "PurchaseOrder",
-    entityId: id,
-    user,
-    oldValue: { poNumber: po.poNumber, status: po.status }
-  });
+
 
   invalidatePOCaches();
   return { id };

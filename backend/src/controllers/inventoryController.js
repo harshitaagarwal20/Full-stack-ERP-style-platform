@@ -1,4 +1,4 @@
-import { createStockAdjustment, getItemBatchOptions, getRawMaterialInventory, getStockRegister, importOpeningStock, listDistinctItemIds } from "../services/inventoryService.js";
+import { createStockAdjustment, getItemBatchOptions, getLatestStockMovementDate, getRawMaterialInventory, getStockRegister, importOpeningStock, listDistinctItemIds } from "../services/inventoryService.js";
 import { isMissingTableError } from "../utils/prismaListFallback.js";
 
 export async function listRawMaterialsHandler(req, res, next) {
@@ -39,11 +39,14 @@ export async function listItemBatchesHandler(req, res, next) {
 
 export async function getStockRegisterHandler(req, res, next) {
   try {
-    const rows = await getStockRegister(req.query.date);
-    res.json({ rows });
+    const [rows, latestMovementDate] = await Promise.all([
+      getStockRegister(req.query.date),
+      getLatestStockMovementDate()
+    ]);
+    res.json({ rows, latestMovementDate });
   } catch (err) {
     if (isMissingTableError(err)) {
-      return res.json({ rows: [] });
+      return res.json({ rows: [], latestMovementDate: null });
     }
     next(err);
   }
@@ -61,6 +64,20 @@ export async function createAdjustmentHandler(req, res, next) {
 export async function importOpeningStockHandler(req, res, next) {
   try {
     const result = await importOpeningStock(req.validatedBody.rows, req.user);
+    res.status(201).json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// One opening balance entered in the app rather than via a spreadsheet — the
+// material is chosen from a dropdown, so it cannot be misspelled into a phantom
+// item the way a typed Excel cell can. Same set-to-target semantics as the
+// import, and the "Opening Stock" reference lands it in the register's Opening
+// column.
+export async function addOpeningStockHandler(req, res, next) {
+  try {
+    const result = await importOpeningStock([req.validatedBody], req.user, { reference: "Opening Stock Entry" });
     res.status(201).json(result);
   } catch (err) {
     next(err);

@@ -689,6 +689,54 @@ CREATE TABLE IF NOT EXISTS `ProductMaster` (
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
+-- Compatibility for partially-created / older Hostinger databases.
+-- CREATE TABLE IF NOT EXISTS does not update an existing table. If an import was
+-- resumed after an older schema had already created these tables, the FK section
+-- below can fail with: #1072 - Key column 'customerId' doesn't exist in table.
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'CustomerAddress' AND COLUMN_NAME = 'customerId');
+SET @sql := IF(@c = 0, 'ALTER TABLE `CustomerAddress` ADD COLUMN `customerId` INTEGER NOT NULL', 'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @i := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'CustomerAddress' AND INDEX_NAME = 'CustomerAddress_customerId_idx');
+SET @sql := IF(@i = 0, 'CREATE INDEX `CustomerAddress_customerId_idx` ON `CustomerAddress`(`customerId`)', 'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Enquiry' AND COLUMN_NAME = 'customerId');
+SET @sql := IF(@c = 0, 'ALTER TABLE `Enquiry` ADD COLUMN `customerId` INTEGER NULL', 'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Enquiry' AND COLUMN_NAME = 'customerAddressId');
+SET @sql := IF(@c = 0, 'ALTER TABLE `Enquiry` ADD COLUMN `customerAddressId` INTEGER NULL', 'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @i := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Enquiry' AND INDEX_NAME = 'Enquiry_customerId_idx');
+SET @sql := IF(@i = 0, 'CREATE INDEX `Enquiry_customerId_idx` ON `Enquiry`(`customerId`)', 'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Order' AND COLUMN_NAME = 'customerId');
+SET @sql := IF(@c = 0, 'ALTER TABLE `Order` ADD COLUMN `customerId` INTEGER NULL', 'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Order' AND COLUMN_NAME = 'customerAddressId');
+SET @sql := IF(@c = 0, 'ALTER TABLE `Order` ADD COLUMN `customerAddressId` INTEGER NULL', 'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @i := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Order' AND INDEX_NAME = 'Order_customerId_idx');
+SET @sql := IF(@i = 0, 'CREATE INDEX `Order_customerId_idx` ON `Order`(`customerId`)', 'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ManualOrderRequest' AND COLUMN_NAME = 'customerId');
+SET @sql := IF(@c = 0, 'ALTER TABLE `ManualOrderRequest` ADD COLUMN `customerId` INTEGER NULL', 'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ManualOrderRequest' AND COLUMN_NAME = 'customerAddressId');
+SET @sql := IF(@c = 0, 'ALTER TABLE `ManualOrderRequest` ADD COLUMN `customerAddressId` INTEGER NULL', 'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @i := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ManualOrderRequest' AND INDEX_NAME = 'ManualOrderRequest_customerId_idx');
+SET @sql := IF(@i = 0, 'CREATE INDEX `ManualOrderRequest_customerId_idx` ON `ManualOrderRequest`(`customerId`)', 'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
 -- CustomerAddress_customerId_fkey
 SET @fk := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
             WHERE CONSTRAINT_SCHEMA = DATABASE()

@@ -35,14 +35,8 @@ function parseDatabaseUrl(databaseUrl) {
   };
 }
 
-export async function testMysqlConnection(databaseUrl) {
-  // The mysql2 driver can only speak to a raw mysql:// endpoint. When
-  // DATABASE_URL is a prisma:// Accelerate URL, fall back to the direct
-  // connection so this diagnostic still reaches the real database.
-  const rawUrl =
-    databaseUrl ||
-    (String(env.dbUrl || "").startsWith("prisma://") ? env.directDbUrl : env.dbUrl);
-  const connectionConfig = parseDatabaseUrl(rawUrl);
+export async function testMysqlConnection(databaseUrl = env.dbUrl) {
+  const connectionConfig = parseDatabaseUrl(databaseUrl);
   const connection = await mysql.createConnection(connectionConfig);
 
   try {

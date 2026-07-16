@@ -6,6 +6,13 @@ function getStatusCode(error) {
   if (typeof error?.statusCode === "number") return error.statusCode;
   if (typeof error?.status === "number") return error.status;
 
+  // Prisma P5xxx/P6xxx are upstream data-proxy/availability errors (not raised
+  // by the direct mariadb adapter, but mapped defensively): treat as a 503
+  // rather than letting them fall through to an opaque 500.
+  if (typeof error?.code === "string" && /^P[56]\d{3}$/.test(error.code)) {
+    return 503;
+  }
+
   switch (error?.code) {
     case "ER_ACCESS_DENIED_ERROR":
     case "ER_BAD_DB_ERROR":
@@ -74,6 +81,9 @@ function getMessage(error, status) {
     error?.name === "PrismaClientRustPanicError"
   ) {
     return "Database connection is temporarily unavailable.";
+  }
+  if (typeof error?.code === "string" && /^P[56]\d{3}$/.test(error.code)) {
+    return "Database service is temporarily unavailable. Please try again.";
   }
   if (error?.name === "SyntaxError" && String(error.message || "").includes("JSON")) {
     return "Invalid JSON payload.";

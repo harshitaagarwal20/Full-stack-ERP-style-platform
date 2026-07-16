@@ -30,10 +30,6 @@ function resolveJwtSecret() {
 const env = {
   port: process.env.PORT || 5001,
   dbUrl: process.env.DATABASE_URL,
-  // Raw mysql:// connection. Used by `prisma migrate`/`db` (Accelerate can't run
-  // migrations) and by the mysql2 health check, since DATABASE_URL may be a
-  // prisma:// Accelerate URL that the mysql2 driver cannot parse.
-  directDbUrl: process.env.DIRECT_DATABASE_URL,
   jwtSecret: resolveJwtSecret(),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "7d",
   clientOrigin:

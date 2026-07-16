@@ -7,7 +7,7 @@ import { startDbHeartbeat, stopDbHeartbeat } from "./utils/dbHeartbeat.js";
 let server;
 
 // DB work that must not block app.listen(). Hostinger kills the app if listen()
-// isn't called within 3s, and a Prisma/Accelerate round-trip can exceed that.
+// isn't called within 3s, and a Prisma round-trip can exceed that.
 // So we bind the port first and warm/seed the database afterwards.
 async function initializeDatabase() {
   // Seed any role/module pair that has never been stored, so a fresh database

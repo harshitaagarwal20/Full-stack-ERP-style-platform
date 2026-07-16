@@ -1,22 +1,18 @@
 generator client {
-  provider      = "prisma-client-js"
-  // Run the in-process Node-API "library" engine (Prisma's default). On
-  // Hostinger's shared runtime the out-of-process "binary" engine's child
-  // process gets CPU-throttled/killed, which kills its timer thread and panics
-  // ("timer has gone away"). The in-process library engine avoids that extra
-  // process. binaryTargets pins Hostinger's platform (debian-openssl-1.1.x).
-  binaryTargets = ["native", "debian-openssl-1.1.x"]
+  provider = "prisma-client-js"
+  // engineType "client" generates a Rust-FREE client: queries are compiled by a
+  // WASM module in-process and executed through a native Node driver (mariadb)
+  // via the driver adapter, instead of Prisma's native Rust query engine. That
+  // engine is what panicked with "timer has gone away" on Hostinger's
+  // CPU-throttled runtime — with no engine process, that panic cannot happen.
+  engineType = "client"
 }
 
 datasource db {
   provider = "mysql"
-  // Runtime/queries: when this is a prisma:// Accelerate URL the query engine
-  // runs in Prisma's cloud (avoids Hostinger's "timer has gone away" panic).
+  // Used by the Prisma CLI (migrate/db) only. At runtime the driver adapter in
+  // config/prisma.js owns the connection, built from this same DATABASE_URL.
   url      = env("DATABASE_URL")
-  // Migrations can't run through Accelerate, so `prisma migrate`/`db` use the
-  // raw mysql:// connection here. Unused for plain queries and for local dev
-  // where DATABASE_URL is already mysql://.
-  directUrl = env("DIRECT_DATABASE_URL")
 }
 
 enum Role {

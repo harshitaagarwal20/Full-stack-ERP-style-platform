@@ -1,19 +1,41 @@
 import prismaPkg from "@prisma/client";
-import { withAccelerate } from "@prisma/extension-accelerate";
+import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 import { createRetryablePrismaClientProxy } from "../utils/prismaClientProxy.js";
 
 const { PrismaClient } = prismaPkg;
 
-// When DATABASE_URL is a prisma:// Accelerate URL, run through Prisma
-// Accelerate so the query engine executes in Prisma's cloud instead of on this
-// host. Hostinger's shared runtime CPU-throttles the local query engine and it
-// panics ("timer has gone away") on every query; Accelerate sidesteps that
-// entirely. With a plain mysql:// URL (e.g. local dev) the client is used as-is.
-const usingAccelerate = String(process.env.DATABASE_URL || "").startsWith("prisma://");
+// Rust-free Prisma: the client (generated with previewFeatures
+// driverAdapters + queryCompiler) compiles queries in JS and runs them through
+// the native `mariadb` driver instead of Prisma's Rust query engine. That
+// engine is what panicked with "timer has gone away" on Hostinger's
+// CPU-throttled runtime; with no engine, that panic cannot happen. The mariadb
+// driver speaks the MySQL wire protocol, so it connects to our MySQL fine.
+function buildAdapterConfig() {
+  const raw = process.env.DATABASE_URL;
+  if (!raw) {
+    throw new Error("DATABASE_URL is not set.");
+  }
+
+  // DATABASE_URL is a mysql:// connection string; parse it into the pool config
+  // the mariadb driver expects. Values are URL-decoded so passwords containing
+  // encoded symbols (e.g. %40 for @) are passed through correctly.
+  const url = new URL(raw);
+  return {
+    host: url.hostname,
+    port: url.port ? Number.parseInt(url.port, 10) : 3306,
+    user: decodeURIComponent(url.username || ""),
+    password: decodeURIComponent(url.password || ""),
+    database: url.pathname.replace(/^\/+/, ""),
+    // Keep the pool small: Hostinger's MySQL caps concurrent connections and
+    // this is a single low-traffic app instance.
+    connectionLimit: 5,
+    connectTimeout: 10000
+  };
+}
 
 function createClient() {
-  const client = new PrismaClient();
-  return usingAccelerate ? client.$extends(withAccelerate()) : client;
+  const adapter = new PrismaMariaDb(buildAdapterConfig());
+  return new PrismaClient({ adapter });
 }
 
 const { prisma, close, reconnect } = createRetryablePrismaClientProxy({

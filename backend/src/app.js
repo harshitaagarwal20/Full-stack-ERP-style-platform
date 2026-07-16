@@ -114,6 +114,16 @@ app.get("/api/health", (req, res) => {
   res.json({ ok: true, message: "FMS API is running" });
 });
 
+app.get("/api/health/mysql", async (req, res, next) => {
+  try {
+    const { testMysqlConnection } = await import("./services/mysqlHealthService.js");
+    const result = await testMysqlConnection();
+    return res.json(result);
+  } catch (error) {
+    return next(error);
+  }
+});
+
 app.use("/api/auth", authRoutes);
 app.use("/api/customers", customerRoutes);
 app.use("/api/master-data", masterDataRoutes);

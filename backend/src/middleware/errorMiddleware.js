@@ -15,6 +15,9 @@ function getStatusCode(error) {
     case "P2000":
     case "P2011":
       return 400;
+    case "P2021":
+    case "P2022":
+      return 500;
     case "P1001":
     case "P1002":
     case "P1008":
@@ -34,6 +37,9 @@ function getMessage(error, status) {
   if (error?.code === "P2025") return "Requested record not found.";
   if (error?.code === "P2000") return "One or more values are too long for the database field.";
   if (error?.code === "P2011") return "A required field is missing.";
+  if (error?.code === "P2021" || error?.code === "P2022") {
+    return "Database schema is missing a required table or column. Run the latest SQL migration on Hostinger.";
+  }
   if (
     error?.code === "P1001" ||
     error?.code === "P1002" ||

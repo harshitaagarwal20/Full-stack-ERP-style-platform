@@ -1,7 +1,6 @@
 import app from "./app.js";
 import env from "./config/env.js";
-import prisma, { closePrisma } from "./config/prisma.js";
-import { isRecoverablePrismaPanicError } from "./utils/prismaClientProxy.js";
+import { closePrisma } from "./config/prisma.js";
 import { ensurePermissionDefaults } from "./services/permissionService.js";
 import { startDbHeartbeat, stopDbHeartbeat } from "./utils/dbHeartbeat.js";
 
@@ -11,23 +10,6 @@ let server;
 // isn't called within 3s, and a Prisma/Accelerate round-trip can exceed that.
 // So we bind the port first and warm/seed the database afterwards.
 async function initializeDatabase() {
-  if (env.prismaStartupCheck) {
-    try {
-      await prisma.$connect();
-    } catch (error) {
-      if (!isRecoverablePrismaPanicError(error)) {
-        console.error("Prisma startup check failed:", error?.message || error);
-      } else {
-        console.warn(
-          "Prisma startup check hit a recoverable panic. Continuing so the app can serve requests:",
-          error?.message || error
-        );
-      }
-    }
-  } else {
-    console.warn("Prisma startup check disabled. Running in diagnostics mode.");
-  }
-
   // Seed any role/module pair that has never been stored, so a fresh database
   // starts with the same access rules the routes used to hard-code. Existing
   // admin choices are left alone (skipDuplicates).

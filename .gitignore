@@ -7,3 +7,11 @@ coverage
 *.log
 .prisma
 backend/public
+
+# Deployment build archives
+*.zip
+
+# Database dumps (contain password hashes + customer PII — never commit)
+*.sql
+!backend/prisma/hostinger-init.sql
+!backend/prisma/hostinger-additive-migration.sql

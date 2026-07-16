@@ -1,4 +1,4 @@
-const PRODUCTION_API_URL = "https://manage.nimbasia.com/api";
+const PRODUCTION_API_URL = "/api";
 const LEGACY_API_URLS = new Set([
   "https://full-stack-erp-style-platform-4.onrender.com/api",
   "https://nimbasia.onrender.com/api",

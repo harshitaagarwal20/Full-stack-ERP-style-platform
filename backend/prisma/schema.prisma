@@ -10,7 +10,13 @@ generator client {
 
 datasource db {
   provider = "mysql"
+  // Runtime/queries: when this is a prisma:// Accelerate URL the query engine
+  // runs in Prisma's cloud (avoids Hostinger's "timer has gone away" panic).
   url      = env("DATABASE_URL")
+  // Migrations can't run through Accelerate, so `prisma migrate`/`db` use the
+  // raw mysql:// connection here. Unused for plain queries and for local dev
+  // where DATABASE_URL is already mysql://.
+  directUrl = env("DIRECT_DATABASE_URL")
 }
 
 enum Role {

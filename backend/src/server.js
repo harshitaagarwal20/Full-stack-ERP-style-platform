@@ -7,51 +7,49 @@ import { startDbHeartbeat, stopDbHeartbeat } from "./utils/dbHeartbeat.js";
 
 let server;
 
-async function start() {
-  try {
-    if (env.prismaStartupCheck) {
-      try {
-        await prisma.$connect();
-      } catch (error) {
-        if (!isRecoverablePrismaPanicError(error)) {
-          throw error;
-        }
-
+// DB work that must not block app.listen(). Hostinger kills the app if listen()
+// isn't called within 3s, and a Prisma/Accelerate round-trip can exceed that.
+// So we bind the port first and warm/seed the database afterwards.
+async function initializeDatabase() {
+  if (env.prismaStartupCheck) {
+    try {
+      await prisma.$connect();
+    } catch (error) {
+      if (!isRecoverablePrismaPanicError(error)) {
+        console.error("Prisma startup check failed:", error?.message || error);
+      } else {
         console.warn(
-          "Prisma startup check hit a recoverable panic. Continuing startup so the app can serve requests:",
+          "Prisma startup check hit a recoverable panic. Continuing so the app can serve requests:",
           error?.message || error
         );
       }
-    } else {
-      console.warn("Prisma startup check disabled. Running in diagnostics mode.");
     }
-
-    // Seed any role/module pair that has never been stored, so a fresh database
-    // starts with the same access rules the routes used to hard-code. Existing
-    // admin choices are left alone (skipDuplicates).
-    try {
-      await ensurePermissionDefaults();
-    } catch (error) {
-      console.warn("Could not seed role permission defaults:", error?.message || error);
-    }
-
-    server = app.listen(env.port, "0.0.0.0", () => {
-      console.log(`Access from this machine: http://localhost:${env.port}`);
-      console.log(`Access from network: http://<your-machine-ip>:${env.port}`);
-    });
-
-    // Keep the pooled DB connection warm so no user request pays the idle
-    // reconnect cost.
-    startDbHeartbeat();
-  } catch (error) {
-    try {
-      await closePrisma();
-    } catch (disconnectError) {
-      console.error("Failed to disconnect Prisma after startup failure:", disconnectError);
-    }
-
-    throw error;
+  } else {
+    console.warn("Prisma startup check disabled. Running in diagnostics mode.");
   }
+
+  // Seed any role/module pair that has never been stored, so a fresh database
+  // starts with the same access rules the routes used to hard-code. Existing
+  // admin choices are left alone (skipDuplicates).
+  try {
+    await ensurePermissionDefaults();
+  } catch (error) {
+    console.warn("Could not seed role permission defaults:", error?.message || error);
+  }
+
+  // Keep the pooled DB connection warm so no user request pays the idle
+  // reconnect cost.
+  startDbHeartbeat();
+}
+
+async function start() {
+  server = app.listen(env.port, "0.0.0.0", () => {
+    console.log(`Access from this machine: http://localhost:${env.port}`);
+    console.log(`Access from network: http://<your-machine-ip>:${env.port}`);
+  });
+
+  // Fire-and-forget: never let DB latency or errors delay/kill startup.
+  void initializeDatabase();
 }
 
 start().catch((error) => {

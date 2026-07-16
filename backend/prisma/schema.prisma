@@ -1,10 +1,10 @@
 generator client {
   provider      = "prisma-client-js"
-  // Hostinger's shared runtime panics with the default Node-API "library"
-  // engine ("PANIC: timer has gone away"). The out-of-process "binary" engine
-  // is stable there. binaryTargets pins the platform Hostinger runs on
-  // (debian-openssl-1.1.x) plus the local dev platform.
-  engineType    = "binary"
+  // Run the in-process Node-API "library" engine (Prisma's default). On
+  // Hostinger's shared runtime the out-of-process "binary" engine's child
+  // process gets CPU-throttled/killed, which kills its timer thread and panics
+  // ("timer has gone away"). The in-process library engine avoids that extra
+  // process. binaryTargets pins Hostinger's platform (debian-openssl-1.1.x).
   binaryTargets = ["native", "debian-openssl-1.1.x"]
 }
 

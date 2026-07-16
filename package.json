@@ -1,8 +1,10 @@
 {
   "name": "nimbasia-frontend-app",
   "private": true,
+  "type": "module",
   "scripts": {
-    "build": "npm --prefix frontend-hostinger install && npm --prefix frontend-hostinger run build",
-    "start": "npm --prefix frontend-hostinger run preview -- --port 4173 --host"
+    "build": "npm --prefix frontend-hostinger install --include=dev && npm --prefix frontend-hostinger run build && node scripts/copy-frontend-dist.js",
+    "postinstall": "npm --prefix backend install --include=dev && npm --prefix frontend-hostinger install --include=dev && npm --prefix frontend-hostinger run build && node scripts/copy-frontend-dist.js",
+    "start": "npm --prefix backend start"
   }
 }

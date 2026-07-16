@@ -1,7 +1,10 @@
 import compression from "compression";
 import cors from "cors";
 import express from "express";
+import fs from "fs";
 import helmet from "helmet";
+import path from "path";
+import { fileURLToPath } from "url";
 import morgan from "morgan";
 import env from "./config/env.js";
 import { errorMiddleware, notFoundMiddleware } from "./middleware/errorMiddleware.js";
@@ -24,6 +27,10 @@ import productionRoutes from "./routes/productionRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 
 const app = express();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const publicDir = path.resolve(__dirname, "../public");
+const frontendIndexPath = path.join(publicDir, "index.html");
 
 // No ETags on API responses. Express fingerprints every JSON body by default, so
 // a repeat list request answers 304 with no body and the client re-renders from
@@ -96,13 +103,6 @@ app.use("/api", (req, res, next) => {
   next();
 });
 
-app.get("/", (req, res) => {
-  res.json({
-    message:
-      "Nimbasia backend is running. Production frontend: https://app.nimbasia.com. Health check: /api/health. Local dev frontend: http://localhost:5174."
-  });
-});
-
 app.get("/api", (req, res) => {
   res.json({
     ok: true,
@@ -131,6 +131,15 @@ app.use("/api/inventory", inventoryRoutes);
 app.use("/api/production", productionRoutes);
 app.use("/api/packing", packingRoutes);
 app.use("/api/dispatch", dispatchRoutes);
+
+app.use(express.static(publicDir));
+
+app.get("*", (req, res, next) => {
+  if (req.path.startsWith("/api")) return next();
+  if (!fs.existsSync(frontendIndexPath)) return next();
+
+  return res.sendFile(frontendIndexPath);
+});
 
 app.use(notFoundMiddleware);
 app.use(errorMiddleware);

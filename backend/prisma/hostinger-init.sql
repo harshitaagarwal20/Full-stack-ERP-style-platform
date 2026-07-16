@@ -367,6 +367,8 @@ CREATE TABLE IF NOT EXISTS `Dispatch` (
     `remarks` VARCHAR(191) NULL,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
+    INDEX `Dispatch_orderId_idx`(`orderId`),
+    INDEX `Dispatch_createdAt_id_idx`(`createdAt`, `id`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -3247,6 +3249,18 @@ PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 SET @i := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'FinishedGoodsTestSheetItem' AND INDEX_NAME = 'FinishedGoodsTestSheetItem_sheetId_idx');
 SET @sql := IF(@i = 0, 'CREATE INDEX `FinishedGoodsTestSheetItem_sheetId_idx` ON `FinishedGoodsTestSheetItem`(`sheetId`)', 'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Dispatch.Dispatch_orderId_idx
+SET @i := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Dispatch' AND INDEX_NAME = 'Dispatch_orderId_idx');
+SET @sql := IF(@i = 0, 'CREATE INDEX `Dispatch_orderId_idx` ON `Dispatch`(`orderId`)', 'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Dispatch.Dispatch_createdAt_id_idx
+SET @i := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Dispatch' AND INDEX_NAME = 'Dispatch_createdAt_id_idx');
+SET @sql := IF(@i = 0, 'CREATE INDEX `Dispatch_createdAt_id_idx` ON `Dispatch`(`createdAt`, `id`)', 'DO 0');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- PackingRecord.PackingRecord_orderId_idx

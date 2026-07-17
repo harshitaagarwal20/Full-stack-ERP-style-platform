@@ -1073,7 +1073,23 @@ function EnquiryPage() {
                           placeholder="Remark for this product"
                         />
                       </div>
-                      
+                      <div className="enquiry-product-row-actions">
+                        <button
+                          type="button"
+                          className="enquiry-btn-secondary"
+                          onClick={() =>
+                            setForm((prev) => ({
+                              ...prev,
+                              products:
+                                prev.products.length > 1
+                                  ? prev.products.filter((_, rowIndex) => rowIndex !== index)
+                                  : [createEmptyProductRow()]
+                            }))
+                          }
+                        >
+                          Remove
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>

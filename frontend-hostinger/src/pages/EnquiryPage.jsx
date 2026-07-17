@@ -821,7 +821,7 @@ function EnquiryPage() {
                 </select>
               </div>
               {form.customer_type && form.enquiry_type && (
-                <div style={{ gridColumn: '1 / -1', padding: '12px', backgroundColor: '#f0f9ff', borderRadius: '4px', marginBottom: '12px', fontSize: '13px', color: '#0369a1' }}>
+                <div style={{ gridColumn: '1 / -1', padding: '4px', backgroundColor: '#f0f9ff', borderRadius: '4px', marginBottom: '12px', fontSize: '13px', color: '#0369a1' }}>
                   Form for: {form.customer_type} Customer - {form.enquiry_type} Enquiry
                 </div>
               )}
@@ -1073,23 +1073,7 @@ function EnquiryPage() {
                           placeholder="Remark for this product"
                         />
                       </div>
-                      <div className="enquiry-product-row-actions">
-                        <button
-                          type="button"
-                          className="enquiry-btn-secondary"
-                          onClick={() =>
-                            setForm((prev) => ({
-                              ...prev,
-                              products:
-                                prev.products.length > 1
-                                  ? prev.products.filter((_, rowIndex) => rowIndex !== index)
-                                  : [createEmptyProductRow()]
-                            }))
-                          }
-                        >
-                          Remove
-                        </button>
-                      </div>
+                      
                     </div>
                   ))}
                 </div>

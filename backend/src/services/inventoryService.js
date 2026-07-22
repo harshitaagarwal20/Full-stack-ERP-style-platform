@@ -264,15 +264,12 @@ export async function getStockRegister(dateStr, category) {
     if (!categoryByItemId.get(row.itemId)) categoryByItemId.set(row.itemId, row.category || "");
   }
   // Curated last so it overwrites, not fills in — see getCuratedCategories.
-  // Matched case-insensitively for the same reason as the stock list: the
-  // master and the ledger disagree on casing for some products.
-  const curatedByKey = new Map();
-  for (const [name, meta] of curated) {
-    if (meta.category) curatedByKey.set(name.toUpperCase(), meta.category);
-  }
-  for (const itemId of itemIds) {
-    const curatedCategory = curatedByKey.get(String(itemId).toUpperCase());
-    if (curatedCategory) categoryByItemId.set(itemId, curatedCategory);
+  // Uses the same drift-tolerant matching as the stock list, so an item cannot
+  // pick up a curated category on one screen and not the other.
+  const curatedRows = [...curated].map(([productName, meta]) => ({ productName, ...meta }));
+  const { matched: curatedMatched } = matchCatalogueToLedger(itemIds, curatedRows);
+  for (const [itemId, row] of curatedMatched) {
+    if (row.category) categoryByItemId.set(itemId, row.category);
   }
 
   let rows = [...rowsByKey.values()]
@@ -321,6 +318,58 @@ async function getCataloguedProductsWithoutStock() {
     // data load; before that a missing table must not break the stock screen.
     return [];
   }
+}
+
+// Product names drift between the master and the ledger — "PE WAX" against
+// "PE-Wax", "ZINC STEARATE" against "Zinc Stearate". A person reads those as
+// the same product, so the join has to as well: compare on letters and digits
+// only, ignoring case, spaces and punctuation.
+function looseNameKey(name) {
+  return String(name || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+// Builds ledgerItemId -> catalogue row. Exact (case-insensitive) matches are
+// taken first; the looser punctuation-blind key only fills what is left, and
+// only when it is unambiguous on both sides. Two different products that
+// happen to collapse to the same loose key are left unmatched rather than
+// silently merged — a wrong link would move real stock to the wrong screen.
+function matchCatalogueToLedger(ledgerItemIds, catalogueRows) {
+  const exactByUpper = new Map();
+  const looseCounts = new Map();
+  const looseToItemId = new Map();
+  for (const itemId of ledgerItemIds) {
+    exactByUpper.set(String(itemId).toUpperCase(), itemId);
+    const key = looseNameKey(itemId);
+    looseCounts.set(key, (looseCounts.get(key) || 0) + 1);
+    looseToItemId.set(key, itemId);
+  }
+
+  const catalogueLooseCounts = new Map();
+  for (const row of catalogueRows) {
+    const key = looseNameKey(row.productName);
+    catalogueLooseCounts.set(key, (catalogueLooseCounts.get(key) || 0) + 1);
+  }
+
+  const matched = new Map();
+  const unmatched = [];
+  for (const row of catalogueRows) {
+    const productName = String(row.productName || "").trim();
+    if (!productName) continue;
+
+    const exact = exactByUpper.get(productName.toUpperCase());
+    if (exact) {
+      matched.set(exact, row);
+      continue;
+    }
+
+    const key = looseNameKey(productName);
+    if (looseCounts.get(key) === 1 && catalogueLooseCounts.get(key) === 1) {
+      matched.set(looseToItemId.get(key), row);
+      continue;
+    }
+    unmatched.push(row);
+  }
+  return { matched, unmatched };
 }
 
 // The product master is the admin-curated answer to "what kind of item is
@@ -372,36 +421,25 @@ export async function getRawMaterialInventory(query = {}) {
     entry.netQty = entry.totalIn - entry.totalOut;
   }
 
-  // Match the catalogue to the ledger case-insensitively. MySQL compares
-  // strings that way, so the master can hold "ZINC STEARATE" while the ledger
-  // carries "Zinc Stearate" for the very same product — a case-sensitive
-  // lookup here silently matches neither, which is what stopped a curated
-  // category from taking effect.
+  // Link the catalogue to the ledger despite name drift (see
+  // matchCatalogueToLedger); anything still unmatched is a product with no
+  // stock history, which joins the list at zero.
+  const { matched, unmatched } = matchCatalogueToLedger([...stockMap.keys()], catalogueRows);
   const catalogueMeta = new Map();
-  const stockKeyByName = new Map();
-  for (const itemId of stockMap.keys()) {
-    stockKeyByName.set(itemId.toUpperCase(), itemId);
+  for (const [itemId, row] of matched) {
+    catalogueMeta.set(itemId, { category: row.category || "", uom: row.defaultUnit || "" });
   }
-  for (const row of catalogueRows) {
+  for (const row of unmatched) {
     const productName = String(row.productName || "").trim();
-    if (!productName) continue;
-    const key = productName.toUpperCase();
-    const existingItemId = stockKeyByName.get(key);
-    catalogueMeta.set(existingItemId || productName, {
-      category: row.category || "",
-      uom: row.defaultUnit || ""
+    catalogueMeta.set(productName, { category: row.category || "", uom: row.defaultUnit || "" });
+    stockMap.set(productName, {
+      itemId:            productName,
+      totalIn:           0,
+      totalOut:          0,
+      netQty:            0,
+      warehouseLocation: "",
+      lastReceivedAt:    null
     });
-    if (!existingItemId) {
-      stockMap.set(productName, {
-        itemId:            productName,
-        totalIn:           0,
-        totalOut:          0,
-        netQty:            0,
-        warehouseLocation: "",
-        lastReceivedAt:    null
-      });
-      stockKeyByName.set(key, productName);
-    }
   }
 
   if (stockMap.size === 0) {

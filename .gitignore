@@ -11,6 +11,9 @@ backend/public
 # Deployment build archives
 *.zip
 
+# Office lock files, created while a doc/template is open
+~$*
+
 # Database dumps (contain password hashes + customer PII — never commit)
 *.sql
 !backend/prisma/hostinger-init.sql

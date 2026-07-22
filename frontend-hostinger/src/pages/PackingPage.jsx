@@ -376,12 +376,6 @@ function PackingPage() {
                 <span>Remaining</span>
                 <strong>{activeOrder.remainingToPack} {activeOrder.unit}</strong>
               </div>
-              {(activeOrder.packingType || activeOrder.packingSize) && (
-                <div className="pack-chip">
-                  <span>Packing</span>
-                  <strong>{[activeOrder.packingType, activeOrder.packingSize].filter(Boolean).join(" · ")}</strong>
-                </div>
-              )}
             </div>
 
             <form onSubmit={submitPack}>

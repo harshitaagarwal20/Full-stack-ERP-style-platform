@@ -8,6 +8,7 @@ import { exportRowsToExcel } from "../utils/exportExcel";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { pickMobileRecent } from "../utils/mobileRecent";
 import MobileListCard from "../components/common/MobileListCard";
+import { INVENTORY_CATEGORY_OPTIONS, inventoryCategoryLabel } from "../constants/inventoryCategories";
 
 const emptyProductForm = { product_name: "", category: "", default_unit: "", hsn_code: "", description: "", opening_stock: "" };
 
@@ -58,7 +59,6 @@ function ProductMasterPage() {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [products, setProducts] = useState([]);
-  const [categoryOptions, setCategoryOptions] = useState([]);
   const [unitOptions, setUnitOptions] = useState([]);
   const [searchText, setSearchText] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
@@ -73,7 +73,6 @@ function ProductMasterPage() {
     try {
       const { data } = await api.get("/master-data");
       setProducts(Array.isArray(data?.productMaster) ? data.productMaster : []);
-      setCategoryOptions(Array.isArray(data?.productCategories) ? data.productCategories : []);
       setUnitOptions(Array.isArray(data?.units) ? data.units : []);
     } catch (error) {
       logApiError(error, "Failed to load product master");
@@ -86,14 +85,21 @@ function ProductMasterPage() {
     fetchMasterData();
   }, []);
 
-  const filterOptions = useMemo(
-    () => [
+  // Legacy rows may carry a free-text category from before the list was fixed,
+  // so keep whatever is actually in the data alongside the three known codes —
+  // otherwise those products become unfilterable.
+  const filterOptions = useMemo(() => {
+    const known = new Set(INVENTORY_CATEGORY_OPTIONS.map((o) => o.value));
+    const legacy = [...new Set(products.map((p) => p.category).filter((c) => c && !known.has(c)))]
+      .sort()
+      .map((c) => ({ value: c, label: c }));
+    return [
       { value: "", label: "All categories" },
-      ...categoryOptions,
+      ...INVENTORY_CATEGORY_OPTIONS,
+      ...legacy,
       { value: UNCATEGORISED, label: "Uncategorised" }
-    ],
-    [categoryOptions]
-  );
+    ];
+  }, [products]);
 
   const filtered = useMemo(() => {
     const query = searchText.trim().toLowerCase();
@@ -218,7 +224,7 @@ function ProductMasterPage() {
     ];
     const rows = filtered.map((product) => ({
       productName: product.productName || "-",
-      category:    product.category || "-",
+      category:    inventoryCategoryLabel(product.category) || "-",
       description: product.description || "-",
       openingStock: ""
     }));
@@ -320,7 +326,7 @@ function ProductMasterPage() {
                       <td style={{ fontWeight: 600, color: "#1d4ed8" }}>{product.productName}</td>
                       <td>
                         {product.category ? (
-                          <span className="order-status approved">{product.category}</span>
+                          <span className="order-status approved">{inventoryCategoryLabel(product.category)}</span>
                         ) : (
                           <span className="pack-cell-sub">Uncategorised</span>
                         )}
@@ -351,10 +357,10 @@ function ProductMasterPage() {
                     key={product.id}
                     title={product.productName}
                     subtitle={product.description || ""}
-                    badge={product.category || "Uncategorised"}
+                    badge={inventoryCategoryLabel(product.category) || "Uncategorised"}
                     badgeColor={product.category ? "blue" : "default"}
                     fields={[
-                      { label: "Category", value: product.category || "Uncategorised" },
+                      { label: "Category", value: inventoryCategoryLabel(product.category) || "Uncategorised" },
                       { label: "Description", value: product.description || "-" }
                     ]}
                     onActionClick={() => openEditModal(product)}
@@ -399,13 +405,12 @@ function ProductMasterPage() {
                 <div>
                   <label className="label">Category</label>
                   <SearchableSelect
-                    options={categoryOptions}
+                    options={INVENTORY_CATEGORY_OPTIONS}
                     value={form.category}
                     onChange={(value) => setForm((p) => ({ ...p, category: value }))}
                     placeholder="Select category"
-                    allowCustom
                   />
-                  <small style={{ color: "#64748b" }}>Type to add a new category.</small>
+                  <small style={{ color: "#64748b" }}>Decides which inventory screen this product's stock appears on.</small>
                 </div>
                 <div>
                   <label className="label">Default Unit</label>

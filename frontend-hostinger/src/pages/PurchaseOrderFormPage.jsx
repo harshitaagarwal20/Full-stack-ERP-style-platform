@@ -9,6 +9,7 @@ import useMasterData from "../hooks/useMasterData";
 import SearchableSelect from "../components/common/SearchableSelect";
 import { SHIP_TO_OPTIONS } from "../config/shipToLocations";
 import { minEntryDateFor } from "../utils/dateRules";
+import { INVENTORY_CATEGORY_OPTIONS } from "../constants/inventoryCategories";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -64,10 +65,9 @@ function formatCurrency(val) {
 }
 
 // Finished goods are produced, not purchased — a PO only ever buys inputs.
-const CATEGORY_OPTIONS = [
-  { value: "RAW_MATERIAL", label: "Raw Materials" },
-  { value: "PACKING_MATERIAL", label: "Packing Material" }
-];
+const CATEGORY_OPTIONS = INVENTORY_CATEGORY_OPTIONS.filter(
+  (option) => option.value !== "FINISHED_GOODS"
+);
 
 const CATALOG_KEY_BY_CATEGORY = {
   RAW_MATERIAL: "rawMaterialsCatalog",

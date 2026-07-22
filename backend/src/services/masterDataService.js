@@ -741,6 +741,24 @@ export async function deleteSupplierMasterRow(supplierId, user) {
   };
 }
 
+// The category decides which inventory screen a product's stock shows up on,
+// and those screens match on the exact stored code. Excel imports carry
+// whatever a plant typed ("raw material", "RM", "Packing"), so fold the common
+// spellings onto the real codes rather than silently filing them as finished
+// goods. Anything unrecognised is left as typed.
+function normalizeProductCategory(raw) {
+  const value = String(raw || "").trim();
+  if (!value) return null;
+
+  const compact = value.toUpperCase().replace(/[^A-Z]/g, "");
+  if (["RAWMATERIAL", "RAWMATERIALS", "RM", "RAW"].includes(compact)) return "RAW_MATERIAL";
+  if (["PACKINGMATERIAL", "PACKINGMATERIALS", "PACKAGINGMATERIAL", "PM", "PACKING", "PACKAGING"].includes(compact)) {
+    return "PACKING_MATERIAL";
+  }
+  if (["FINISHEDGOODS", "FINISHEDGOOD", "FG", "FINISHED"].includes(compact)) return "FINISHED_GOODS";
+  return value;
+}
+
 function readProductPayload(payload) {
   const productName = String(payload.product_name || "").trim();
   if (!productName) {
@@ -751,7 +769,7 @@ function readProductPayload(payload) {
 
   return {
     productName,
-    category: String(payload.category || "").trim() || null,
+    category: normalizeProductCategory(payload.category),
     defaultUnit: String(payload.default_unit || "").trim() || null,
     hsnCode: String(payload.hsn_code || "").trim() || null,
     description: String(payload.description || "").trim() || null

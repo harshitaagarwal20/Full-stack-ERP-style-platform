@@ -4,6 +4,40 @@ import { buildPagination } from "../utils/pagination.js";
 const CREDIT_TYPES = new Set(["IN", "ADJUSTMENT_IN"]);
 const DEBIT_TYPES = new Set(["OUT", "ADJUSTMENT_OUT"]);
 
+export const RAW_MATERIAL = "RAW_MATERIAL";
+export const PACKING_MATERIAL = "PACKING_MATERIAL";
+export const FINISHED_GOODS = "FINISHED_GOODS";
+
+// Categories in the data are whatever was typed when the item was purchased —
+// "Raw Material", "Additive", "Catalyst", "Packing Material" — not the codes
+// the newer screens use. Fold them onto the three buckets the inventory
+// screens are split by, so filtering works on real historical data and not
+// just on rows created since the codes were introduced.
+//
+// Additives and catalysts are production inputs bought on a PO exactly like
+// raw materials (they even share the same production wizard steps), so they
+// belong on the Raw Materials screen rather than in a bucket of their own.
+// Anything with no category at all is finished goods: produced stock never
+// arrives on a GRN, so it is the only thing that can have no purchase
+// category.
+export function normalizeInventoryCategory(raw) {
+  const compact = String(raw || "").toUpperCase().replace(/[^A-Z]/g, "");
+  if (!compact) return FINISHED_GOODS;
+  if (compact.includes("PACK")) return PACKING_MATERIAL;
+  if (compact.includes("FINISHED") || compact === "FG") return FINISHED_GOODS;
+  if (
+    compact.includes("RAW") ||
+    compact.includes("ADDITIVE") ||
+    compact.includes("CATALYST") ||
+    compact === "RM"
+  ) {
+    return RAW_MATERIAL;
+  }
+  // An unrecognised category is still a purchased input — it came in on a PO,
+  // so it is not finished goods.
+  return RAW_MATERIAL;
+}
+
 // Real-time net stock for a single item, used by dispatch to decide what's
 // actually available to ship regardless of which batch/production it came from.
 // Pass batchNo to scope the same calculation down to one specific batch line
@@ -200,18 +234,45 @@ export async function getStockRegister(dateStr, category) {
   }
 
   const itemIds = [...new Set([...rowsByKey.values()].map((r) => r.itemId))];
-  const grnItems = itemIds.length
-    ? await prisma.grnItem.findMany({
-        where: { itemId: { in: itemIds } },
-        select: { itemId: true, grade: true, category: true },
-        orderBy: { id: "desc" }
-      })
-    : [];
+  // Most stock never arrives on a GRN (production output, packing material
+  // consumed straight off an adjustment), so the ledger's own category is the
+  // only thing that can place those rows on the right screen. GRN wins where
+  // it exists — it describes what physically arrived.
+  const [grnItems, ledgerMeta, curated] = itemIds.length
+    ? await Promise.all([
+        prisma.grnItem.findMany({
+          where: { itemId: { in: itemIds } },
+          select: { itemId: true, grade: true, category: true },
+          orderBy: { id: "desc" }
+        }),
+        prisma.inventoryTransaction.findMany({
+          where: { itemId: { in: itemIds }, OR: [{ category: { not: null } }, { grade: { not: null } }] },
+          select: { itemId: true, grade: true, category: true },
+          orderBy: { id: "desc" }
+        }),
+        getCuratedCategories()
+      ])
+    : [[], [], new Map()];
   const gradeByItemId = new Map();
   const categoryByItemId = new Map();
   for (const gi of grnItems) {
     if (!gradeByItemId.has(gi.itemId)) gradeByItemId.set(gi.itemId, gi.grade || "");
     if (!categoryByItemId.has(gi.itemId)) categoryByItemId.set(gi.itemId, gi.category || "");
+  }
+  for (const row of ledgerMeta) {
+    if (!gradeByItemId.get(row.itemId)) gradeByItemId.set(row.itemId, row.grade || "");
+    if (!categoryByItemId.get(row.itemId)) categoryByItemId.set(row.itemId, row.category || "");
+  }
+  // Curated last so it overwrites, not fills in — see getCuratedCategories.
+  // Matched case-insensitively for the same reason as the stock list: the
+  // master and the ledger disagree on casing for some products.
+  const curatedByKey = new Map();
+  for (const [name, meta] of curated) {
+    if (meta.category) curatedByKey.set(name.toUpperCase(), meta.category);
+  }
+  for (const itemId of itemIds) {
+    const curatedCategory = curatedByKey.get(String(itemId).toUpperCase());
+    if (curatedCategory) categoryByItemId.set(itemId, curatedCategory);
   }
 
   let rows = [...rowsByKey.values()]
@@ -229,9 +290,8 @@ export async function getStockRegister(dateStr, category) {
       row.consumeAShift !== 0 || row.consumeBShift !== 0 || row.consumeCShift !== 0 || row.closingStock !== 0);
 
   if (category) {
-    rows = category === "FINISHED_GOODS"
-      ? rows.filter((row) => !["RAW_MATERIAL", "PACKING_MATERIAL"].includes(row.category || ""))
-      : rows.filter((row) => row.category === category);
+    const wanted = normalizeInventoryCategory(category);
+    rows = rows.filter((row) => normalizeInventoryCategory(row.category) === wanted);
   }
 
   // batchNo is null for the un-batched movement that makes up most of the
@@ -239,15 +299,56 @@ export async function getStockRegister(dateStr, category) {
   return rows.sort((a, b) => (a.itemId || "").localeCompare(b.itemId || "") || (a.batchNo || "").localeCompare(b.batchNo || ""));
 }
 
+// Products catalogued in the master but with no ledger movement yet. Without
+// these, a product added on the Product Master screen is invisible on its
+// inventory screen until something first moves it, which reads as "my product
+// vanished". They join the list at zero so the screen shows the full catalogue
+// and stock-outs are obvious.
+//
+// Deliberately only products with an explicit category: the master is seeded
+// from the old product-name list with the category left blank for an admin to
+// fill in, and "no category" reads as finished goods further down — so
+// including them would dump the entire uncategorised catalogue onto the
+// Finished Goods screen.
+async function getCataloguedProductsWithoutStock() {
+  try {
+    return await prisma.$queryRawUnsafe(
+      "SELECT `productName`, `category`, `defaultUnit` FROM `ProductMaster` " +
+      "WHERE `isActive` = 1 AND `category` IS NOT NULL AND TRIM(`category`) <> ''"
+    );
+  } catch {
+    // ProductMaster is a raw-managed table that self-creates on first master
+    // data load; before that a missing table must not break the stock screen.
+    return [];
+  }
+}
+
+// The product master is the admin-curated answer to "what kind of item is
+// this", so it outranks anything inferred from history. Without that
+// precedence an item mislabelled once — an opening-stock import that tagged a
+// finished product "Raw Material", say — would be stuck on the wrong screen
+// forever, with no way for an admin to correct it.
+async function getCuratedCategories() {
+  const map = new Map();
+  for (const row of await getCataloguedProductsWithoutStock()) {
+    const itemId = String(row.productName || "").trim();
+    if (itemId) map.set(itemId, { category: row.category || "", uom: row.defaultUnit || "" });
+  }
+  return map;
+}
+
 export async function getRawMaterialInventory(query = {}) {
   const { search, category, uom, grade } = query;
 
   // Sum quantities per itemId/type at the DB level instead of loading every
   // transaction row into memory (the ledger only grows over time).
-  const grouped = await prisma.inventoryTransaction.groupBy({
-    by: ["itemId", "type"],
-    _sum: { quantity: true }
-  });
+  const [grouped, catalogueRows] = await Promise.all([
+    prisma.inventoryTransaction.groupBy({
+      by: ["itemId", "type"],
+      _sum: { quantity: true }
+    }),
+    getCataloguedProductsWithoutStock()
+  ]);
 
   const stockMap = new Map();
   for (const row of grouped) {
@@ -269,6 +370,38 @@ export async function getRawMaterialInventory(query = {}) {
       entry.totalOut += qty;
     }
     entry.netQty = entry.totalIn - entry.totalOut;
+  }
+
+  // Match the catalogue to the ledger case-insensitively. MySQL compares
+  // strings that way, so the master can hold "ZINC STEARATE" while the ledger
+  // carries "Zinc Stearate" for the very same product — a case-sensitive
+  // lookup here silently matches neither, which is what stopped a curated
+  // category from taking effect.
+  const catalogueMeta = new Map();
+  const stockKeyByName = new Map();
+  for (const itemId of stockMap.keys()) {
+    stockKeyByName.set(itemId.toUpperCase(), itemId);
+  }
+  for (const row of catalogueRows) {
+    const productName = String(row.productName || "").trim();
+    if (!productName) continue;
+    const key = productName.toUpperCase();
+    const existingItemId = stockKeyByName.get(key);
+    catalogueMeta.set(existingItemId || productName, {
+      category: row.category || "",
+      uom: row.defaultUnit || ""
+    });
+    if (!existingItemId) {
+      stockMap.set(productName, {
+        itemId:            productName,
+        totalIn:           0,
+        totalOut:          0,
+        netQty:            0,
+        warehouseLocation: "",
+        lastReceivedAt:    null
+      });
+      stockKeyByName.set(key, productName);
+    }
   }
 
   if (stockMap.size === 0) {
@@ -322,14 +455,44 @@ export async function getRawMaterialInventory(query = {}) {
   const unmetaItemIds = itemIds.filter((itemId) => !metaMap.has(itemId));
   if (unmetaItemIds.length > 0) {
     const fallbackRows = await prisma.inventoryTransaction.findMany({
-      where:   { itemId: { in: unmetaItemIds }, OR: [{ uom: { not: null } }, { grade: { not: null } }] },
-      select:  { itemId: true, uom: true, grade: true },
+      where:   {
+        itemId: { in: unmetaItemIds },
+        OR: [{ uom: { not: null } }, { grade: { not: null } }, { category: { not: null } }]
+      },
+      select:  { itemId: true, uom: true, grade: true, category: true },
       orderBy: { id: "desc" }
     });
+    // Scan newest-first but keep looking past blanks: production and dispatch
+    // rows carry no category, so taking only the newest row would drop the
+    // category an item was actually received under. Same rule as the stock
+    // register, so an item can't land on one screen there and another here.
     for (const row of fallbackRows) {
-      if (!metaMap.has(row.itemId)) {
-        metaMap.set(row.itemId, { category: "", uom: row.uom || "", grade: row.grade || "", batchNo: "" });
+      const existing = metaMap.get(row.itemId);
+      if (!existing) {
+        metaMap.set(row.itemId, {
+          category: row.category || "",
+          uom: row.uom || "",
+          grade: row.grade || "",
+          batchNo: ""
+        });
+        continue;
       }
+      if (!existing.category) existing.category = row.category || "";
+      if (!existing.uom) existing.uom = row.uom || "";
+      if (!existing.grade) existing.grade = row.grade || "";
+    }
+  }
+
+  // The product master's curated category overrides whatever history inferred
+  // (see getCuratedCategories); its unit only fills a gap, since a GRN records
+  // the unit the goods actually arrived in.
+  for (const [itemId, meta] of catalogueMeta) {
+    const existing = metaMap.get(itemId);
+    if (!existing) {
+      metaMap.set(itemId, { category: meta.category, uom: meta.uom, grade: "", batchNo: "" });
+    } else {
+      if (meta.category) existing.category = meta.category;
+      if (!existing.uom) existing.uom = meta.uom;
     }
   }
 
@@ -349,11 +512,8 @@ export async function getRawMaterialInventory(query = {}) {
     );
   }
   if (category) {
-    // Finished goods are never bought on a PO, so they never get a GrnItem
-    // category — "no known purchasing category" is what makes an item FG.
-    items = category === "FINISHED_GOODS"
-      ? items.filter((item) => !["RAW_MATERIAL", "PACKING_MATERIAL"].includes(item.category || ""))
-      : items.filter((item) => (item.category || "") === category);
+    const wanted = normalizeInventoryCategory(category);
+    items = items.filter((item) => normalizeInventoryCategory(item.category) === wanted);
   }
   if (uom) {
     items = items.filter((item) => (item.uom || "") === uom);

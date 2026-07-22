@@ -356,7 +356,7 @@ function PackingPage() {
             <div className="masterdata-modal-head">
               <div>
                 <h3>Record Packing</h3>
-                <p>{activeOrder.orderNo} — {activeOrder.product} for {activeOrder.clientName}</p>
+                <p>{activeOrder.product} for {activeOrder.clientName}</p>
               </div>
               <button className="masterdata-modal-close-btn" onClick={closePackModal} disabled={saving} type="button">
                 ✕

@@ -256,6 +256,10 @@ async function buildDispatchDashboardData(query = {}, client = prisma) {
             orderBy: {
               createdAt: "asc"
             }
+          },
+          // Packed quantity feeds the Packaging Size column.
+          packingRecords: {
+            select: { packedQuantity: true }
           }
         },
         orderBy: [{ updatedAt: "desc" }, { id: "desc" }]
@@ -414,6 +418,10 @@ async function buildDispatchDashboardData(query = {}, client = prisma) {
             orderBy: {
               createdAt: "asc"
             }
+          },
+          // Packed quantity feeds the Packaging Size column.
+          packingRecords: {
+            select: { packedQuantity: true }
           }
         },
         orderBy: [{ updatedAt: "desc" }, { id: "desc" }]

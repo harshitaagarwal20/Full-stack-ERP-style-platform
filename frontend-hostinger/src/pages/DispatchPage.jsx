@@ -97,10 +97,15 @@ function getAllowedShipmentStatusOptions(order, dispatchQty, editingShipmentStat
   return baseOptions;
 }
 
-// packingSize is a real "25 KG"-style value typed on the order itself — the
-// packing material recorded during the actual Packing step is a different
-// thing (bag/drum type, not a size), so it can't stand in for this.
+// The quantity actually packed on the Packing screen, summed across every
+// packing entry for the order. Falls back to the packing size typed on the
+// order itself while nothing has been packed yet ("NA" is the placeholder
+// stamped on orders raised from an enquiry, so it never counts as a value).
 function getPackagingDisplay(order) {
+  const records = Array.isArray(order?.packingRecords) ? order.packingRecords : [];
+  const packed = records.reduce((sum, record) => sum + Number(record?.packedQuantity || 0), 0);
+  if (packed > 0) return `${packed} ${order?.unit || ""}`.trim();
+
   const size = order?.packingSize;
   return size && size !== "NA" ? size : "-";
 }

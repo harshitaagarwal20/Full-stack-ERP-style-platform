@@ -394,6 +394,11 @@ export const DISPATCH_ORDER_SELECT = {
     orderBy: {
       createdAt: "desc"
     }
+  },
+  // Feeds the dispatch screen's Packaging Size column: the quantity actually
+  // packed, summed across every packing entry for the order.
+  packingRecords: {
+    select: { packedQuantity: true }
   }
 };
 

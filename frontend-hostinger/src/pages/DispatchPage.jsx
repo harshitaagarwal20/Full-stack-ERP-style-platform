@@ -97,12 +97,10 @@ function getAllowedShipmentStatusOptions(order, dispatchQty, editingShipmentStat
   return baseOptions;
 }
 
-// The order's own packingSize is only ever what was typed at order-creation
-// time (often "NA" for orders auto-created from an enquiry). Once the order
-// has actually been packed, show the packing material used instead.
+// packingSize is a real "25 KG"-style value typed on the order itself — the
+// packing material recorded during the actual Packing step is a different
+// thing (bag/drum type, not a size), so it can't stand in for this.
 function getPackagingDisplay(order) {
-  const packedMaterial = order?.packingRecords?.[0]?.packingMaterialItemId;
-  if (packedMaterial) return packedMaterial;
   const size = order?.packingSize;
   return size && size !== "NA" ? size : "-";
 }

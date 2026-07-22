@@ -394,15 +394,6 @@ export const DISPATCH_ORDER_SELECT = {
     orderBy: {
       createdAt: "desc"
     }
-  },
-  // Most recent packing record's material stands in for "packaging size" on
-  // the dispatch screen once the order has actually been packed — packingSize
-  // on the order itself is only ever what was typed at order-creation time
-  // (often "NA" for orders auto-created from an enquiry).
-  packingRecords: {
-    select: { packingMaterialItemId: true },
-    orderBy: { createdAt: "desc" },
-    take: 1
   }
 };
 

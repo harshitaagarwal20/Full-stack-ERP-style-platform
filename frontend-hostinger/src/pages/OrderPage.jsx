@@ -137,6 +137,7 @@ function createCreateForm() {
     price: "",
     currency: "INR",
     unit: "KG",
+    packing_size: "",
     delivery_date: "",
     client_name: "",
     address: "",
@@ -326,11 +327,15 @@ function OrderPage() {
     setCreating(true);
     try {
       if (editingOrderId) {
+        const packingSize = String(form.packing_size || "").trim();
         const payload = {
           ...form,
           quantity: Number(form.quantity),
           price: form.price === "" ? null : Number(form.price),
-          currency: form.currency || null
+          currency: form.currency || null,
+          // The API rejects an empty string here, so leave the field out
+          // entirely when it is blank rather than sending "".
+          packing_size: packingSize || undefined
         };
         await api.put(`/orders/${editingOrderId}`, payload);
       } else {
@@ -520,6 +525,9 @@ function OrderPage() {
       price: order.price ?? "",
       currency: order.currency || "",
       unit: order.unit || "KG",
+      // Orders created from an enquiry carry a placeholder "NA" — show it as
+      // empty so the field reads as "not filled in yet" rather than a value.
+      packing_size: order.packingSize && order.packingSize !== "NA" ? order.packingSize : "",
       delivery_date: order.deliveryDate ? new Date(order.deliveryDate).toISOString().slice(0, 10) : "",
       client_name: order.clientName || "",
       address: order.address || "",
@@ -1070,6 +1078,17 @@ function OrderPage() {
                       placeholder="Select unit"
                     />
                     {renderFieldError("unit")}
+                  </div>
+                  <div>
+                    <label>Packaging Size</label>
+                    <input
+                      autoComplete="off"
+                      className={getOrderInputClass("packing_size")}
+                      value={form.packing_size}
+                      onChange={(e) => setOrderField("packing_size", e.target.value)}
+                      placeholder="e.g. 25 KG"
+                    />
+                    {renderFieldError("packing_size")}
                   </div>
                   <div>
                     <label>Dispatch Date</label>

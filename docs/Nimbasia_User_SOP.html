@@ -1,0 +1,243 @@
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">
+<head>
+<meta charset="utf-8">
+<title>Nimbasia ERP - Standard Operating Procedure (User Guide)</title>
+<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->
+<style>
+body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; color: #1a1a1a; margin: 40px; }
+h1 { font-size: 20pt; color: #1f3864; border-bottom: 3px solid #1f3864; padding-bottom: 6px; page-break-before: always; }
+h1.first { page-break-before: avoid; }
+h2 { font-size: 14pt; color: #2e5496; margin-top: 22px; }
+h3 { font-size: 12pt; color: #333f50; margin-top: 16px; }
+table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 10.5pt; }
+th { background: #1f3864; color: #fff; padding: 6px 8px; text-align: left; border: 1px solid #999; }
+td { padding: 5px 8px; border: 1px solid #bbb; vertical-align: top; }
+tr:nth-child(even) td { background: #f2f6fc; }
+ol.steps li { margin: 6px 0; }
+.cover { text-align: center; margin-top: 200px; }
+.cover h1 { border: none; font-size: 30pt; page-break-before: avoid; }
+.note { background: #fff8e1; border-left: 4px solid #f0a500; padding: 8px 12px; margin: 10px 0; }
+.warn { background: #fdecea; border-left: 4px solid #c0392b; padding: 8px 12px; margin: 10px 0; }
+.tip { background: #e8f5e9; border-left: 4px solid #2e7d32; padding: 8px 12px; margin: 10px 0; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+<h1>NIMBASIA ERP</h1>
+<h2>Standard Operating Procedure — User Guide</h2>
+<p style="font-size:13pt">Plain-language, step-by-step instructions for everyday use</p>
+<p style="font-size:12pt"><b>For:</b> Sales, Production, Dispatch, Purchase, Accounts and Admin teams</p>
+<p><b>Document Version:</b> 1.0 &nbsp;&nbsp; <b>Date:</b> 18 July 2026</p>
+</div>
+
+<h1 class="first">About This Document</h1>
+<p>This guide explains, in simple language, how to do your daily work in the Nimbasia system. No technical knowledge is needed. Each section is a short procedure: what screen to open, what to fill in, which button to press, and what happens next.</p>
+<p>The system follows one main journey:</p>
+<p style="font-size:12pt; text-align:center"><b>Enquiry &rarr; Approval &rarr; Order &rarr; Production &rarr; Quality Check &rarr; Packing &rarr; Dispatch &rarr; Delivered</b></p>
+<p>Alongside this journey, a purchasing loop keeps raw materials in stock: <b>Purchase Order &rarr; Goods Receipt &rarr; Quality Check &rarr; Stock</b>.</p>
+
+<h1>Table of Contents</h1>
+<ol>
+<li>Who Does What (Roles)</li>
+<li>Getting Started (Login and Basics)</li>
+</ol>
+
+<h1>Who Does What (Roles)</h1>
+<p>Every person has one login and one role. You only see the screens your role needs. Pricing is hidden from everyone except Admin and Accounts.</p>
+<table>
+<tr><th>Role</th><th>What they do in the system</th></tr>
+<tr><td><b>Admin</b></td><td>Can see and do everything. Also manages user accounts, master data (product and customer lists) and the activity log.</td></tr>
+<tr><td><b>Sales</b></td><td>Logs customer enquiries, approves or rejects them, creates and manages orders, and raises manual order requests.</td></tr>
+<tr><td><b>Production</b></td><td>Runs manufacturing batches: materials, equipment, testing, quality check, packing. Can raise purchase orders (without prices) and record stock adjustments.</td></tr>
+<tr><td><b>Dispatch</b></td><td>Ships completed orders: creates shipments, updates their status from packing to delivered, and enters dispatch dates for approved requests.</td></tr>
+<tr><td><b>Purchase</b></td><td>Raises purchase orders — chooses the supplier, items and quantities. Never sees prices and cannot send a PO to the supplier.</td></tr>
+<tr><td><b>Accounts</b></td><td>Adds prices, tax, discount and freight to purchase orders, and sends the finished PO to the supplier.</td></tr>
+</table>
+
+<h1>Getting Started</h1>
+<h2>Logging in</h2>
+<ol class="steps">
+<li>Open the Nimbasia website in your browser (works on computer and phone).</li>
+<li>Enter your email and password, then press <b>Sign In</b>.</li>
+<li>You land on the screen for your role. The menu on the left (or the bottom bar on a phone) shows only the pages you can use.</li>
+</ol>
+<div class="warn"><b>Wrong password too many times?</b> After 10 failed attempts the system blocks login for 15 minutes. Wait and try again.</div>
+<h2>Changing your password</h2>
+<ol class="steps">
+<li>Click your name at the top right.</li>
+<li>Choose <b>Change Password</b>, enter the old and new password (at least 6 characters), and save.</li>
+<li>You stay logged in, but everyone else using your old password is logged out immediately.</li>
+</ol>
+<div class="tip"><b>Tip:</b> If the screen suddenly returns to the login page, your session has expired. Just log in again — nothing is lost.</div>
+
+<h1>SOP 1 — Recording a Customer Enquiry (Sales)</h1>
+<p><b>When:</b> a customer calls, messages or visits asking about a product.</p>
+<ol class="steps">
+<li>Open <b>Enquiries</b> and press <b>New Enquiry</b>.</li>
+<li>Fill in the enquiry date, how it came in (phone, WhatsApp, website, walk-in), and the company name. If the company already exists, pick it from the list so its details fill in automatically.</li>
+<li>Add one row per product: choose the product from the list, its grade, quantity and unit. You can add several products to one enquiry.</li>
+<li>Enter the expected price and currency, the customer's expected timeline, and who in your team owns this enquiry.</li>
+<li>If the customer needs it urgently, switch on the <b>Urgent</b> toggle — urgent enquiries jump the production queue later.</li>
+<li>Press <b>Save</b>. The system gives the enquiry a number and marks it <b>Pending</b>.</li>
+</ol>
+<div class="note"><b>Sample follow-up:</b> if a sample was sent, the list reminds you automatically after 12 days to follow up with the customer.</div>
+
+<h1>SOP 2 — Approving or Rejecting an Enquiry (Sales / Admin)</h1>
+<p><b>When:</b> pending enquiries are waiting for a decision.</p>
+<ol class="steps">
+<li>Open <b>Approval</b>. You see every pending enquiry with its full details.</li>
+<li>To accept: press <b>Approve</b> and confirm. The enquiry becomes <b>Accepted</b>.</li>
+<li>To reject: press <b>Reject</b>. You must type a reason — the system will not let you reject without one.</li>
+</ol>
+<div class="note">Only a <b>Pending</b> enquiry can be approved or rejected. Once decided, the decision cannot be repeated.</div>
+
+<h1>SOP 3 — Creating and Managing Orders (Sales)</h1>
+<p><b>When:</b> an enquiry has been accepted and the customer confirms the order.</p>
+<ol class="steps">
+<li>Open <b>Orders</b>. Create the order from the accepted enquiry — the product, quantity and customer details carry over automatically, and the order gets its own sales-order number.</li>
+<li>Check the delivery address. The order <b>cannot go to production</b> until city, pincode, state and country are all filled in. If something is missing, the screen tells you exactly what.</li>
+<li>While the order status is <b>Created</b>, you can still edit or delete it. Once production starts, it locks.</li>
+<li>When ready, press <b>Move to Production</b>. The order status changes and a production batch is created automatically for the factory team.</li>
+</ol>
+<h2>Manual order requests (no enquiry)</h2>
+<p>If a customer confirms an order directly and there is no enquiry on record:</p>
+<ol class="steps">
+<li>In <b>Orders</b>, create a <b>Manual Order Request</b> with the product, grade, quantity, packing and the full delivery address.</li>
+<li>The request waits for approval (Admin or Sales). Once approved and given a dispatch date, it becomes a real order just like the enquiry route.</li>
+</ol>
+
+<h1>SOP 4 — Running a Production Batch (Production)</h1>
+<p><b>When:</b> an order has been moved to production and appears in your queue.</p>
+<h2>The queue</h2>
+<p>Open <b>Production</b>. Batches are listed urgent-first, then oldest-first. Each row shows the order, the product, how much has been produced so far, and the batch status (Not Started, Started, Partially Produced, Hold, Completed).</p>
+<h2>Working through a batch</h2>
+<p>Open a batch to see its overview and the eight steps. Complete them as the work happens on the floor:</p>
+<table>
+<tr><th>Step</th><th>What you record</th></tr>
+<tr><td>1. Batch Setup</td><td>Batch number, capacity, particle size, assigned staff, delivery date and produced quantity.</td></tr>
+<tr><td>2. Raw Materials</td><td>Each material used: item, vendor, grade, batch number and quantity per shift (A/B/C). The screen shows how much of each batch is available in stock.</td></tr>
+<tr><td>3. Additives</td><td>Same as raw materials, for additives.</td></tr>
+<tr><td>4. Catalyst</td><td>Same as raw materials, for catalysts.</td></tr>
+<tr><td>5. Equipment</td><td>Equipment checklist: name, ID and remarks.</td></tr>
+<tr><td>6. Process Parameters</td><td>Target vs actual values, plus machine RPM settings.</td></tr>
+<tr><td>7. Operation Log</td><td>A running diary of the batch: time, operation, operator, remarks.</td></tr>
+<tr><td>8. In-Process Testing</td><td>Shift sampling results (FFA, ash, moisture, appearance, melting point, etc.). For records only.</td></tr>
+</table>
+<div class="note"><b>Substituting a material batch:</b> if a planned batch of material runs short, use <b>Substitute Batch</b> on that row, give the reason and pick the replacement. The change is recorded in the batch history.</div>
+<div class="warn">A batch status can only be changed <b>twice</b>. Plan status changes carefully — the system blocks a third change.</div>
+
+<h1>SOP 5 — Final Quality Check (Production)</h1>
+<p><b>When:</b> the batch is completed (or partially produced) and finished goods need sign-off.</p>
+<ol class="steps">
+<li>Open the batch's <b>QC Test Sheet</b>.</li>
+<li>Enter the test rows: sample date, shift, who sampled, black particle, bulk density, sieve residue, who analysed, remarks.</li>
+<li>Choose the overall result — <b>PASS</b>, <b>FAIL</b> or <b>PENDING</b> — and the approver's name.</li>
+<li>Press <b>Save</b>.</li>
+</ol>
+<div class="tip"><b>What PASS does:</b> the produced quantity is added to finished-goods stock and the order automatically becomes <b>Ready for Dispatch</b>. Nothing can be packed or shipped until QC passes.</div>
+
+<h1>SOP 6 — Packing (Production / Dispatch)</h1>
+<p><b>When:</b> a QC-passed order needs to be packed for shipment.</p>
+<ol class="steps">
+<li>Open <b>Packing</b>. Each order card shows: ordered quantity, already packed, already dispatched, and what remains.</li>
+<li>Press <b>Pack</b>, enter the quantity packed, the packing material used, its quantity, who packed it, and remarks.</li>
+<li>Save. The packing history for the order updates.</li>
+</ol>
+<div class="note">The system will not let you pack more than was produced, or use more packing material than is in stock.</div>
+
+<h1>SOP 7 — Dispatching Orders (Dispatch)</h1>
+<p><b>When:</b> packed goods are ready to leave the factory.</p>
+<ol class="steps">
+<li>Open <b>Dispatch</b>. The top shows orders ready to ship (with delivered and remaining amounts); below are the individual shipments.</li>
+<li>Press <b>New Dispatch</b>, choose the order, and enter the quantity — the system caps it at what is actually available to ship.</li>
+<li>Enter the dispatch date, tick whether packing is done, set the shipment status and add remarks. Save.</li>
+<li>As the shipment moves, update its status: <b>Packing &rarr; Shipped &rarr; Delivered</b>.</li>
+</ol>
+<div class="note"><b>Delivered</b> can only be set on the shipment that completes the full order quantity — it closes the order.</div>
+<h2>Entering dispatch dates for approved requests</h2>
+<p>Open <b>Dispatch Date</b>. This queue lists accepted enquiries and approved manual requests that do not have an order yet. Entering a dispatch date converts each into a real order automatically, with the address filled in.</p>
+
+<h1>SOP 8 — Purchasing Raw Materials (Purchase / Production / Accounts / Admin)</h1>
+<p>Purchasing is deliberately split between two roles so that ordering and pricing stay separate.</p>
+<h2>Step A — Raise the purchase order (Purchase or Production)</h2>
+<ol class="steps">
+<li>Open <b>Purchase Orders</b> and press <b>New PO</b>.</li>
+<li>Choose the supplier — existing suppliers fill in their contact, GST and address automatically; a new name creates a new supplier.</li>
+<li>Fill in category, bill-to and ship-to plant, order date, expected delivery date and department.</li>
+<li>Add item rows: description, category, unit, grade and quantity. <b>You will not see price fields — that is normal.</b></li>
+<li>Save. The PO stays in <b>Draft</b>.</li>
+</ol>
+<h2>Step B — Price and send (Accounts or Admin)</h2>
+<ol class="steps">
+<li>Open the draft PO. Accounts sees the price, tax, currency, discount and freight fields.</li>
+<li>Fill in all pricing and save.</li>
+<li>Press <b>Send to Supplier</b> — this button only works once the PO is fully priced.</li>
+<li>Use <b>Print</b> for a clean, letterhead-ready copy of the PO.</li>
+</ol>
+
+<h1>SOP 9 — Receiving Goods (GRN)</h1>
+<p><b>When:</b> material ordered on a PO arrives at the gate.</p>
+<ol class="steps">
+<li>Open <b>GRNs</b> and press <b>New GRN</b> (Admin).</li>
+<li>Pick the purchase order the delivery belongs to — only POs still awaiting material appear.</li>
+<li>Enter the received date, who received it, vehicle reference and warehouse location, and the quantity received against each ordered item.</li>
+<li>Save. The GRN is in <b>Draft</b>.</li>
+<li>Record the quality test on the GRN: sampling rows, the overall result, and the approver (the approver must be a different person from the analyst).</li>
+<li>When the result is <b>PASS</b>, press <b>Confirm</b>. Only then is the material added to stock.</li>
+</ol>
+<div class="warn">Never press Confirm before QC has passed — Confirm is what puts the material into usable inventory.</div>
+
+<h1>SOP 10 — Checking and Adjusting Stock</h1>
+<ol class="steps">
+<li>Open <b>Raw Materials</b>. The table shows stock on hand for every item and batch — lowest stock first — plus summary tiles at the top.</li>
+<li>Use the <b>Stock Register</b> tab to see any date's opening stock, what came in, what was consumed per shift, and the closing stock.</li>
+<li>To correct a physical difference, use <b>Manual Adjustment</b>: choose IN or OUT, the quantity, and a reason. The reason is mandatory — every adjustment is traceable.</li>
+</ol>
+<div class="warn">Never try to fix stock by editing past records. Always use a Manual Adjustment with a clear reason, so the history stays truthful.</div>
+
+<h1>SOP 11 — Admin Tasks</h1>
+<h2>Managing users</h2>
+<ol class="steps">
+<li>Open <b>Users</b>. Press <b>Add</b>, enter the name, email, role and a starting password (at least 6 characters).</li>
+<li>Tell the person to change their password on first login.</li>
+</ol>
+<h2>Master data</h2>
+<p>Open <b>Master Data</b> to maintain the dropdown lists everyone else picks from: products, persons, supervisors, enquiry modes, units, and the customer list (with Excel import). <b>Supplier Data</b> does the same for suppliers.</p>
+<h2>Activity log</h2>
+<p>Open <b>Activity Log</b> to see who did what and when: every important action is recorded with the person, time, and what changed. Use the search and filters to investigate any question about a record's history.</p>
+
+<h1>Golden Rules</h1>
+<table>
+<tr><th>#</th><th>Rule</th></tr>
+<tr><td>1</td><td>An order can only be created from an <b>accepted</b> enquiry.</td></tr>
+<tr><td>2</td><td>Production cannot start until the order has a complete delivery address (city, pincode, state, country).</td></tr>
+<tr><td>3</td><td>Nothing ships until the final quality check is a <b>PASS</b>.</td></tr>
+<tr><td>4</td><td>You can never dispatch more than has been produced and packed.</td></tr>
+<tr><td>5</td><td>Rejections always need a written reason — enquiries and purchase orders alike.</td></tr>
+<tr><td>6</td><td>Prices on purchase orders are Accounts' job; ordering quantities is Purchase's job. Neither does the other's.</td></tr>
+<tr><td>7</td><td>Goods enter stock only through a confirmed, QC-passed GRN; corrections only through reasoned manual adjustments.</td></tr>
+<tr><td>8</td><td>Change your password after your first login, and never share logins.</td></tr>
+</table>
+
+<h1>Common Messages and What They Mean</h1>
+<table>
+<tr><th>Message you see</th><th>What it means</th><th>What to do</th></tr>
+<tr><td>"Missing: Pincode" (or City/State/Country) when moving to production</td><td>The delivery address is incomplete.</td><td>Open the order, fill in the missing field, try again.</td></tr>
+<tr><td>Reject button asks for a reason</td><td>Rejections must be explained.</td><td>Type a short reason and confirm.</td></tr>
+<tr><td>"Too many attempts" at login</td><td>10 wrong passwords in 15 minutes.</td><td>Wait 15 minutes, then log in. Contact Admin if you forgot the password.</td></tr>
+<tr><td>Screen returns to login by itself</td><td>Your session expired or your password was changed.</td><td>Log in again.</td></tr>
+<tr><td>Dispatch quantity box won't accept your number</td><td>You are trying to ship more than is available.</td><td>Check produced, packed and already-dispatched amounts on the Packing screen.</td></tr>
+<tr><td>"Send to Supplier" is greyed out</td><td>The PO has no prices yet.</td><td>Ask Accounts to price the PO first.</td></tr>
+<tr><td>Batch status change refused</td><td>The batch already used its two allowed status changes.</td><td>Contact Admin if the status is genuinely wrong.</td></tr>
+</table>
+
+<h1>Need Help?</h1>
+<ul>
+<li><b>Forgot your password / locked out:</b> contact your Admin — they can set a new password for you.</li>
+<li><b>A record looks wrong:</b> do not delete or overwrite it. Note the record number and tell your Admin; the activity log shows its full history.</li>
+<li><b>The site is not loading:</b> try refreshing once; if it persists, inform your Admin — do not keep retrying a form submission, as it may create duplicates.</li>
+</ul>
+
+</body>
+</html>

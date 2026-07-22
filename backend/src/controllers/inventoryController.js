@@ -40,7 +40,7 @@ export async function listItemBatchesHandler(req, res, next) {
 export async function getStockRegisterHandler(req, res, next) {
   try {
     const [rows, latestMovementDate] = await Promise.all([
-      getStockRegister(req.query.date),
+      getStockRegister(req.query.date, req.query.category),
       getLatestStockMovementDate()
     ]);
     res.json({ rows, latestMovementDate });

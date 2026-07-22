@@ -1,34 +1,32 @@
 # Nimbasia Frontend
 
-This folder is a frontend-only copy of the Nimbasia app for Hostinger deployment.
+React + Vite frontend of the Nimbasia app. In production it is **not** deployed
+separately: the root `package.json` build script builds this folder and copies
+`dist/` into `backend/public`, and the Express backend serves it alongside the
+`/api` routes from one origin. See [`../DEPLOYMENT.md`](../DEPLOYMENT.md).
+
+## Local development
+
+```bash
+npm install
+npm run dev
+```
+
+Runs on `http://localhost:5174` and proxies `/api` to the backend on
+`http://localhost:5001` (see `vite.config.js`).
 
 ## Build
 
 ```bash
-npm install
 npm run build
 ```
 
-Build output:
+Output goes to `dist/`. To produce what production actually serves, run
+`npm run build` from the repo root instead — it builds this folder and copies
+the output into `backend/public`.
 
-- `dist`
+## API base URL
 
-## Production API
-
-The frontend calls the backend on the **same origin** (the Hostinger Node app
-serves both the built frontend and the `/api` backend), so `VITE_API_URL` is
-left empty and requests go to the relative `/api`:
-
-```env
-VITE_API_URL=
-```
-
-## Hostinger Deployment
-
-1. Create a new Hostinger `Node.js Web App`
-2. Import the frontend-only GitHub repo
-3. Set the framework preset to `Vite` or `React`
-4. Use package manager `npm`
-5. Use build command `npm run build`
-6. Set output directory to `dist`
-7. Deploy
+The frontend calls the backend on the **same origin**, so `VITE_API_URL` stays
+`/api` in both `.env.production` and local dev (the dev server proxies it).
+Only set an absolute URL if the API is hosted on a different origin.

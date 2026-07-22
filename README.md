@@ -1,27 +1,33 @@
+# Nimbasia System (FMS)
 
-# Nibasia System (FMS)
-
-Production-ready full-stack web app for workflow:
+Full-stack ERP-style platform for the workflow:
 
 `Enquiry -> Approval -> Order -> Production -> Completion -> Dispatch`
 
+It covers order lifecycle tracking, enquiry management, production batches, dispatch control, purchase orders, GRNs, inventory, and role-based user access in one system.
+
 ## Tech Stack
 
-- Frontend: React (hooks), Axios, Tailwind CSS (mobile-first responsive)
+- Frontend: React 18 (hooks), Axios, Tailwind CSS (mobile-first responsive), Vite
 - Backend: Node.js, Express, JWT auth, RBAC middleware
-- Database: MySQL + Prisma ORM
+- Database: MySQL + Prisma ORM 6 (Rust-free `engineType = "client"` with the `@prisma/adapter-mariadb` driver adapter — no native query engine process)
 
-The deployed frontend is `frontend-hostinger/`. The top-level `frontend/` folder
-is an older copy kept only for reference — do not develop against it.
+The frontend lives in `frontend-hostinger/`.
 
 ## Folder Structure
 
 ```text
 Nimbasia/
+  server.js            # Hostinger startup file — imports backend/src/server.js
+  package.json         # root build/start scripts for the single-app deployment
   backend/
     prisma/
       schema.prisma
       seed.js
+      hostinger-init.sql               # full current schema (fresh or live DB safe)
+      hostinger-additive-migration.sql # adds columns/tables missing from old backups
+      hostinger-fix-zero-dates.sql     # repairs 0000-00-00 datetimes (see DEPLOYMENT.md)
+    public/            # built frontend copied here; served by Express in production
     src/
       config/
       controllers/
@@ -31,7 +37,7 @@ Nimbasia/
       utils/
       app.js
       server.js
-  frontend/
+  frontend-hostinger/
     src/
       api/
       components/
@@ -40,12 +46,15 @@ Nimbasia/
       App.jsx
       main.jsx
   docs/
-    gst.md
+    Nimbasia_Complete_Documentation.docx
+    Nimbasia_Complete_Documentation.html
 ```
 
 ## Documentation
 
-- [`gst.py`](docs/gst.md) - GST reconciliation script guide
+- [`DEPLOYMENT.md`](DEPLOYMENT.md) — Hostinger deployment guide and troubleshooting runbook
+- [`docs/Nimbasia_Complete_Documentation.html`](docs/Nimbasia_Complete_Documentation.html) — full product documentation
+- [`frontend-hostinger/README.md`](frontend-hostinger/README.md) — frontend build notes
 
 ## RBAC
 
@@ -73,11 +82,11 @@ npm install
 cp .env.example .env
 ```
 
-4. Update `DATABASE_URL` in `.env` for your MySQL instance.
-5. Run Prisma migration and generate client:
+4. Update `DATABASE_URL` in `.env` for your MySQL instance. Do not put unencoded special characters (`@`, `#`, …) in the password — they break URL parsing.
+5. Run Prisma migrations and generate the client:
 
 ```bash
-npx prisma migrate dev --name init
+npx prisma migrate dev
 npx prisma generate
 ```
 
@@ -129,33 +138,54 @@ npm run dev
 
 Frontend runs on `http://localhost:5174` and proxies `/api` to `http://localhost:5001`.
 
-## Deployment Notes
+## Deployment
+
+The app deploys to Hostinger as a **single Node.js web app**: Express serves both
+the built frontend (from `backend/public`) and the API at `/api` from one origin.
+See [`DEPLOYMENT.md`](DEPLOYMENT.md) for the full guide, required env vars, the
+database SQL scripts, and the troubleshooting runbook (503s, Prisma engine
+panics, zero-date crashes).
+
+Key points:
 
 - Set the backend `CLIENT_ORIGIN` env var to the exact deployed frontend origin, such as `https://app.nimbasia.com`. Multiple origins can be comma-separated, and `*` wildcards are supported by the backend CORS matcher.
-- Leave the frontend `VITE_API_URL` empty in production so it calls the same-origin `/api` (the backend serves the built frontend); only set it if the API is on a different origin.
+- Leave the frontend `VITE_API_URL` as `/api` in production so it calls the same origin; only set an absolute URL if the API is on a different origin.
 - Set a strong `JWT_SECRET` (32+ chars) and a `CRON_SECRET`; the backend refuses to start in production without a strong `JWT_SECRET`.
 
 ## Bootstrap Login
 
 - Admin: `admin@gmail.com` / `123456`
 
-Change this password immediately after any deployment. The seed script will not
-overwrite it once the account exists.
+(The seed also creates `sales@`, `production@` and `dispatch@gmail.com` accounts
+with the same password if they are missing.)
+
+Change these passwords immediately after any deployment. The seed script will not
+overwrite a password once the account exists.
 
 ## API Modules
 
-- `POST /api/auth/login`
-- `GET/POST /api/users` (admin)
-- `GET/POST /api/enquiries` (sales; admin has full override)
-- `PUT /api/enquiries/:id` (admin)
-- `GET/POST /api/orders` (sales create; others view by role)
-- `POST /api/production`, `GET /api/production`, `PUT /api/production/:id`
-- `GET /api/dispatch`, `POST /api/dispatch`
+Routes are mounted under `/api`:
+
+- `auth` — login, profile
+- `users`, `roles` — user management and role permissions (admin)
+- `enquiries` — enquiry CRUD and approval (sales; admin override)
+- `orders`, `manual-orders` — order lifecycle and manual order requests
+- `production`, `packing` — production batches, batch cards, QC, packing
+- `dispatch` — dispatch queue and shipments
+- `purchase-orders`, `grns`, `inventory`, `bom` — procurement and stock
+- `customers`, `master-data`, `dashboard`, `diagnostics` — supporting data and metrics
+- `GET /api/health` — liveness; `GET /api/health/mysql` tests the DB via the
+  mysql2 driver (bypassing Prisma) and returns the real error, to isolate
+  DB-vs-Prisma problems
 
 ## Business Validation Rules
 
 - Order creation is blocked unless enquiry is `ACCEPTED`.
-- Cannot start production without a valid order in `CREATED` status.\n- Completion auto-updates order status to `COMPLETED`.\n- Cannot dispatch unless order status is `COMPLETED`.\n- Each dispatch is linked 1:1 with an order.\n- Dispatch tracking statuses: `PACKING`, `SHIPPED`, `DELIVERED`.
+- Cannot start production without a valid order in `CREATED` status.
+- Completion auto-updates order status to `COMPLETED`.
+- Cannot dispatch unless order status is `COMPLETED`.
+- Each dispatch is linked 1:1 with an order.
+- Dispatch tracking statuses: `PACKING`, `SHIPPED`, `DELIVERED`.
 - Enquiry approval/rejection only allowed from `PENDING` state.
 
 ## UI Features
@@ -166,6 +196,3 @@ overwrite it once the account exists.
 - Status badges (`Pending`, `Approved`, `Completed`, `Rejected`)
 - Toast notifications, loading spinners, error feedback
 - Search and filters across modules
-
-# Full-stack-ERP-style-platform
-Full-stack logistics and ERP-style platform with a Node.js/Express backend and Vite/React frontend, built to handle order management, enquiry tracking, production workflows, dispatch control, and role-based user access in one cohesive system. It includes order lifecycle tracking, responsive admin interface for users approvals.

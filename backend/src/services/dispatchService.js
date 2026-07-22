@@ -256,6 +256,13 @@ async function buildDispatchDashboardData(query = {}, client = prisma) {
             orderBy: {
               createdAt: "asc"
             }
+          },
+          // Most recent packing record's material stands in for "packaging
+          // size" once the order has actually been packed.
+          packingRecords: {
+            select: { packingMaterialItemId: true },
+            orderBy: { createdAt: "desc" },
+            take: 1
           }
         },
         orderBy: [{ updatedAt: "desc" }, { id: "desc" }]
@@ -414,6 +421,13 @@ async function buildDispatchDashboardData(query = {}, client = prisma) {
             orderBy: {
               createdAt: "asc"
             }
+          },
+          // Most recent packing record's material stands in for "packaging
+          // size" once the order has actually been packed.
+          packingRecords: {
+            select: { packingMaterialItemId: true },
+            orderBy: { createdAt: "desc" },
+            take: 1
           }
         },
         orderBy: [{ updatedAt: "desc" }, { id: "desc" }]

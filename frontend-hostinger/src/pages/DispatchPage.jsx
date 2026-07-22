@@ -97,6 +97,16 @@ function getAllowedShipmentStatusOptions(order, dispatchQty, editingShipmentStat
   return baseOptions;
 }
 
+// The order's own packingSize is only ever what was typed at order-creation
+// time (often "NA" for orders auto-created from an enquiry). Once the order
+// has actually been packed, show the packing material used instead.
+function getPackagingDisplay(order) {
+  const packedMaterial = order?.packingRecords?.[0]?.packingMaterialItemId;
+  if (packedMaterial) return packedMaterial;
+  const size = order?.packingSize;
+  return size && size !== "NA" ? size : "-";
+}
+
 function getClientCode(clientName, orderId) {
   const normalizedName = (clientName || "").toUpperCase().replace(/[^A-Z]/g, "");
   const prefix = (normalizedName.slice(0, 2) || "CL").padEnd(2, "X");
@@ -129,7 +139,7 @@ function toExportRow(row, customerMasterRows) {
 
   return {
     clientCode: getClientCode(order.clientName, order.id),
-    packagingSize: order.packingSize || "-",
+    packagingSize: getPackagingDisplay(order),
     salesOrderNo: getDisplaySalesNumber(order) || "-",
     product: order.product || "-",
     orderQuantity: order.quantity || 0,
@@ -517,7 +527,6 @@ function DispatchPage() {
                     <th>Client Code</th>
                     <th>Packaging Size</th>
                     <th><button className="dispatch-sort-btn" onClick={() => onSort("orderNo")}>Order No</button></th>
-                    <th><button className="dispatch-sort-btn" onClick={() => onSort("salesOrderNumber")}>Sales ID</button></th>
                     <th><button className="dispatch-sort-btn" onClick={() => onSort("product")}>Product</button></th>
                     <th><button className="dispatch-sort-btn" onClick={() => onSort("orderQuantity")}>Order QUANTITY</button></th>
                     <th><button className="dispatch-sort-btn" onClick={() => onSort("dispatchQuantity")}>Dispatch QUANTITY</button></th>
@@ -536,7 +545,7 @@ function DispatchPage() {
                 </thead>
               <VirtualizedTableBody
                 rows={sortedDispatchRows}
-                colSpan={19}
+                colSpan={18}
                 rowHeight={52}
                 overscan={8}
                 scrollContainerRef={tableWrapRef}
@@ -551,9 +560,8 @@ function DispatchPage() {
                     <tr key={row.key}>
                       <td>{(currentPage - 1) * PAGE_SIZE + index + 1}</td>
                       <td>{getClientCode(order.clientName, order.id)}</td>
-                      <td>{order.packingSize || "-"}</td>
+                      <td>{getPackagingDisplay(order)}</td>
                       <td>{order.orderNo || "-"}</td>
-                      <td>{getDisplaySalesNumber(order) || "-"}</td>
                       <td>{order.product || "-"}</td>
                       <td>{order.quantity || 0}</td>
                       <td>{row.dispatch ? (row.dispatch.dispatchedQuantity || 0) : 0}</td>

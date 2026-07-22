@@ -10,7 +10,9 @@ const NAV_ITEMS = [
     children: [
       { to: "/purchase-orders", label: "Purchase Orders", module: "purchase_orders" },
       { to: "/grns", label: "Goods Receipts", module: "grns" },
-      { to: "/raw-materials", label: "Raw Materials", module: "inventory" }
+      { to: "/raw-materials", label: "Raw Materials", module: "inventory" },
+      { to: "/packing-materials", label: "Packing Material", module: "inventory" },
+      { to: "/finished-goods", label: "Finished Goods", module: "inventory" }
     ]
   },
   {

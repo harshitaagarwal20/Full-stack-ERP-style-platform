@@ -118,7 +118,7 @@ export async function getLatestStockMovementDate() {
 // Daily stock movement register (Opening Stock / Production(received) /
 // Dispatch / Consume by shift / Closing Stock) per item+batch, computed
 // entirely from the InventoryTransaction ledger for the given date.
-export async function getStockRegister(dateStr) {
+export async function getStockRegister(dateStr, category) {
   const startOfDay = new Date(`${String(dateStr || "").trim()}T00:00:00.000Z`);
   if (Number.isNaN(startOfDay.getTime())) {
     const error = new Error("A valid date is required.");
@@ -203,30 +203,40 @@ export async function getStockRegister(dateStr) {
   const grnItems = itemIds.length
     ? await prisma.grnItem.findMany({
         where: { itemId: { in: itemIds } },
-        select: { itemId: true, grade: true },
+        select: { itemId: true, grade: true, category: true },
         orderBy: { id: "desc" }
       })
     : [];
   const gradeByItemId = new Map();
+  const categoryByItemId = new Map();
   for (const gi of grnItems) {
     if (!gradeByItemId.has(gi.itemId)) gradeByItemId.set(gi.itemId, gi.grade || "");
+    if (!categoryByItemId.has(gi.itemId)) categoryByItemId.set(gi.itemId, gi.category || "");
   }
 
-  return [...rowsByKey.values()]
+  let rows = [...rowsByKey.values()]
     .map((entry) => {
       const consumeTotal = entry.consumeAShift + entry.consumeBShift + entry.consumeCShift;
       const closingStock = entry.openingStock + entry.production - entry.dispatch - consumeTotal;
       return {
         ...entry,
         grade: gradeByItemId.get(entry.itemId) || "",
+        category: categoryByItemId.get(entry.itemId) || "",
         closingStock
       };
     })
     .filter((row) => row.openingStock !== 0 || row.production !== 0 || row.dispatch !== 0 ||
-      row.consumeAShift !== 0 || row.consumeBShift !== 0 || row.consumeCShift !== 0 || row.closingStock !== 0)
-    // batchNo is null for the un-batched movement that makes up most of the
-    // ledger (see the groupBy above), so both keys compare defensively.
-    .sort((a, b) => (a.itemId || "").localeCompare(b.itemId || "") || (a.batchNo || "").localeCompare(b.batchNo || ""));
+      row.consumeAShift !== 0 || row.consumeBShift !== 0 || row.consumeCShift !== 0 || row.closingStock !== 0);
+
+  if (category) {
+    rows = category === "FINISHED_GOODS"
+      ? rows.filter((row) => !["RAW_MATERIAL", "PACKING_MATERIAL"].includes(row.category || ""))
+      : rows.filter((row) => row.category === category);
+  }
+
+  // batchNo is null for the un-batched movement that makes up most of the
+  // ledger (see the groupBy above), so both keys compare defensively.
+  return rows.sort((a, b) => (a.itemId || "").localeCompare(b.itemId || "") || (a.batchNo || "").localeCompare(b.batchNo || ""));
 }
 
 export async function getRawMaterialInventory(query = {}) {
@@ -339,7 +349,11 @@ export async function getRawMaterialInventory(query = {}) {
     );
   }
   if (category) {
-    items = items.filter((item) => (item.category || "") === category);
+    // Finished goods are never bought on a PO, so they never get a GrnItem
+    // category — "no known purchasing category" is what makes an item FG.
+    items = category === "FINISHED_GOODS"
+      ? items.filter((item) => !["RAW_MATERIAL", "PACKING_MATERIAL"].includes(item.category || ""))
+      : items.filter((item) => (item.category || "") === category);
   }
   if (uom) {
     items = items.filter((item) => (item.uom || "") === uom);

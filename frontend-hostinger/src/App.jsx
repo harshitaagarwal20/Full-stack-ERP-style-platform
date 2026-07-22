@@ -32,6 +32,8 @@ const SupplierMasterPage = lazy(() => import("./pages/SupplierMasterPage"));
 const ProductMasterPage = lazy(() => import("./pages/ProductMasterPage"));
 const PaymentsPage = lazy(() => import("./pages/PaymentsPage"));
 const RawMaterialPage = lazy(() => import("./pages/RawMaterialPage"));
+const PackingMaterialInventoryPage = lazy(() => import("./pages/PackingMaterialInventoryPage"));
+const FinishedGoodsInventoryPage = lazy(() => import("./pages/FinishedGoodsInventoryPage"));
 const ProductionOverviewPage = lazy(() => import("./pages/ProductionOverviewPage"));
 const ProductionBatchSetupPage = lazy(() => import("./pages/ProductionBatchSetupPage"));
 const ProductionMaterialStepPage = lazy(() => import("./pages/ProductionMaterialStepPage"));
@@ -182,9 +184,13 @@ function App() {
               <Route path="/grns/:id" element={withSuspense(<GrnDetailPage />)} />
             </Route>
 
-            {/* Raw Materials reads the inventory ledger, not goods receipts. */}
+            {/* These three read the inventory ledger, not goods receipts —
+                split by category (raw material / packing material / finished
+                goods) so each team sees only its own stock. */}
             <Route element={<ProtectedRoute module="inventory" />}>
               <Route path="/raw-materials" element={withSuspense(<RawMaterialPage />)} />
+              <Route path="/packing-materials" element={withSuspense(<PackingMaterialInventoryPage />)} />
+              <Route path="/finished-goods" element={withSuspense(<FinishedGoodsInventoryPage />)} />
             </Route>
 
             <Route element={<ProtectedRoute module="production" />}>

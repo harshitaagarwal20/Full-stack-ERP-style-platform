@@ -403,6 +403,10 @@ export const importSupplierMasterSchema = z.object({
 
 export const productMasterSchema = z.object({
   product_name: z.preprocess((value) => String(value ?? "").trim(), z.string().min(1)),
+  // A product stocked in more than one grade is one master row per grade, so
+  // (product_name, grade) is what has to be unique — not the name on its own.
+  grade: z.string().optional().nullable(),
+  batch_no: z.string().optional().nullable(),
   category: z.string().optional().nullable(),
   default_unit: z.string().optional().nullable(),
   hsn_code: z.string().optional().nullable(),

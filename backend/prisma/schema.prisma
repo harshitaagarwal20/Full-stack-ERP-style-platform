@@ -834,7 +834,13 @@ model SupplierMaster {
 /// bind to, the category and attributes are what a plain name cannot carry.
 model ProductMaster {
   id          Int      @id @default(autoincrement())
-  productName String   @unique(map: "ProductMaster_productName_key") @db.VarChar(191)
+  productName String   @db.VarChar(191)
+  // Grade is part of a row's identity, not a loose attribute: a plant stocks one
+  // product in several grades and each grade is its own master row, so the unique
+  // key spans both. Empty string rather than NULL because MySQL counts NULLs in a
+  // unique key as distinct, which would let un-graded duplicates back in.
+  grade       String   @default("") @db.VarChar(100)
+  batchNo     String?  @db.VarChar(80)
   category    String?  @db.VarChar(100)
   defaultUnit String?  @db.VarChar(20)
   hsnCode     String?  @db.VarChar(30)
@@ -843,5 +849,6 @@ model ProductMaster {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @default(now()) @updatedAt
 
+  @@unique([productName, grade], map: "ProductMaster_productName_grade_key")
   @@index([category], map: "ProductMaster_category_idx")
 }

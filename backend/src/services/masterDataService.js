@@ -118,11 +118,18 @@ const CREATE_SUPPLIER_MASTER_TABLE_SQL = `
 // authoritative set of *names* every product picker binds to — ensureProductsExist()
 // validates enquiries against it — so ProductMaster rows are mirrored back into
 // that list. This table is what carries the attributes a name cannot: category,
-// default unit, HSN, description.
+// grade, batch, default unit, HSN, description.
+//
+// A product stocked in several grades is several rows here, which is why the
+// unique key spans (productName, grade) and grade is NOT NULL DEFAULT '' —
+// MySQL counts NULLs in a unique key as distinct, so a nullable grade would let
+// un-graded duplicates of one product back in.
 const CREATE_PRODUCT_MASTER_TABLE_SQL = `
   CREATE TABLE IF NOT EXISTS \`ProductMaster\` (
     \`id\` INT NOT NULL AUTO_INCREMENT,
     \`productName\` VARCHAR(191) NOT NULL,
+    \`grade\` VARCHAR(100) NOT NULL DEFAULT '',
+    \`batchNo\` VARCHAR(80) NULL,
     \`category\` VARCHAR(100) NULL,
     \`defaultUnit\` VARCHAR(20) NULL,
     \`hsnCode\` VARCHAR(30) NULL,
@@ -131,10 +138,59 @@ const CREATE_PRODUCT_MASTER_TABLE_SQL = `
     \`createdAt\` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     \`updatedAt\` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (\`id\`),
-    UNIQUE KEY \`ProductMaster_productName_key\` (\`productName\`),
+    UNIQUE KEY \`ProductMaster_productName_grade_key\` (\`productName\`, \`grade\`),
     KEY \`ProductMaster_category_idx\` (\`category\`)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 `;
+
+async function tableHasColumn(table, column) {
+  const [row] = await prisma.$queryRaw`
+    SELECT COUNT(*) AS total
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ${table} AND COLUMN_NAME = ${column}
+  `;
+  return Number(row?.total || 0) > 0;
+}
+
+async function tableHasIndex(table, index) {
+  const [row] = await prisma.$queryRaw`
+    SELECT COUNT(*) AS total
+    FROM INFORMATION_SCHEMA.STATISTICS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ${table} AND INDEX_NAME = ${index}
+  `;
+  return Number(row?.total || 0) > 0;
+}
+
+// CREATE TABLE IF NOT EXISTS above only shapes a fresh database. Grade and batch
+// were added after the product master shipped, and a running database can be
+// ahead of its migrations, so bring an existing table up to that shape here too.
+// Every step is guarded, so this is a no-op once applied.
+async function ensureProductMasterShape() {
+  if (!(await tableHasColumn("ProductMaster", "grade"))) {
+    await prisma.$executeRawUnsafe(
+      "ALTER TABLE `ProductMaster` ADD COLUMN `grade` VARCHAR(100) NOT NULL DEFAULT '' AFTER `productName`;"
+    );
+  }
+
+  if (!(await tableHasColumn("ProductMaster", "batchNo"))) {
+    await prisma.$executeRawUnsafe(
+      "ALTER TABLE `ProductMaster` ADD COLUMN `batchNo` VARCHAR(80) NULL AFTER `grade`;"
+    );
+  }
+
+  // Add the composite key before dropping the name-only one, so the table is
+  // never briefly free of a uniqueness guard. Existing rows all carry grade '',
+  // so the new key cannot collide on data the old key already allowed.
+  if (!(await tableHasIndex("ProductMaster", "ProductMaster_productName_grade_key"))) {
+    await prisma.$executeRawUnsafe(
+      "ALTER TABLE `ProductMaster` ADD UNIQUE KEY `ProductMaster_productName_grade_key` (`productName`, `grade`);"
+    );
+  }
+
+  if (await tableHasIndex("ProductMaster", "ProductMaster_productName_key")) {
+    await prisma.$executeRawUnsafe("ALTER TABLE `ProductMaster` DROP INDEX `ProductMaster_productName_key`;");
+  }
+}
 
 function normalizeCategory(category) {
   return String(category || "").trim();
@@ -153,6 +209,7 @@ async function ensureMasterDataInitialized() {
   await prisma.$executeRawUnsafe("ALTER TABLE `CustomerMaster` MODIFY COLUMN `customerCode` VARCHAR(80) NULL;");
   await prisma.$executeRawUnsafe(CREATE_SUPPLIER_MASTER_TABLE_SQL);
   await prisma.$executeRawUnsafe(CREATE_PRODUCT_MASTER_TABLE_SQL);
+  await ensureProductMasterShape();
 
   for (const category of MASTER_DATA_CATEGORIES) {
     const defaults = defaultMasterData[category] || [];
@@ -296,6 +353,8 @@ function buildMasterData(rows, enquiryRows, customerRows, supplierRows, productR
   const productMaster = (productRows || []).map((row) => ({
     id: Number(row.id),
     productName: row.productName || "",
+    grade: row.grade || "",
+    batchNo: row.batchNo || "",
     category: row.category || "",
     defaultUnit: row.defaultUnit || "",
     hsnCode: row.hsnCode || "",
@@ -346,10 +405,10 @@ async function loadMasterDataSnapshot() {
       ORDER BY \`id\` DESC
     `,
     prisma.$queryRaw`
-      SELECT \`id\`, \`productName\`, \`category\`, \`defaultUnit\`, \`hsnCode\`, \`description\`
+      SELECT \`id\`, \`productName\`, \`grade\`, \`batchNo\`, \`category\`, \`defaultUnit\`, \`hsnCode\`, \`description\`
       FROM \`ProductMaster\`
       WHERE \`isActive\` = 1
-      ORDER BY \`productName\` ASC
+      ORDER BY \`productName\` ASC, \`grade\` ASC
     `
   ]);
 
@@ -769,11 +828,21 @@ function readProductPayload(payload) {
 
   return {
     productName,
+    // Half of the row's unique key, so it is "" and never null — see
+    // CREATE_PRODUCT_MASTER_TABLE_SQL.
+    grade: String(payload.grade || "").trim(),
+    batchNo: String(payload.batch_no || "").trim() || null,
     category: normalizeProductCategory(payload.category),
     defaultUnit: String(payload.default_unit || "").trim() || null,
     hsnCode: String(payload.hsn_code || "").trim() || null,
     description: String(payload.description || "").trim() || null
   };
+}
+
+// "Zinc Stearate (ZS-100)" — how a product master row is named in an error the
+// user has to act on, since the name alone no longer identifies one row.
+function describeProduct(product) {
+  return product.grade ? `${product.productName} (${product.grade})` : product.productName;
 }
 
 // Keeps the `products` dropdown list in step with the product master, so a
@@ -801,6 +870,11 @@ async function applyProductOpeningStock(payload, product, user, reference = "Pro
       item_id:  product.productName,
       category: product.category,
       uom:      product.defaultUnit,
+      grade:    product.grade || undefined,
+      // Scopes the starting balance to this row's batch when it has one, so a
+      // second grade of the same product seeds its own lot instead of resetting
+      // the first (importOpeningStock sets stock *to* the target per item+batch).
+      batch_no: product.batchNo || undefined,
       quantity: openingStock
     }],
     user,
@@ -813,20 +887,23 @@ export async function addProductMasterRow(payload, user) {
   const product = readProductPayload(payload);
 
   const existing = await prisma.$queryRaw`
-    SELECT \`id\` FROM \`ProductMaster\` WHERE \`productName\` = ${product.productName} AND \`isActive\` = 1
+    SELECT \`id\` FROM \`ProductMaster\`
+    WHERE \`productName\` = ${product.productName} AND \`grade\` = ${product.grade} AND \`isActive\` = 1
   `;
   if (existing.length) {
-    const error = new Error(`Product '${product.productName}' already exists.`);
+    const error = new Error(`Product '${describeProduct(product)}' already exists.`);
     error.statusCode = 409;
     throw error;
   }
 
   await prisma.$executeRaw`
     INSERT INTO \`ProductMaster\`
-      (\`productName\`, \`category\`, \`defaultUnit\`, \`hsnCode\`, \`description\`, \`isActive\`)
+      (\`productName\`, \`grade\`, \`batchNo\`, \`category\`, \`defaultUnit\`, \`hsnCode\`, \`description\`, \`isActive\`)
     VALUES
-      (${product.productName}, ${product.category}, ${product.defaultUnit}, ${product.hsnCode}, ${product.description}, 1)
+      (${product.productName}, ${product.grade}, ${product.batchNo}, ${product.category},
+       ${product.defaultUnit}, ${product.hsnCode}, ${product.description}, 1)
     ON DUPLICATE KEY UPDATE
+      \`batchNo\` = VALUES(\`batchNo\`),
       \`category\` = VALUES(\`category\`),
       \`defaultUnit\` = VALUES(\`defaultUnit\`),
       \`hsnCode\` = VALUES(\`hsnCode\`),
@@ -864,15 +941,18 @@ export async function importProductMasterRows(rows, user) {
       const product = readProductPayload(rows[index]);
 
       const existing = await prisma.$queryRaw`
-        SELECT \`id\` FROM \`ProductMaster\` WHERE \`productName\` = ${product.productName}
+        SELECT \`id\` FROM \`ProductMaster\`
+        WHERE \`productName\` = ${product.productName} AND \`grade\` = ${product.grade}
       `;
 
       await prisma.$executeRaw`
         INSERT INTO \`ProductMaster\`
-          (\`productName\`, \`category\`, \`defaultUnit\`, \`hsnCode\`, \`description\`, \`isActive\`)
+          (\`productName\`, \`grade\`, \`batchNo\`, \`category\`, \`defaultUnit\`, \`hsnCode\`, \`description\`, \`isActive\`)
         VALUES
-          (${product.productName}, ${product.category}, ${product.defaultUnit}, ${product.hsnCode}, ${product.description}, 1)
+          (${product.productName}, ${product.grade}, ${product.batchNo}, ${product.category},
+           ${product.defaultUnit}, ${product.hsnCode}, ${product.description}, 1)
         ON DUPLICATE KEY UPDATE
+          \`batchNo\` = VALUES(\`batchNo\`),
           \`category\` = VALUES(\`category\`),
           \`defaultUnit\` = VALUES(\`defaultUnit\`),
           \`hsnCode\` = VALUES(\`hsnCode\`),
@@ -917,10 +997,11 @@ export async function updateProductMasterRow(productId, payload, user) {
 
   const clash = await prisma.$queryRaw`
     SELECT \`id\` FROM \`ProductMaster\`
-    WHERE \`productName\` = ${product.productName} AND \`id\` <> ${id} AND \`isActive\` = 1
+    WHERE \`productName\` = ${product.productName} AND \`grade\` = ${product.grade}
+      AND \`id\` <> ${id} AND \`isActive\` = 1
   `;
   if (clash.length) {
-    const error = new Error(`Product '${product.productName}' already exists.`);
+    const error = new Error(`Product '${describeProduct(product)}' already exists.`);
     error.statusCode = 409;
     throw error;
   }
@@ -928,6 +1009,8 @@ export async function updateProductMasterRow(productId, payload, user) {
   const affected = await prisma.$executeRaw`
     UPDATE \`ProductMaster\`
     SET \`productName\` = ${product.productName},
+        \`grade\` = ${product.grade},
+        \`batchNo\` = ${product.batchNo},
         \`category\` = ${product.category},
         \`defaultUnit\` = ${product.defaultUnit},
         \`hsnCode\` = ${product.hsnCode},
@@ -978,12 +1061,24 @@ export async function deleteProductMasterRow(productId, user) {
   // Retiring a product also withdraws it from the pickers, the same soft delete
   // removeMasterDataValue() performs — records already saved against it keep
   // their stored text.
+  //
+  // One product can hold several rows here, one per grade, and the pickers only
+  // ever deal in names. So the name goes only once its LAST grade is retired —
+  // otherwise retiring a single grade would blank a product that is still sold.
   if (row?.productName) {
-    await prisma.$executeRaw`
-      UPDATE \`MasterDataItem\`
-      SET \`isActive\` = 0
-      WHERE \`category\` = 'products' AND \`value\` = ${row.productName}
+    const stillListed = await prisma.$queryRaw`
+      SELECT \`id\` FROM \`ProductMaster\`
+      WHERE \`productName\` = ${row.productName} AND \`isActive\` = 1
+      LIMIT 1
     `;
+
+    if (!stillListed.length) {
+      await prisma.$executeRaw`
+        UPDATE \`MasterDataItem\`
+        SET \`isActive\` = 0
+        WHERE \`category\` = 'products' AND \`value\` = ${row.productName}
+      `;
+    }
   }
 
   invalidateMasterDataCache();

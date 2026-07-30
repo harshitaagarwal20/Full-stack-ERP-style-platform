@@ -10,7 +10,7 @@ import { pickMobileRecent } from "../utils/mobileRecent";
 import MobileListCard from "../components/common/MobileListCard";
 import { INVENTORY_CATEGORY_OPTIONS, inventoryCategoryLabel } from "../constants/inventoryCategories";
 
-const emptyProductForm = { product_name: "", category: "", default_unit: "", hsn_code: "", description: "", opening_stock: "" };
+const emptyProductForm = { product_name: "", grade: "", batch_no: "", category: "", default_unit: "", hsn_code: "", description: "", opening_stock: "" };
 
 const UNCATEGORISED = "__none__";
 
@@ -18,6 +18,8 @@ const UNCATEGORISED = "__none__";
 // than forcing them to rename columns before they can upload.
 const HEADER_ALIASES = {
   product_name: ["product name", "product", "productname", "item", "item name", "name"],
+  grade:        ["grade", "product grade", "quality", "grade name"],
+  batch_no:     ["batch no", "batch", "batch number", "batch no.", "batchno", "lot", "lot no"],
   category:     ["category", "product category", "type", "group"],
   default_unit: ["default unit", "unit", "uom"],
   hsn_code:     ["hsn code", "hsn", "hsn/sac", "hsn code no"],
@@ -26,7 +28,7 @@ const HEADER_ALIASES = {
 };
 
 function mapProductRow(row) {
-  const mapped = { product_name: "", category: "", default_unit: "", hsn_code: "", description: "", opening_stock: "" };
+  const mapped = { product_name: "", grade: "", batch_no: "", category: "", default_unit: "", hsn_code: "", description: "", opening_stock: "" };
   for (const [rawKey, rawValue] of Object.entries(row)) {
     const header = String(rawKey || "").trim().toLowerCase();
     const field = Object.keys(HEADER_ALIASES).find((key) => HEADER_ALIASES[key].includes(header));
@@ -107,7 +109,7 @@ function ProductMasterPage() {
       if (categoryFilter === UNCATEGORISED && product.category) return false;
       if (categoryFilter && categoryFilter !== UNCATEGORISED && product.category !== categoryFilter) return false;
       if (!query) return true;
-      return [product.productName, product.category, product.hsnCode, product.description]
+      return [product.productName, product.grade, product.batchNo, product.category, product.hsnCode, product.description]
         .some((field) => String(field || "").toLowerCase().includes(query));
     });
   }, [products, searchText, categoryFilter]);
@@ -129,6 +131,8 @@ function ProductMasterPage() {
     setEditingId(product.id);
     setForm({
       product_name: product.productName || "",
+      grade: product.grade || "",
+      batch_no: product.batchNo || "",
       category: product.category || "",
       default_unit: product.defaultUnit || "",
       hsn_code: product.hsnCode || "",
@@ -168,9 +172,11 @@ function ProductMasterPage() {
   const onDelete = async (product) => {
     if (deletingId) return;
     // Retiring a product withdraws it from every product picker, so make the
-    // consequence explicit before it happens.
+    // consequence explicit before it happens. Name the grade too — a product can
+    // hold one row per grade, and only the last one to go takes the name with it.
+    const label = product.grade ? `${product.productName} (${product.grade})` : product.productName;
     const confirmed = window.confirm(
-      `Retire "${product.productName}"? It will stop being offered on new enquiries and orders. Existing records keep it.`
+      `Retire "${label}"? It will stop being offered on new enquiries and orders. Existing records keep it.`
     );
     if (!confirmed) return;
 
@@ -195,7 +201,7 @@ function ProductMasterPage() {
       const rows = await parseExcelToProductRows(file);
       if (!rows.length) {
         dispatchUserMessage(
-          "No products found. The sheet needs a 'Product Name' column; 'Category', 'Description' and 'Opening Stock' are optional.",
+          "No products found. The sheet needs a 'Product Name' column; 'Grade', 'Batch No', 'Category', 'Description' and 'Opening Stock' are optional.",
           { title: "Import", variant: "error" }
         );
         return;
@@ -218,12 +224,16 @@ function ProductMasterPage() {
   const exportToExcel = () => {
     const columns = [
       { key: "productName", header: "Product Name" },
+      { key: "grade",       header: "Grade" },
+      { key: "batchNo",     header: "Batch No" },
       { key: "category",    header: "Category" },
       { key: "description", header: "Description" },
       { key: "openingStock", header: "Opening Stock" }
     ];
     const rows = filtered.map((product) => ({
       productName: product.productName || "-",
+      grade:       product.grade || "-",
+      batchNo:     product.batchNo || "-",
       category:    inventoryCategoryLabel(product.category) || "-",
       description: product.description || "-",
       openingStock: ""
@@ -265,7 +275,7 @@ function ProductMasterPage() {
         <div className="unified-search-box">
           <SearchIcon />
           <input autoComplete="off"
-            placeholder="Search product, category or HSN..."
+            placeholder="Search product, grade, batch, category or HSN..."
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
           />
@@ -314,6 +324,8 @@ function ProductMasterPage() {
                   <tr>
                     <th style={{ width: 44 }}>#</th>
                     <th>Product Name</th>
+                    <th>Grade</th>
+                    <th>Batch No</th>
                     <th>Category</th>
                     <th>Description</th>
                     <th />
@@ -324,6 +336,8 @@ function ProductMasterPage() {
                     <tr key={product.id}>
                       <td style={{ color: "#94a3b8", fontSize: 12 }}>{idx + 1}</td>
                       <td style={{ fontWeight: 600, color: "#1d4ed8" }}>{product.productName}</td>
+                      <td>{product.grade || "-"}</td>
+                      <td>{product.batchNo || "-"}</td>
                       <td>
                         {product.category ? (
                           <span className="order-status approved">{inventoryCategoryLabel(product.category)}</span>
@@ -360,6 +374,8 @@ function ProductMasterPage() {
                     badge={inventoryCategoryLabel(product.category) || "Uncategorised"}
                     badgeColor={product.category ? "blue" : "default"}
                     fields={[
+                      { label: "Grade", value: product.grade || "-" },
+                      { label: "Batch No", value: product.batchNo || "-" },
                       { label: "Category", value: inventoryCategoryLabel(product.category) || "Uncategorised" },
                       { label: "Description", value: product.description || "-" }
                     ]}
@@ -400,6 +416,25 @@ function ProductMasterPage() {
                     value={form.product_name}
                     onChange={(e) => setForm((p) => ({ ...p, product_name: e.target.value }))}
                     required
+                  />
+                </div>
+                <div>
+                  <label className="label">Grade</label>
+                  <input autoComplete="off"
+                    className="input"
+                    value={form.grade}
+                    onChange={(e) => setForm((p) => ({ ...p, grade: e.target.value }))}
+                  />
+                  <small style={{ color: "#64748b" }}>
+                    One row per grade — the same product can be listed again under a different grade.
+                  </small>
+                </div>
+                <div>
+                  <label className="label">Batch No</label>
+                  <input autoComplete="off"
+                    className="input"
+                    value={form.batch_no}
+                    onChange={(e) => setForm((p) => ({ ...p, batch_no: e.target.value }))}
                   />
                 </div>
                 <div>

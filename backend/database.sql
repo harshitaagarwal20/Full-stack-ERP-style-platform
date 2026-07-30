@@ -221,12 +221,13 @@ SET @x := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 
 SET @s := IF(@x = 0, 'ALTER TABLE `GoodsReceiptNote` ADD COLUMN `rejectedAt` DATETIME(3) NULL', 'DO 0');
 PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
 
--- ---------------------------------------------------- Product master (no DDL)
+-- ------------------------------------------------- Product master (no create)
 -- ProductMaster and the `productCategories` master list are created and seeded
 -- by masterDataService.ensureMasterDataInitialized() on the first master-data
 -- request after a restart, in the same way CustomerMaster and SupplierMaster
--- are. Nothing to import here — the table appears on its own, backfilled from
--- the existing product list.
+-- are. Nothing to create here — the table appears on its own, backfilled from
+-- the existing product list. Its grade/batch columns are further down, since
+-- those alter a table that by then already exists.
 
 -- ============================================================================
 -- Finished goods test sheet: per-row "Approved by".
@@ -260,6 +261,49 @@ ALTER TABLE `Production`         MODIFY COLUMN `capacity` DOUBLE NOT NULL;
 ALTER TABLE `Production`         MODIFY COLUMN `producedQuantity` DOUBLE NOT NULL DEFAULT 0;
 ALTER TABLE `Dispatch`           MODIFY COLUMN `dispatchedQuantity` DOUBLE NOT NULL;
 ALTER TABLE `BatchSubstitution`  MODIFY COLUMN `quantity` DOUBLE NOT NULL;
+
+-- ============================================================================
+-- Product master: grade and batch number.
+--
+-- Mirrors prisma/migrations/20260730120000_add_product_master_grade_batch.
+--
+-- Grade is part of a row's identity, not a loose attribute: a plant stocks one
+-- product in several grades and each grade is its own master row, so the unique
+-- key moves from (productName) to (productName, grade). Grade is NOT NULL
+-- DEFAULT '' rather than nullable because MySQL counts NULLs in a unique key as
+-- distinct, which would let unlimited un-graded duplicates of one product back
+-- in — the very thing the old key existed to stop.
+--
+-- Existing rows all take grade '', so (productName, '') is exactly as unique as
+-- (productName) already was: the key swap cannot fail on live data. The
+-- composite key goes on before the old one comes off, so the table is never left
+-- without a uniqueness guard.
+--
+-- Unlike every other section here, these steps also test that the table exists.
+-- ProductMaster is created by the application rather than by this file (see
+-- above), so on a database whose backend has not yet served a master-data
+-- request there is nothing to alter — and masterDataService.
+-- ensureProductMasterShape() applies the same four steps itself on the first
+-- request after deploy, which is what makes importing this file optional.
+-- ============================================================================
+
+SET @tbl := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ProductMaster');
+
+SET @x := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ProductMaster' AND COLUMN_NAME = 'grade');
+SET @s := IF(@tbl > 0 AND @x = 0, 'ALTER TABLE `ProductMaster` ADD COLUMN `grade` VARCHAR(100) NOT NULL DEFAULT '''' AFTER `productName`', 'DO 0');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+
+SET @x := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ProductMaster' AND COLUMN_NAME = 'batchNo');
+SET @s := IF(@tbl > 0 AND @x = 0, 'ALTER TABLE `ProductMaster` ADD COLUMN `batchNo` VARCHAR(80) NULL AFTER `grade`', 'DO 0');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+
+SET @x := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ProductMaster' AND INDEX_NAME = 'ProductMaster_productName_grade_key');
+SET @s := IF(@tbl > 0 AND @x = 0, 'ALTER TABLE `ProductMaster` ADD UNIQUE KEY `ProductMaster_productName_grade_key` (`productName`, `grade`)', 'DO 0');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+
+SET @x := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ProductMaster' AND INDEX_NAME = 'ProductMaster_productName_key');
+SET @s := IF(@tbl > 0 AND @x > 0, 'ALTER TABLE `ProductMaster` DROP INDEX `ProductMaster_productName_key`', 'DO 0');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
 
 -- Put safe update mode back exactly as the caller had it.
 SET SESSION sql_safe_updates = @OLD_SQL_SAFE_UPDATES;

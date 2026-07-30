@@ -14,8 +14,13 @@
 --   * CREATE INDEX (guarded)      — adds new indexes only
 --   * ADD CONSTRAINT (guarded)    — adds new foreign keys only
 --
--- It NEVER drops or alters an existing table, column, index, FK, or
--- row, so no existing data can be lost.
+-- It NEVER drops or alters an existing table, column, FK, or row, so
+-- no existing data can be lost.
+--
+-- One index is the sole exception: ProductMaster's old name-only unique
+-- key is dropped in favour of the (productName, grade) key that replaced
+-- it, because leaving it would reject the second grade of a product. No
+-- row is touched — see the note at that statement in section 3.
 --
 -- Creates structure only — no data. On a fresh database run the seed
 -- (npm run seed) afterwards for the admin user and role permissions,
@@ -665,9 +670,15 @@ CREATE TABLE IF NOT EXISTS `SupplierMaster` (
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
+-- `grade` is half of this table's identity, not a loose attribute: a plant
+-- stocks one product in several grades and each grade is its own row. It is
+-- NOT NULL DEFAULT '' because MySQL counts NULLs in a unique key as distinct,
+-- which would let un-graded duplicates of one product back in.
 CREATE TABLE IF NOT EXISTS `ProductMaster` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `productName` VARCHAR(191) NOT NULL,
+    `grade` VARCHAR(100) NOT NULL DEFAULT '',
+    `batchNo` VARCHAR(80) NULL,
     `category` VARCHAR(100) NULL,
     `defaultUnit` VARCHAR(20) NULL,
     `hsnCode` VARCHAR(30) NULL,
@@ -676,7 +687,7 @@ CREATE TABLE IF NOT EXISTS `ProductMaster` (
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
-    UNIQUE INDEX `ProductMaster_productName_key`(`productName`),
+    UNIQUE INDEX `ProductMaster_productName_grade_key`(`productName`, `grade`),
     INDEX `ProductMaster_category_idx`(`category`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -2983,6 +2994,18 @@ SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
 SET @sql := IF(@c = 0, 'ALTER TABLE `ProductMaster` ADD COLUMN `productName` VARCHAR(191) NOT NULL', 'DO 0');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
+-- ProductMaster.grade
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ProductMaster' AND COLUMN_NAME = 'grade');
+SET @sql := IF(@c = 0, 'ALTER TABLE `ProductMaster` ADD COLUMN `grade` VARCHAR(100) NOT NULL DEFAULT '''' AFTER `productName`', 'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- ProductMaster.batchNo
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ProductMaster' AND COLUMN_NAME = 'batchNo');
+SET @sql := IF(@c = 0, 'ALTER TABLE `ProductMaster` ADD COLUMN `batchNo` VARCHAR(80) NULL AFTER `grade`', 'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
 -- ProductMaster.category
 SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ProductMaster' AND COLUMN_NAME = 'category');
@@ -3443,10 +3466,20 @@ SET @i := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
 SET @sql := IF(@i = 0, 'CREATE UNIQUE INDEX `SupplierMaster_supplierCode_key` ON `SupplierMaster`(`supplierCode`)', 'DO 0');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
--- ProductMaster.ProductMaster_productName_key
+-- ProductMaster.ProductMaster_productName_grade_key
+SET @i := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ProductMaster' AND INDEX_NAME = 'ProductMaster_productName_grade_key');
+SET @sql := IF(@i = 0, 'CREATE UNIQUE INDEX `ProductMaster_productName_grade_key` ON `ProductMaster`(`productName`, `grade`)', 'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- The name-only key this replaced. It is the one index this file drops, and it
+-- has to: leaving it in place would reject the second grade of a product, which
+-- is exactly what the composite key above exists to allow. Dropping it costs no
+-- data — the composite key created above already covers `productName` as its
+-- leading column, so lookups by name keep an index either way.
 SET @i := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ProductMaster' AND INDEX_NAME = 'ProductMaster_productName_key');
-SET @sql := IF(@i = 0, 'CREATE UNIQUE INDEX `ProductMaster_productName_key` ON `ProductMaster`(`productName`)', 'DO 0');
+SET @sql := IF(@i > 0, 'ALTER TABLE `ProductMaster` DROP INDEX `ProductMaster_productName_key`', 'DO 0');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- ProductMaster.ProductMaster_category_idx

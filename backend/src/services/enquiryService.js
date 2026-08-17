@@ -14,8 +14,10 @@ import { buildProductionCreateData } from "./productionService.js";
 const ENQUIRY_STAGES = ["GENERAL", "SAMPLED", "QUOTED"];
 
 // Number of days an enquiry may sit in SAMPLED before we nudge the owner to
-// follow up with the client.
-export const SAMPLED_FOLLOW_UP_DAYS = 12;
+// follow up with the client. Matches the frontend constant of the same name and
+// the reminder email's default (env.sampleFollowUpMailDays), so the banner, the
+// Sampled Enquiries screen and the mail all use one deadline.
+export const SAMPLED_FOLLOW_UP_DAYS = 15;
 
 function normalizeStageInput(value, fallback = "GENERAL") {
   const stage = String(value || "").trim().toUpperCase();
@@ -33,7 +35,7 @@ function normalizeUrgentInput(value) {
 // Sampled Enquiries screen by itself.
 //
 // sampledAt is stamped the first time the enquiry reaches SAMPLED and is never
-// cleared afterwards: it starts the 12-day follow-up clock, and the dashboard
+// cleared afterwards: it starts the follow-up clock, and the dashboard
 // reads it to count everything that was ever sampled.
 export function resolveStageProgress(enquiry, { requestedStage, nextPrice }) {
   const currentStage = normalizeStageInput(enquiry.stage);
@@ -195,7 +197,7 @@ export async function createEnquiry(payload, user) {
   const stage = normalizeStageInput(payload.stage);
   const isUrgent = normalizeUrgentInput(payload.is_urgent);
   // Only stamp sampledAt when the enquiry actually starts life as SAMPLED —
-  // the 12-day follow-up clock runs from here.
+  // the follow-up clock runs from here.
   const sampledAt = stage === "SAMPLED" ? new Date() : null;
   const normalizedProducts = products.map((product, index) => ({
     product,

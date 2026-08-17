@@ -1127,7 +1127,7 @@ function EnquiryPage() {
                 </select>
                 {form.stage === "SAMPLED" && (
                   <small style={{ color: "#7a4b09" }}>
-                    You'll be reminded to follow up if this stays sampled for 12 days.
+                    You'll be reminded to follow up if this stays sampled for {SAMPLED_FOLLOW_UP_DAYS} days.
                   </small>
                 )}
               </div>

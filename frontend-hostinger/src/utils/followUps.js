@@ -1,7 +1,9 @@
 // Sampled enquiries go stale. If one has been sitting at the "Sampled" stage
 // for this long without moving to Quoted, the owner gets nudged to call the
-// client. Kept in sync with SAMPLED_FOLLOW_UP_DAYS in the backend.
-export const SAMPLED_FOLLOW_UP_DAYS = 12;
+// client. Kept in sync with SAMPLED_FOLLOW_UP_DAYS in the backend, and with the
+// reminder email's default — one deadline, so the screen and the mail can never
+// tell someone two different things.
+export const SAMPLED_FOLLOW_UP_DAYS = 15;
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 

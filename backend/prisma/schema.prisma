@@ -240,7 +240,7 @@ model Enquiry {
   remarks          String?
   status           EnquiryStatus @default(PENDING)
   stage            EnquiryStage  @default(GENERAL)
-  // Set the first time the enquiry enters SAMPLED; drives the 12-day
+  // Set the first time the enquiry enters SAMPLED; drives the 15-day
   // follow-up reminder.
   sampledAt        DateTime?
   // When the overdue-sample reminder was emailed to the approving admin.

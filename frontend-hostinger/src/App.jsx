@@ -151,6 +151,10 @@ function App() {
               <Route path="/master-data" element={withSuspense(<MasterDataPage />)} />
               <Route path="/dropdown-masters" element={withSuspense(<DropdownMastersPage />)} />
               <Route path="/supplier-data" element={withSuspense(<SupplierMasterPage />)} />
+            </Route>
+            {/* Its own module: a role can be trusted with products without also
+                getting customers, suppliers and the dropdown lists. */}
+            <Route element={<ProtectedRoute module="product_master" />}>
               <Route path="/product-data" element={withSuspense(<ProductMasterPage />)} />
             </Route>
 

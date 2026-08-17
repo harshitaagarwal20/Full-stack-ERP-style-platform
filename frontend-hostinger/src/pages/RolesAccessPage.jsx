@@ -23,6 +23,7 @@ const MODULES = [
   { key: "bom", label: "Bill of Materials" },
   { key: "customers", label: "Customers" },
   { key: "master_data", label: "Master Data" },
+  { key: "product_master", label: "Product Master" },
   { key: "users", label: "Users" }
 ];
 

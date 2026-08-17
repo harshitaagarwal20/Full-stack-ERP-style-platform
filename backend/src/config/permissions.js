@@ -32,6 +32,11 @@ export const MODULES = [
   { key: "customers",     label: "Customers" },
   { key: "payments",      label: "Payments (Accounts)" },
   { key: "master_data",   label: "Master Data" },
+  // Split out of master_data: the product master is the one "administration"
+  // screen a sales or production role often needs to keep up to date, and
+  // granting it should not also hand over customers, suppliers and the
+  // dropdown lists.
+  { key: "product_master", label: "Product Master" },
   { key: "users",         label: "Users" }
 ];
 
@@ -49,7 +54,8 @@ export const DEFAULT_MATRIX = {
     orders: "FULL",
     manual_orders: "FULL",
     customers: "FULL",
-    master_data: "VIEW"
+    master_data: "VIEW",
+    product_master: "VIEW"
   },
   production: {
     production: "FULL",
@@ -57,14 +63,16 @@ export const DEFAULT_MATRIX = {
     purchase_orders: "FULL",
     inventory: "FULL",
     bom: "VIEW",
-    master_data: "VIEW"
+    master_data: "VIEW",
+    product_master: "VIEW"
   },
   dispatch: {
     dispatch: "FULL",
     packing: "FULL",
     manual_orders: "FULL",
     customers: "VIEW",
-    master_data: "VIEW"
+    master_data: "VIEW",
+    product_master: "VIEW"
   },
   purchase: {
     purchase_orders: "FULL",
@@ -74,7 +82,8 @@ export const DEFAULT_MATRIX = {
     // picker (finished goods / raw materials / packing materials) and its unit
     // dropdown from master data. Without VIEW, GET /api/master-data 403s and
     // those dropdowns come up empty — for the very role whose job is raising POs.
-    master_data: "VIEW"
+    master_data: "VIEW",
+    product_master: "VIEW"
   },
   accounts: {
     // The payments screen is the accounts department's own step at the end of
@@ -87,7 +96,8 @@ export const DEFAULT_MATRIX = {
     grns: "VIEW",
     inventory: "VIEW",
     // Same reason as purchase: accounts prices the PO on the same form.
-    master_data: "VIEW"
+    master_data: "VIEW",
+    product_master: "VIEW"
   }
 };
 

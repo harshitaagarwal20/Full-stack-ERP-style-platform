@@ -10,6 +10,9 @@ const router = Router();
 // Module access is configured by an admin on the Role Management screen:
 // reads need VIEW, writes need FULL.
 const masterData = requirePermission("master_data");
+// The product master is its own module, so a role can be trusted with products
+// without also being handed customers, suppliers and the dropdown lists.
+const productMaster = requirePermission("product_master");
 
 router.use(authMiddleware);
 // Reading the master data is not an admin act: it is what fills the dropdowns on
@@ -26,10 +29,10 @@ router.delete("/customer-master/rows/:id", masterData, removeCustomerMaster);
 router.post("/supplier-master/rows", masterData, validateBody(createSupplierMasterSchema), createSupplierMaster);
 router.post("/supplier-master/import", masterData, validateBody(importSupplierMasterSchema), importSupplierMaster);
 router.delete("/supplier-master/rows/:id", masterData, removeSupplierMaster);
-router.post("/product-master/rows", masterData, validateBody(productMasterSchema), createProductMaster);
-router.post("/product-master/import", masterData, validateBody(importProductMasterSchema), importProductMaster);
-router.put("/product-master/rows/:id", masterData, validateBody(productMasterSchema), editProductMaster);
-router.delete("/product-master/rows/:id", masterData, removeProductMaster);
+router.post("/product-master/rows", productMaster, validateBody(productMasterSchema), createProductMaster);
+router.post("/product-master/import", productMaster, validateBody(importProductMasterSchema), importProductMaster);
+router.put("/product-master/rows/:id", productMaster, validateBody(productMasterSchema), editProductMaster);
+router.delete("/product-master/rows/:id", productMaster, removeProductMaster);
 // Literal paths must stay ahead of the "/:category" catch-alls below, or
 // "editable-categories" would be parsed as a category name.
 router.get("/editable-categories", masterData, listEditableCategories);

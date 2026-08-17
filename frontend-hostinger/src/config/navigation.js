@@ -56,7 +56,9 @@ const NAV_ITEMS = [
       { to: "/master-data", label: "Master Data", module: "master_data" },
       { to: "/dropdown-masters", label: "Dropdown Masters", module: "master_data" },
       { to: "/supplier-data", label: "Supplier Data", module: "master_data" },
-      { to: "/product-data", label: "Product Master", module: "master_data" },
+      // Its own module, so a role can maintain products without being given
+      // customers, suppliers and the dropdown lists along with them.
+      { to: "/product-data", label: "Product Master", module: "product_master" },
       { to: "/users", label: "Users", module: "users" },
       // Not module-gated: granting a role access to the Users module must not
       // also let it rewrite the permission matrix. Admin only.

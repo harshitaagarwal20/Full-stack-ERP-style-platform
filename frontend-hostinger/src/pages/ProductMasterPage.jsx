@@ -8,6 +8,7 @@ import { exportRowsToExcel } from "../utils/exportExcel";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { pickMobileRecent } from "../utils/mobileRecent";
 import MobileListCard from "../components/common/MobileListCard";
+import { usePermissions } from "../context/PermissionContext";
 import { INVENTORY_CATEGORY_OPTIONS, inventoryCategoryLabel } from "../constants/inventoryCategories";
 
 const emptyProductForm = { product_name: "", grade: "", batch_no: "", category: "", default_unit: "", hsn_code: "", description: "", opening_stock: "" };
@@ -69,6 +70,11 @@ function ProductMasterPage() {
   const [form, setForm] = useState(emptyProductForm);
   const [importing, setImporting] = useState(false);
   const importInputRef = useRef(null);
+  // VIEW gets the list; changing it needs FULL. Without this the buttons were
+  // all shown to everyone and simply failed on click — the server was refusing
+  // the write correctly, but the screen offered it anyway.
+  const { can } = usePermissions();
+  const canEditProducts = can("product_master", "FULL");
 
   const fetchMasterData = async () => {
     setLoading(true);
@@ -257,21 +263,25 @@ function ProductMasterPage() {
             <p className="order-header-sub">The product range behind every enquiry, order and production picker.</p>
           </div>
           <div className="order-header-right">
-            <input
-              ref={importInputRef}
-              type="file"
-              accept=".xlsx,.xls,.csv"
-              style={{ display: "none" }}
-              onChange={onImportFile}
-            />
-            <button
-              className="order-btn-secondary"
-              disabled={importing}
-              onClick={() => importInputRef.current?.click()}
-            >
-              {importing ? "Importing..." : "Import from Excel"}
-            </button>
-            <button className="order-btn-primary" onClick={openAddModal}>+ Add Product</button>
+            {canEditProducts && (
+              <>
+                <input
+                  ref={importInputRef}
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  style={{ display: "none" }}
+                  onChange={onImportFile}
+                />
+                <button
+                  className="order-btn-secondary"
+                  disabled={importing}
+                  onClick={() => importInputRef.current?.click()}
+                >
+                  {importing ? "Importing..." : "Import from Excel"}
+                </button>
+                <button className="order-btn-primary" onClick={openAddModal}>+ Add Product</button>
+              </>
+            )}
           </div>
         </div>
       </section>
@@ -313,7 +323,7 @@ function ProductMasterPage() {
           <div className="order-empty-state">
             <div className="order-empty-icon"><BoxesIcon /></div>
             <p>{products.length === 0 ? "No products yet" : "No products match these filters"}</p>
-            {products.length === 0 && (
+            {products.length === 0 && canEditProducts && (
               <button className="order-btn-primary" style={{ marginTop: 10 }} onClick={openAddModal}>
                 + Add Product
               </button>
@@ -353,16 +363,20 @@ function ProductMasterPage() {
                       </td>
                       <td>{product.description || "-"}</td>
                       <td>
-                        <div className="order-row-actions">
-                          <button className="order-btn-secondary" onClick={() => openEditModal(product)}>Edit</button>
-                          <button
-                            className="order-btn-secondary"
-                            disabled={deletingId === product.id}
-                            onClick={() => onDelete(product)}
-                          >
-                            {deletingId === product.id ? "Removing..." : "Retire"}
-                          </button>
-                        </div>
+                        {canEditProducts ? (
+                          <div className="order-row-actions">
+                            <button className="order-btn-secondary" onClick={() => openEditModal(product)}>Edit</button>
+                            <button
+                              className="order-btn-secondary"
+                              disabled={deletingId === product.id}
+                              onClick={() => onDelete(product)}
+                            >
+                              {deletingId === product.id ? "Removing..." : "Retire"}
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="pack-cell-sub">View only</span>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -385,8 +399,9 @@ function ProductMasterPage() {
                       { label: "Category", value: inventoryCategoryLabel(product.category) || "Uncategorised" },
                       { label: "Description", value: product.description || "-" }
                     ]}
-                    onActionClick={() => openEditModal(product)}
-                    actionLabel="Edit"
+                    {...(canEditProducts
+                      ? { onActionClick: () => openEditModal(product), actionLabel: "Edit" }
+                      : {})}
                   />
                 ))}
                 {showingRecentOnly && (

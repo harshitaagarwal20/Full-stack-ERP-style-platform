@@ -3,6 +3,7 @@ import env from "./config/env.js";
 import { closePrisma } from "./config/prisma.js";
 import { ensurePermissionDefaults } from "./services/permissionService.js";
 import { startDbHeartbeat, stopDbHeartbeat } from "./utils/dbHeartbeat.js";
+import { startSampleFollowUpScheduler, stopSampleFollowUpScheduler } from "./utils/sampleFollowUpScheduler.js";
 
 let server;
 
@@ -22,6 +23,10 @@ async function initializeDatabase() {
   // Keep the pooled DB connection warm so no user request pays the idle
   // reconnect cost.
   startDbHeartbeat();
+
+  // Chases samples that have gone quiet. Stands down by itself when SMTP is
+  // not configured, so this is safe to start unconditionally.
+  startSampleFollowUpScheduler();
 }
 
 async function start() {
@@ -42,6 +47,7 @@ start().catch((error) => {
 async function shutdown(signal) {
   try {
     stopDbHeartbeat();
+    stopSampleFollowUpScheduler();
     if (server) {
       await new Promise((resolve) => {
         server.close(resolve);

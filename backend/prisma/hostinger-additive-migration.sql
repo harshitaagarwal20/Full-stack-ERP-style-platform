@@ -125,6 +125,7 @@ CREATE TABLE IF NOT EXISTS `Enquiry` (
     `status` ENUM('PENDING', 'ACCEPTED', 'HOLD', 'REJECTED') NOT NULL DEFAULT 'PENDING',
     `stage` ENUM('GENERAL', 'SAMPLED', 'QUOTED') NOT NULL DEFAULT 'GENERAL',
     `sampledAt` DATETIME(3) NULL,
+    `sampleFollowUpMailedAt` DATETIME(3) NULL,
     `isUrgent` BOOLEAN NOT NULL DEFAULT false,
     `rejectionReason` VARCHAR(191) NULL,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
@@ -1014,6 +1015,12 @@ PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Enquiry' AND COLUMN_NAME = 'sampledAt');
 SET @sql := IF(@c = 0, 'ALTER TABLE `Enquiry` ADD COLUMN `sampledAt` DATETIME(3) NULL', 'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Enquiry.sampleFollowUpMailedAt
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Enquiry' AND COLUMN_NAME = 'sampleFollowUpMailedAt');
+SET @sql := IF(@c = 0, 'ALTER TABLE `Enquiry` ADD COLUMN `sampleFollowUpMailedAt` DATETIME(3) NULL', 'DO 0');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- Enquiry.isUrgent

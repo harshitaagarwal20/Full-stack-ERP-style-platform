@@ -243,6 +243,9 @@ model Enquiry {
   // Set the first time the enquiry enters SAMPLED; drives the 12-day
   // follow-up reminder.
   sampledAt        DateTime?
+  // When the overdue-sample reminder was emailed to the approving admin.
+  // Stamped so the reminder goes out once and not every night after.
+  sampleFollowUpMailedAt DateTime?
   // Urgent enquiries jump the production queue and can auto-create the
   // downstream order + production job.
   isUrgent         Boolean       @default(false)

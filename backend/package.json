@@ -17,6 +17,7 @@
     "po:renumber": "node scripts/renumberPurchaseOrders.js",
     "supplier:backfill-codes": "node scripts/backfillSupplierCodes.js",
     "orders:reformat-no": "node scripts/reformatOrderNumbers.js",
+    "mail:sample-follow-up": "node scripts/sendSampleFollowUpMails.js",
     "db:deploy": "npm run prisma:deploy"
   },
   "dependencies": {
@@ -33,6 +34,7 @@
     "mariadb": "3.5.3",
     "morgan": "^1.10.0",
     "mysql2": "^3.22.3",
+    "nodemailer": "^9.0.5",
     "xlsx": "^0.18.5",
     "zod": "^3.23.8"
   },

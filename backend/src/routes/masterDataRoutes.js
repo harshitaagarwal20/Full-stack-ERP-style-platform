@@ -12,7 +12,13 @@ const router = Router();
 const masterData = requirePermission("master_data");
 
 router.use(authMiddleware);
-router.get("/", masterData, listMasterData);
+// Reading the master data is not an admin act: it is what fills the dropdowns on
+// every form in the app — products on an order, company names on an enquiry,
+// units everywhere. Gating this on the master_data module left any role without
+// it staring at empty pickers, because the client falls back to its built-in
+// defaults when the call is refused. Any signed-in user may read; changing the
+// master still needs master_data FULL on the routes below.
+router.get("/", listMasterData);
 router.post("/enquiry-master/rows", masterData, validateBody(createEnquiryMasterSchema), createEnquiryMaster);
 router.post("/customer-master/rows", masterData, validateBody(createCustomerMasterSchema), createCustomerMaster);
 router.post("/customer-master/import", masterData, validateBody(importCustomerMasterSchema), importCustomerMaster);

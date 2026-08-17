@@ -8024,6 +8024,64 @@ tr.row-urgent td:first-child {
   white-space: nowrap;
 }
 
+/* ---- The table ---- */
+/* Every row opens its enquiry, so rows have to look reachable. */
+.sampled-table tbody tr {
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.sampled-table tbody tr:hover {
+  background: #eff6ff;
+}
+
+.sampled-table td {
+  vertical-align: top;
+}
+
+.sampled-cell-ref {
+  font-weight: 600;
+  color: #1e40af;
+  white-space: nowrap;
+}
+
+.sampled-cell-company {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+/* The product summary runs long — grade, pack size and packaging all in one
+   string. Given a width it wraps instead of being cut off mid-word, which is
+   the difference between reading the packaging and guessing at it. */
+.sampled-cell-product {
+  min-width: 240px;
+  max-width: 340px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+  color: #475569;
+}
+
+.sampled-cell-qty,
+.sampled-cell-date {
+  white-space: nowrap;
+}
+
+.sampled-cell-qty {
+  font-variant-numeric: tabular-nums;
+}
+
+.sampled-cell-waiting {
+  white-space: nowrap;
+}
+
+/* Days waited is the number the screen exists for, so it carries weight once
+   it matters and stays quiet before then. */
+.sampled-waiting-late {
+  font-weight: 700;
+  color: #b45309;
+}
+
 /* An enquiry past the follow-up threshold: marked on the leading edge so it
    reads down a column of rows without colouring the whole table. */
 .sampled-row-overdue > td:first-child {

@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/axiosClient";
 import MobileListCard from "../components/common/MobileListCard";
+import { SearchIcon } from "../components/erp/ErpIcons";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { logApiError } from "../utils/apiError";
 import { exportRowsToExcel } from "../utils/exportExcel";
@@ -132,6 +133,9 @@ function SampledEnquiriesPage() {
 
       <section className="enquiry-card">
         <div className="unified-search-box">
+          {/* The input reserves 36px on the left for this icon — without it the
+              placeholder floats in dead space. */}
+          <SearchIcon />
           <input autoComplete="off"
             placeholder="Search by enquiry ID, company, product, or person"
             value={searchText}
@@ -157,7 +161,11 @@ function SampledEnquiriesPage() {
           <>
             {!isMobile && (
               <div className="enquiry-table-wrap">
-                <table className="enquiry-table">
+                <div className="enquiry-table-meta">
+                  {rows.length} sampled enquir{rows.length === 1 ? "y" : "ies"}
+                  {overdueCount > 0 && ` · ${overdueCount} past ${SAMPLED_FOLLOW_UP_DAYS} days`}
+                </div>
+                <table className="enquiry-table sampled-table">
                   <thead>
                     <tr>
                       <th>Enquiry ID</th>
@@ -176,17 +184,21 @@ function SampledEnquiriesPage() {
                         <tr
                           key={enquiry.id}
                           className={due ? "sampled-row-overdue" : undefined}
-                          style={{ cursor: "pointer" }}
                           onClick={() => openEnquiry(enquiry)}
+                          title="Open this enquiry"
                         >
-                          <td>{enquiry.enquiryNumber || `#${enquiry.id}`}</td>
-                          <td style={{ fontWeight: 600 }}>{enquiry.companyName || "-"}</td>
-                          <td>{enquiry.product || "-"}</td>
-                          <td>{enquiry.quantity || 0} {enquiry.unitOfMeasurement || ""}</td>
+                          <td className="sampled-cell-ref">{enquiry.enquiryNumber || `#${enquiry.id}`}</td>
+                          <td className="sampled-cell-company">{enquiry.companyName || "-"}</td>
+                          {/* The product summary carries grade, size and packaging,
+                              so it is the one column that needs room to wrap. */}
+                          <td className="sampled-cell-product">{enquiry.product || "-"}</td>
+                          <td className="sampled-cell-qty">
+                            {enquiry.quantity || 0} {enquiry.unitOfMeasurement || ""}
+                          </td>
                           <td>{enquiry.assignedPerson || "-"}</td>
-                          <td>{formatDate(enquiry.sampledAt)}</td>
-                          <td>
-                            {formatWaiting(enquiry)}
+                          <td className="sampled-cell-date">{formatDate(enquiry.sampledAt)}</td>
+                          <td className="sampled-cell-waiting">
+                            <span className={due ? "sampled-waiting-late" : undefined}>{formatWaiting(enquiry)}</span>
                             {due && <span className="sampled-due-pill">Follow up</span>}
                           </td>
                         </tr>

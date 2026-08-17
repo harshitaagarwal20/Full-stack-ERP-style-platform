@@ -69,11 +69,17 @@ const DEFAULT_MASTER_DATA = {
   supplierMaster: [],
   countryCodes: [{ value: "IN", label: "IN" }],
   products: [],
+  // The product master rows behind those names. `products` is only a name list;
+  // this is what carries each product's category, so a picker can offer just the
+  // categories that belong on its screen.
+  productMaster: [],
   finishedGoodsCatalog: [],
   rawMaterialsCatalog: [],
   packingMaterialsCatalog: []
 };
-const MASTER_DATA_CACHE_KEY = "fms_master_data_v3";
+// v4 adds productMaster — a v3 payload has no such key, and bumping avoids
+// serving a snapshot without it for the life of the old cache.
+const MASTER_DATA_CACHE_KEY = "fms_master_data_v4";
 const MASTER_DATA_TTL_MS = 5 * 60 * 1000;
 
 let memoryCache = {
@@ -158,6 +164,7 @@ function buildMasterDataFromResponse(previousData, responseData) {
     supplierMaster: Array.isArray(data.supplierMaster) ? data.supplierMaster : prev.supplierMaster,
     countryCodes: normalizeOptions(data.countryCodes, prev.countryCodes),
     products: normalizeOptions(data.products, prev.products),
+    productMaster: Array.isArray(data.productMaster) ? data.productMaster : prev.productMaster,
     finishedGoodsCatalog: normalizeOptions(data.finishedGoodsCatalog, prev.finishedGoodsCatalog),
     rawMaterialsCatalog: normalizeOptions(data.rawMaterialsCatalog, prev.rawMaterialsCatalog),
     packingMaterialsCatalog: normalizeOptions(data.packingMaterialsCatalog, prev.packingMaterialsCatalog)
@@ -217,7 +224,12 @@ async function getMasterData({ force = false } = {}) {
       writeCachedMasterData(memoryCache);
       return memoryCache.data;
     })
-    .catch(() => memoryCache.data)
+    // Falling back to the built-in defaults keeps the app usable, but it empties
+    // every product/company picker — so say so rather than failing invisibly.
+    .catch((error) => {
+      console.warn("Master data could not be loaded; dropdowns will fall back to defaults.", error);
+      return memoryCache.data;
+    })
     .finally(() => {
       inFlightRequest = null;
     });

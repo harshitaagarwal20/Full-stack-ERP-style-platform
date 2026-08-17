@@ -210,15 +210,47 @@ function OrderPage() {
     }
     return unitOptions;
   }, [form.unit, unitOptions]);
-  const productOptions = useMemo(() => {
+  // An order is raised for finished goods and raw materials only. Packing
+  // material is bought against a purchase order and consumed in-house, so a
+  // customer never orders it and it has no business on this form.
+  //
+  // Anything else stays offered: a product whose category has not been set yet —
+  // or carries a legacy free-text one — counts as finished goods everywhere in
+  // the app (see constants/inventoryCategories.js), so it must not quietly
+  // vanish from ordering while the master is still being categorised.
+  const orderableProducts = useMemo(() => {
     const options = Array.isArray(masterData.products) ? masterData.products : [];
-    const current = String(form.product || "").trim();
-    if (current && !options.some((item) => item.value === current)) {
-      return [{ value: current, label: current }, ...options];
+    const rows = Array.isArray(masterData.productMaster) ? masterData.productMaster : [];
+    if (rows.length === 0) return options;
+
+    // A product name can hold several master rows, one per grade. It only leaves
+    // the form if every one of them is packing material — a name that is packing
+    // in one grade and finished goods in another is still orderable.
+    const orderableByName = new Map();
+    for (const row of rows) {
+      const name = String(row.productName || "").trim().toLowerCase();
+      if (!name) continue;
+      const orderable = row.category !== "PACKING_MATERIAL";
+      orderableByName.set(name, (orderableByName.get(name) || false) || orderable);
     }
-    return options;
-  }, [form.product, masterData.products]);
-  const requestProductOptions = productOptions;
+
+    return options.filter((option) => {
+      const name = String(option.value).trim().toLowerCase();
+      return !orderableByName.has(name) || orderableByName.get(name);
+    });
+  }, [masterData.products, masterData.productMaster]);
+
+  // Keep whatever the order was already saved against selectable, even if that
+  // product has since been recategorised or retired — editing an old order must
+  // not silently blank its product.
+  const productOptions = useMemo(() => {
+    const current = String(form.product || "").trim();
+    if (current && !orderableProducts.some((item) => item.value === current)) {
+      return [{ value: current, label: current }, ...orderableProducts];
+    }
+    return orderableProducts;
+  }, [form.product, orderableProducts]);
+  const requestProductOptions = orderableProducts;
   const statusFilterOptions = useMemo(
     () => [
       { value: "all", label: "All Status" },

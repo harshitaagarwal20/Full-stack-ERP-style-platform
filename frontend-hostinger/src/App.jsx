@@ -11,6 +11,7 @@ const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const DispatchPage = lazy(() => import("./pages/DispatchPage"));
 const PackingPage = lazy(() => import("./pages/PackingPage"));
 const EnquiryPage = lazy(() => import("./pages/EnquiryPage"));
+const SampledEnquiriesPage = lazy(() => import("./pages/SampledEnquiriesPage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const MasterDataPage = lazy(() => import("./pages/MasterDataPage"));
 const DropdownMastersPage = lazy(() => import("./pages/DropdownMastersPage"));
@@ -136,6 +137,7 @@ function App() {
 
             <Route element={<ProtectedRoute module="enquiries" />}>
               <Route path="/enquiries" element={withSuspense(<EnquiryPage />)} />
+              <Route path="/sampled-enquiries" element={withSuspense(<SampledEnquiriesPage />)} />
             </Route>
 
             <Route element={<ProtectedRoute module="enquiries" />}>

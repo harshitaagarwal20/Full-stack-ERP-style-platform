@@ -7994,6 +7994,55 @@ tr.row-urgent td:first-child {
 .followup-banner strong { font-weight: 700; }
 .followup-banner-icon { flex: none; font-size: 15px; line-height: 1.4; }
 
+/* ---- Sampled Enquiries screen ---- */
+/* The count is a plain fact, so it stays neutral; only the overdue tally and
+   the rows behind it are allowed to shout. */
+.sampled-subhead {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.sampled-count-badge {
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 12px;
+  white-space: nowrap;
+}
+
+.sampled-overdue-badge {
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 12px;
+  white-space: nowrap;
+}
+
+/* An enquiry past the follow-up threshold: marked on the leading edge so it
+   reads down a column of rows without colouring the whole table. */
+.sampled-row-overdue > td:first-child {
+  box-shadow: inset 3px 0 0 #d97706;
+}
+
+.sampled-due-pill {
+  display: inline-block;
+  margin-left: 8px;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
 /* Why an enquiry was rejected — shown back to the sales team. */
 .approval-reject-reason {
   margin-top: 10px;

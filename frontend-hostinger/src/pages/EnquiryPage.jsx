@@ -175,6 +175,19 @@ function EnquiryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, canManageEnquiries]);
 
+  // Deep-link: /enquiries?q=ENQ_0042 lands with the search already applied. The
+  // Sampled Enquiries screen uses this to hand off the enquiry that was clicked.
+  useEffect(() => {
+    const incomingQuery = searchParams.get("q");
+    if (!incomingQuery) return;
+    setSearchText(incomingQuery);
+    setQuery(incomingQuery);
+    setCurrentPage(1);
+    searchParams.delete("q");
+    setSearchParams(searchParams, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   // For an "Old" customer, the Last Transaction Details are auto-fetched
   // (read-only) from that company's most recent prior enquiry. Runs whenever
   // the customer type / company changes so the field always reflects the

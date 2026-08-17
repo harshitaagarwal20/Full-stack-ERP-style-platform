@@ -26,6 +26,33 @@ function normalizeUrgentInput(value) {
   return value === true || value === "true" || value === 1 || value === "1";
 }
 
+// Where an enquiry sits in the sales pipeline after an edit. Two things move it:
+// the Stage field on the enquiry form, and — automatically — a price landing on
+// an enquiry that had only been sampled. Quoting the client is what QUOTED
+// means, so it needs no second manual step, and the enquiry drops off the
+// Sampled Enquiries screen by itself.
+//
+// sampledAt is stamped the first time the enquiry reaches SAMPLED and is never
+// cleared afterwards: it starts the 12-day follow-up clock, and the dashboard
+// reads it to count everything that was ever sampled.
+export function resolveStageProgress(enquiry, { requestedStage, nextPrice }) {
+  const currentStage = normalizeStageInput(enquiry.stage);
+  let stage = requestedStage === undefined
+    ? currentStage
+    : normalizeStageInput(requestedStage, currentStage);
+
+  const hadPrice = Number(enquiry.price ?? 0) > 0;
+  const hasPrice = Number(nextPrice === undefined ? enquiry.price ?? 0 : nextPrice ?? 0) > 0;
+  if (stage === "SAMPLED" && !hadPrice && hasPrice) {
+    stage = "QUOTED";
+  }
+
+  return {
+    stage,
+    sampledAt: enquiry.sampledAt || (stage === "SAMPLED" ? new Date() : null)
+  };
+}
+
 const ENQUIRY_CACHE_PREFIX = "enquiries:list";
 const ENQUIRY_CACHE_TTL_MS = 12 * 1000;
 const ENQUIRY_TRANSACTION_OPTIONS = {
@@ -113,6 +140,8 @@ export function buildEnquiryRowData({
     notesForProduction: sharedData.notesForProduction,
     remarks: sharedData.remarks,
     status,
+    stage: sharedData.stage ?? "GENERAL",
+    sampledAt: sharedData.sampledAt ?? null,
     createdById,
     ...(approvedById ? { approvedById } : {})
   };
@@ -449,6 +478,8 @@ export async function updateEnquiry(enquiryId, payload) {
       notesForProduction: true,
       remarks: true,
       status: true,
+      stage: true,
+      sampledAt: true,
       createdById: true,
       approvedById: true,
       order: {
@@ -509,6 +540,12 @@ export async function updateEnquiry(enquiryId, payload) {
       remarks: payload.remarks !== undefined ? (payload.remarks || null) : enquiry.remarks || null,
       unitOfMeasurement: deriveUnitOfMeasurement(normalizedProducts, payload.unit_of_measurement || enquiry.unitOfMeasurement || null)
     };
+    // Every row of a split carries the same pipeline position: it is still the
+    // one enquiry, just recorded per product.
+    Object.assign(sharedData, resolveStageProgress(enquiry, {
+      requestedStage: payload.stage,
+      nextPrice: sharedData.price
+    }));
     const enquiryNumber = enquiry.enquiryNumber || formatEnquiryNumber(enquiry.id);
     const rowPayloads = normalizedProducts.map((row) =>
       buildEnquiryRowData({
@@ -546,6 +583,11 @@ export async function updateEnquiry(enquiryId, payload) {
     return createdRows.length === 1 ? createdRows[0] : createdRows;
   }
 
+  const nextPrice = normalizedProducts
+    ? deriveRowPrice(normalizedProducts[0], payload.price !== undefined ? normalizePriceInput(payload.price) : null)
+    : payload.price !== undefined ? normalizePriceInput(payload.price) : undefined;
+  const stageProgress = resolveStageProgress(enquiry, { requestedStage: payload.stage, nextPrice });
+
   const updated = await prisma.enquiry.update({
     where: { id: enquiryId },
     data: {
@@ -561,14 +603,14 @@ export async function updateEnquiry(enquiryId, payload) {
       product: normalizedProducts ? formatEnquiryProducts(normalizedProducts) : payload.product,
       products: normalizedProducts,
       quantity: totalQuantity || payload.quantity,
-      price: normalizedProducts
-        ? deriveRowPrice(normalizedProducts[0], payload.price !== undefined ? normalizePriceInput(payload.price) : null)
-        : payload.price !== undefined ? normalizePriceInput(payload.price) : undefined,
+      price: nextPrice,
       currency: payload.currency !== undefined ? normalizeCurrencyInput(payload.currency) : undefined,
       unitOfMeasurement: normalizedProducts ? deriveUnitOfMeasurement(normalizedProducts, payload.unit_of_measurement || null) : payload.unit_of_measurement,
       expectedTimeline: payload.expected_timeline ? parseDateInput(payload.expected_timeline) : undefined,
       assignedPerson: payload.assigned_person,
-      notesForProduction: payload.notes_for_production
+      notesForProduction: payload.notes_for_production,
+      stage: stageProgress.stage,
+      sampledAt: stageProgress.sampledAt
     },
     select: ENQUIRY_LIST_SELECT
   });

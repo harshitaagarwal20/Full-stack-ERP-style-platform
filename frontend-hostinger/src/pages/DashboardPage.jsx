@@ -215,7 +215,7 @@ function DashboardPage() {
     const today = new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "short" });
     const tiles = MOBILE_TILES.filter((tile) => tile.roles.includes(user?.role));
     const needs = [
-      { label: "Sampled — follow up", value: followUps.length, to: "/enquiries", tone: "warn", roles: ["admin", "sales"] },
+      { label: "Sampled — follow up", value: followUps.length, to: "/sampled-enquiries", tone: "warn", roles: ["admin", "sales"] },
       { label: "Pending approvals", value: counts.pendingApprovals, to: "/approval", tone: "warn", roles: ["admin", "sales"] },
       { label: "In production", value: counts.inProductionOrders, to: "/production", tone: "info", roles: ["admin"] },
       { label: "Ready for dispatch", value: counts.readyForDispatchOrders, to: "/dispatch", tone: "ok", roles: ["admin"] }

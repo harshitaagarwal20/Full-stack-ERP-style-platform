@@ -21,6 +21,7 @@ const NAV_ITEMS = [
     icon: "inbox",
     children: [
       { to: "/enquiries", label: "Enquiries", module: "enquiries" },
+      { to: "/sampled-enquiries", label: "Sampled", module: "enquiries" },
       { to: "/approval", label: "Approval", module: "enquiries" },
       { to: "/orders", label: "Orders", module: "orders" }
     ]

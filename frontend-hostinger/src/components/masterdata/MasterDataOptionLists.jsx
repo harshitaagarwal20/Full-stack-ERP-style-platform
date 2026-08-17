@@ -75,6 +75,9 @@ function MasterDataOptionLists({ masterData, editableCategories, loading, onChan
       await api.post(`/master-data/${selectedCategory}`, { value });
       setNewValue("");
       await onChanged();
+      // onChanged only refreshes this screen. The dropdowns everywhere else read
+      // a cached snapshot, so they need telling too or they stay minutes behind.
+      window.dispatchEvent(new Event("master-data-updated"));
     } catch (error) {
       logApiError(error, `Failed to add "${value}" to ${labelFor(selectedCategory)}`);
     } finally {
@@ -94,6 +97,7 @@ function MasterDataOptionLists({ masterData, editableCategories, loading, onChan
     try {
       await api.delete(`/master-data/${selectedCategory}/values/${encodeURIComponent(value)}`);
       await onChanged();
+      window.dispatchEvent(new Event("master-data-updated"));
     } catch (error) {
       logApiError(error, `Failed to remove "${value}"`);
     } finally {

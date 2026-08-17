@@ -162,6 +162,10 @@ function ProductMasterPage() {
       }
       closeModal();
       await fetchMasterData();
+      // Every product picker in the app reads a cached master-data snapshot that
+      // only refreshes every few minutes. Without this the product just added is
+      // missing from Orders, Enquiries and POs until that cache expires.
+      window.dispatchEvent(new Event("master-data-updated"));
     } catch (error) {
       logApiError(error, editingId ? "Failed to update product" : "Failed to add product");
     } finally {
@@ -185,6 +189,7 @@ function ProductMasterPage() {
       await api.delete(`/master-data/product-master/rows/${product.id}`);
       dispatchUserMessage("Product retired.", { title: "Removed", variant: "success" });
       await fetchMasterData();
+      window.dispatchEvent(new Event("master-data-updated"));
     } catch (error) {
       logApiError(error, "Failed to retire product");
     } finally {
@@ -213,6 +218,7 @@ function ProductMasterPage() {
         { title: "Import complete", variant: data.failed ? "error" : "success" }
       );
       await fetchMasterData();
+      window.dispatchEvent(new Event("master-data-updated"));
     } catch (error) {
       logApiError(error, "Failed to import products");
     } finally {

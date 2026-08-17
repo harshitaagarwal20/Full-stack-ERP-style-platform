@@ -55,10 +55,30 @@ function PackingPage() {
   const [activeOrder, setActiveOrder] = useState(null);
   const [saving, setSaving] = useState(false);
 
-  const packingMaterialOptions = useMemo(
-    () => (Array.isArray(masterData.packingMaterialsCatalog) ? masterData.packingMaterialsCatalog : []),
-    [masterData.packingMaterialsCatalog]
-  );
+  // Two lists name the same things. This screen was fed only by the curated
+  // "Packing Materials" dropdown, maintained on Dropdown Masters, while the
+  // product master keeps its own category — so a product categorised as Packing
+  // Material there never appeared here and had to be entered twice to be
+  // usable. Both feed it now, the curated list first, de-duplicated by name so
+  // a material held in both places is offered once.
+  const packingMaterialOptions = useMemo(() => {
+    const curated = Array.isArray(masterData.packingMaterialsCatalog) ? masterData.packingMaterialsCatalog : [];
+    const rows = Array.isArray(masterData.productMaster) ? masterData.productMaster : [];
+
+    const seen = new Set(curated.map((option) => String(option.value ?? "").trim().toLowerCase()));
+    const fromProductMaster = [];
+
+    for (const row of rows) {
+      if (row.category !== "PACKING_MATERIAL") continue;
+      const name = String(row.productName || "").trim();
+      const key = name.toLowerCase();
+      if (!name || seen.has(key)) continue;
+      seen.add(key);
+      fromProductMaster.push({ value: name, label: name });
+    }
+
+    return [...curated, ...fromProductMaster];
+  }, [masterData.packingMaterialsCatalog, masterData.productMaster]);
 
   const fetchQueue = async () => {
     setLoading(true);

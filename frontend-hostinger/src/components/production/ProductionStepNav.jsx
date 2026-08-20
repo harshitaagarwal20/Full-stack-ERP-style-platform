@@ -170,6 +170,16 @@ export default function ProductionStepNav({ record, activeStep }) {
   const isMobile = useIsMobile();
   const order = record?.order || {};
 
+  // Product and grade ride along with every step. An operator on the raw-material
+  // step is weighing against a grade spec, and until now nothing between Batch
+  // Setup and the QC sheet said which product — let alone which grade — the batch
+  // was being made to; the old single-page MFG sheet showed both in its summary.
+  const headerMeta = [
+    order.product,
+    order.grade && `Grade: ${order.grade}`,
+    record?.batchNo && `Batch: ${record.batchNo}`
+  ].filter(Boolean);
+
   return (
     <>
       <section className="order-card po-detail-header">
@@ -180,10 +190,12 @@ export default function ProductionStepNav({ record, activeStep }) {
           <div className="po-detail-header-meta">
             <div className="po-detail-title-block">
               <div className="po-detail-number">{order.orderNo || `#${record?.id}`}</div>
-              <div className="po-detail-supplier-name">
-                {order.clientName || "-"}
-                {record?.batchNo && <span style={{ marginLeft: 10, color: "#64748b", fontWeight: 400, fontSize: 13 }}>Batch: {record.batchNo}</span>}
-              </div>
+              <div className="po-detail-supplier-name">{order.clientName || "-"}</div>
+              {headerMeta.length > 0 && (
+                <div className="prod-header-meta">
+                  {headerMeta.map((item) => <span key={item}>{item}</span>)}
+                </div>
+              )}
             </div>
             <span className={`order-status ${getStatusClass(record?.status)}`}>
               {getStatusLabel(record?.status)}

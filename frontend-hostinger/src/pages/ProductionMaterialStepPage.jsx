@@ -297,7 +297,7 @@ function ProductionMaterialStepPage({ section, stepKey, label, colLabel }) {
                         <SearchableSelect
                           options={(batchOptionsByItem[row.name] || []).map((b) => ({
                             value: b.batchNo,
-                            label: `${b.batchNo}${b.vendor ? ` — ${b.vendor}` : ""} (${b.availableQty} avail)`,
+                            label: `${b.batchNo}${b.grade ? ` · Grade ${b.grade}` : ""}${b.vendor ? ` — ${b.vendor}` : ""} (${b.availableQty} avail)`,
                             searchText: [b.batchNo, b.vendor, b.grade].filter(Boolean).join(" ")
                           }))}
                           value={row.batch_no}
@@ -420,7 +420,7 @@ function ProductionMaterialStepPage({ section, stepKey, label, colLabel }) {
                   <SearchableSelect
                     options={(batchOptionsByItem[substituteForm.substitute_item_id] || []).map((b) => ({
                       value: b.batchNo,
-                      label: `${b.batchNo}${b.vendor ? ` — ${b.vendor}` : ""} (${b.availableQty} avail)`,
+                      label: `${b.batchNo}${b.grade ? ` · Grade ${b.grade}` : ""}${b.vendor ? ` — ${b.vendor}` : ""} (${b.availableQty} avail)`,
                       searchText: [b.batchNo, b.vendor, b.grade].filter(Boolean).join(" ")
                     }))}
                     value={substituteForm.substitute_batch_no}

@@ -1586,7 +1586,7 @@ function ProductionPage() {
                               <SearchableSelect
                                 options={(batchOptionsByItem[row.name] || []).map((batch) => ({
                                   value: batch.batchNo,
-                                  label: `${batch.batchNo}${batch.vendor ? ` — ${batch.vendor}` : ""} (${batch.availableQty} avail)`,
+                                  label: `${batch.batchNo}${batch.grade ? ` · Grade ${batch.grade}` : ""}${batch.vendor ? ` — ${batch.vendor}` : ""} (${batch.availableQty} avail)`,
                                   searchText: [batch.batchNo, batch.vendor, batch.grade].filter(Boolean).join(" ")
                                 }))}
                                 value={row.batch_no}

@@ -10492,6 +10492,35 @@ tr.row-urgent td:first-child {
   color: #64748b;
 }
 
+/* Product / grade / batch line under the customer name in the step header.
+   Dot-separated rather than chipped, so it stays quieter than the order number
+   while still being readable at a glance from the shop floor. */
+.prod-header-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  margin-top: 4px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.prod-header-meta span {
+  position: relative;
+}
+
+.prod-header-meta span + span::before {
+  content: "";
+  position: absolute;
+  left: -7px;
+  top: 50%;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #cbd5e1;
+  transform: translateY(-50%);
+}
+
 /* ==========================================================================
    Production step rail
    Nine sequential steps on one line. The rail scrolls sideways rather than

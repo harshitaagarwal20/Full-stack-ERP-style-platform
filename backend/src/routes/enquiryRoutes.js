@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { addEnquiry, approveOrRejectEnquiry, editEnquiry, getEnquiries, removeEnquiry } from "../controllers/enquiryController.js";
+import { addEnquiry, approveOrRejectEnquiry, editEnquiry, getEnquiries, removeEnquiry, submitEnquiry } from "../controllers/enquiryController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import { requirePermission } from "../middleware/permissionMiddleware.js";
 import { validateBody } from "../middleware/validateMiddleware.js";
@@ -15,6 +15,7 @@ router.use(authMiddleware);
 router.get("/", enquiries, getEnquiries);
 router.post("/", enquiries, validateBody(createEnquirySchema), addEnquiry);
 router.put("/:id", enquiries, validateBody(updateEnquiryStatusSchema), approveOrRejectEnquiry);
+router.post("/:id/submit", enquiries, submitEnquiry);
 router.put("/:id/edit", enquiries, validateBody(updateEnquirySchema), editEnquiry);
 router.delete("/:id", enquiries, removeEnquiry);
 

@@ -13,7 +13,8 @@ export function getApprovalListParams(statusFilter) {
 
   if (normalized === "ALL") {
     return {
-      enquiryParams: {},
+      // Drafts haven't been sent for approval yet, so they stay off this screen.
+      enquiryParams: { exclude_draft: "1" },
       manualParams: {}
     };
   }

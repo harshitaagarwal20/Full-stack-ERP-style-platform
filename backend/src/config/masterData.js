@@ -1,6 +1,6 @@
 export const RAW_MASTER_DATA = {
   roles: ["admin", "sales", "production", "dispatch", "purchase", "accounts"],
-  enquiryStatuses: ["PENDING", "ACCEPTED", "REJECTED"],
+  enquiryStatuses: ["DRAFT", "PENDING", "ACCEPTED", "REJECTED"],
   orderStatuses: ["CREATED", "IN_PRODUCTION", "READY_FOR_DISPATCH", "PARTIALLY_DISPATCHED", "COMPLETED", "DISPATCHED"],
   productionStatuses: ["PENDING", "IN_PROGRESS", "PARTIALLY_PRODUCED", "HOLD", "REWORK", "COMPLETED"],
   shipmentStatuses: ["PACKING", "SHIPPED", "DELIVERED"],

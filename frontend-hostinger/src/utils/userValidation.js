@@ -23,6 +23,9 @@ export function validateUserForm(form, { isEditing = false } = {}) {
     errors.email = buildError("Email is required.");
   } else if (!EMAIL_PATTERN.test(email)) {
     errors.email = buildError("Enter a valid email address.");
+  } else if (!isEditing && !email.toLowerCase().endsWith("@nimbasia.com")) {
+    // Edits are checked on the server, which lets an existing address stay as it is.
+    errors.email = buildError("Users must have an @nimbasia.com email address.");
   }
 
   if (isEditing) {

@@ -6,10 +6,11 @@ import {
 } from "../services/manualOrderRequestService.js";
 import { emptyPaginatedOrArrayFallback, isMissingTableError } from "../utils/prismaListFallback.js";
 import { toPositiveIntOrThrow } from "../utils/routeParams.js";
+import { assertManualOrderRequestAccess, scopedOwnerId } from "../utils/dataScope.js";
 
 export async function getManualOrderRequests(req, res, next) {
   try {
-    const requests = await listManualOrderRequests(req.query);
+    const requests = await listManualOrderRequests(req.query, { ownerId: scopedOwnerId(req.user) });
     res.setHeader("Cache-Control", "private, max-age=10");
     return res.json(requests);
   } catch (error) {
@@ -31,6 +32,7 @@ export async function addManualOrderRequest(req, res, next) {
 
 export async function updateManualOrderRequest(req, res, next) {
   try {
+    await assertManualOrderRequestAccess(req.user, toPositiveIntOrThrow(req.params.id, "id"));
     const request = await updateManualOrderRequestStatus(toPositiveIntOrThrow(req.params.id, "id"), req.validatedBody.status, req.user);
     return res.json(request);
   } catch (error) {
@@ -40,6 +42,7 @@ export async function updateManualOrderRequest(req, res, next) {
 
 export async function setManualOrderDate(req, res, next) {
   try {
+    await assertManualOrderRequestAccess(req.user, toPositiveIntOrThrow(req.params.id, "id"));
     const result = await setManualOrderDispatchDate(toPositiveIntOrThrow(req.params.id, "id"), req.validatedBody, req.user);
     return res.json(result);
   } catch (error) {

@@ -35,7 +35,21 @@ export async function listUsers(query = {}) {
   });
 }
 
+// Accounts are company accounts only. Existing users on other domains keep
+// working; the rule applies whenever an address is set or changed.
+export const ALLOWED_EMAIL_DOMAIN = "nimbasia.com";
+
+function assertAllowedEmail(email) {
+  const domain = String(email || "").trim().toLowerCase().split("@")[1];
+  if (domain !== ALLOWED_EMAIL_DOMAIN) {
+    const error = new Error(`Users must have an @${ALLOWED_EMAIL_DOMAIN} email address.`);
+    error.statusCode = 400;
+    throw error;
+  }
+}
+
 export async function createUser(payload) {
+  assertAllowedEmail(payload.email);
   const hashedPassword = await bcrypt.hash(payload.password, 10);
 
   try {
@@ -44,7 +58,8 @@ export async function createUser(payload) {
         name: payload.name,
         email: payload.email,
         password: hashedPassword,
-        role: payload.role
+        role: payload.role,
+        ...(payload.data_scope ? { dataScope: payload.data_scope } : {})
       },
       select: USER_PUBLIC_SELECT
     });
@@ -65,7 +80,15 @@ export async function updateUser(userId, payload) {
     throw error;
   }
 
-  const data = { ...payload };
+  if (payload.email !== undefined) {
+    const current = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+    if (current && current.email.toLowerCase() !== String(payload.email).trim().toLowerCase()) {
+      assertAllowedEmail(payload.email);
+    }
+  }
+
+  const { data_scope: dataScope, ...rest } = payload;
+  const data = { ...rest, ...(dataScope ? { dataScope } : {}) };
   if (payload.password) {
     data.password = await bcrypt.hash(payload.password, 10);
     data.passwordChangedAt = new Date();

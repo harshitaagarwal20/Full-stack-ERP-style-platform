@@ -2722,6 +2722,15 @@ body {
   color: #15803d;
 }
 
+.user-scope-badge {
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  background: #fef3c7;
+  color: #a16207;
+}
+
 .user-status-badge.active {
   background: #f1f5f9;
   color: #475569;
@@ -3845,6 +3854,27 @@ body {
 .enquiry-status.new {
   background: #dbeafe;
   color: #1d4ed8;
+}
+
+.enquiry-status.draft {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.enquiry-send-btn {
+  border: 0;
+  border-radius: 8px;
+  padding: 6px 10px;
+  background: #1d4ed8;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.enquiry-send-btn:hover {
+  background: #1e40af;
 }
 
 .enquiry-status.pending {

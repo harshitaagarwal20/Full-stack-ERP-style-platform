@@ -78,8 +78,11 @@ function buildStageFunnel({ totalEnquiries, everSampled, quoted }) {
   });
 }
 
-function buildOutcomeMix({ totalEnquiries, approved, rejected, pending, ordered }) {
+function buildOutcomeMix({ totalEnquiries, drafts, approved, rejected, pending, ordered }) {
   return [
+    // Saved but not yet sent for approval — without this slice the shares
+    // would no longer add up to the enquiry total.
+    { key: "DRAFT", label: "Draft (not sent)", count: drafts, share: ratio(drafts, totalEnquiries), color: "#6b7280" },
     { key: "APPROVED", label: "Approved", count: approved, share: ratio(approved, totalEnquiries), color: "#16a34a" },
     { key: "PENDING", label: "Awaiting Decision", count: pending, share: ratio(pending, totalEnquiries), color: "#ea580c" },
     { key: "REJECTED", label: "Rejected", count: rejected, share: ratio(rejected, totalEnquiries), color: "#dc2626" },
@@ -97,6 +100,7 @@ export async function getDashboardSummary() {
     const [
       totalEnquiries,
       pendingApprovals,
+      draftEnquiries,
       totalOrders,
       createdOrders,
       inProductionOrders,
@@ -116,6 +120,7 @@ export async function getDashboardSummary() {
     ] = await Promise.all([
       prisma.enquiry.count(),
       prisma.enquiry.count({ where: { status: "PENDING" } }),
+      prisma.enquiry.count({ where: { status: "DRAFT" } }),
       prisma.order.count(),
       prisma.order.count({ where: { status: "CREATED" } }),
       prisma.order.count({ where: { status: "IN_PRODUCTION" } }),
@@ -173,6 +178,7 @@ export async function getDashboardSummary() {
 
     const outcomeMix = buildOutcomeMix({
       totalEnquiries,
+      drafts: draftEnquiries,
       approved: approvedEnquiries,
       rejected: rejectedEnquiries,
       pending: pendingApprovals,
@@ -189,6 +195,7 @@ export async function getDashboardSummary() {
       counts: {
         totalEnquiries,
         pendingApprovals,
+        draftEnquiries,
         totalOrders,
         createdOrders,
         inProductionOrders,

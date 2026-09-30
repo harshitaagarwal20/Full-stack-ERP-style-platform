@@ -22,14 +22,16 @@ export const createUserSchema = z.object({
   name: z.string().min(2),
   email: z.string().email(),
   password: z.string().min(6),
-  role: roleSchema
+  role: roleSchema,
+  data_scope: z.enum(["SELF", "ALL"]).optional()
 });
 
 export const updateUserSchema = z.object({
   name: z.string().min(2).optional(),
   email: z.string().email().optional(),
   password: z.string().min(6).optional(),
-  role: roleSchema.optional()
+  role: roleSchema.optional(),
+  data_scope: z.enum(["SELF", "ALL"]).optional()
 });
 
 export const changePasswordSchema = z.object({

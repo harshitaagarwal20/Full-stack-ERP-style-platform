@@ -1,4 +1,5 @@
 import prisma from "../config/prisma.js";
+import { orderOwnerWhere } from "../utils/dataScope.js";
 import { startProductionFromOrder } from "./productionService.js";
 import { buildPagination } from "../utils/pagination.js";
 import { buildMonthRange, recentDaysWhere } from "../utils/dateFilters.js";
@@ -214,7 +215,7 @@ export async function createOrder(payload, createdByUser) {
   return finalOrder;
 }
 
-export async function listOrders(filters = {}) {
+export async function listOrders(filters = {}, { ownerId = null } = {}) {
   const { status, payment_status: paymentStatus, q, client, date, month, recent_days: recentDays } = filters;
   const { page, take, skip } = buildPagination(filters, { defaultLimit: 20, maxLimit: 100 });
   const normalizedClient = String(client || "").trim();
@@ -242,7 +243,16 @@ export async function listOrders(filters = {}) {
     ...(normalizedDate && dateFrom && dateTo ? { deliveryDate: { gte: dateFrom, lte: dateTo } } : {}),
     // Month = when the order was placed. AND-wrapped so it can't clobber the
     // search box's OR below.
-    ...(buildMonthRange(month) ? { AND: [{ orderDate: buildMonthRange(month) }] } : {}),
+    // Month and the own-data limit both go in AND so neither clobbers the
+    // search box's OR below.
+    ...((buildMonthRange(month) || ownerId)
+      ? {
+          AND: [
+            ...(buildMonthRange(month) ? [{ orderDate: buildMonthRange(month) }] : []),
+            ...(ownerId ? [orderOwnerWhere(ownerId)] : [])
+          ]
+        }
+      : {}),
     ...(q
       ? {
           OR: [
@@ -275,6 +285,7 @@ export async function listOrders(filters = {}) {
   const cacheKey = buildCacheKey(ORDER_CACHE_PREFIX, {
     status: status || null,
     paymentStatus: normalizedPaymentStatus || null,
+    ownerId,
     month: String(month || "") || null,
     recentDays: String(recentDays || "") || null,
     q: q || null,

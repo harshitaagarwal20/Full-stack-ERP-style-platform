@@ -243,6 +243,9 @@ export async function createEnquiry(payload, user) {
           stage,
           sampledAt,
           isUrgent,
+          // Enquiries wait as drafts until their creator sends them for
+          // approval; urgent ones skip the queue, so they start as PENDING.
+          status: isUrgent ? "PENDING" : "DRAFT",
           createdById: userId
         },
         select: ENQUIRY_LIST_SELECT
@@ -287,8 +290,10 @@ export async function createEnquiry(payload, user) {
   return created;
 }
 
-export async function listEnquiries(filters = {}) {
+export async function listEnquiries(filters = {}, { ownerId = null } = {}) {
   const { status, q, assigned, date, month, stage, recent_days: recentDays } = filters;
+  // The approval screen's "All" view must not surface drafts nobody has sent yet.
+  const excludeDraft = String(filters.exclude_draft || "").trim() === "1";
   const { page, take, skip } = buildPagination(filters, { defaultLimit: 20, maxLimit: 100 });
   const normalizedAssigned = String(assigned || "").trim();
   const normalizedDate = String(date || "").trim();
@@ -304,7 +309,9 @@ export async function listEnquiries(filters = {}) {
   const monthRange = buildMonthRange(month);
 
   const where = {
-    ...(status ? { status } : {}),
+    ...(status ? { status } : excludeDraft ? { status: { not: "DRAFT" } } : {}),
+    // Users limited to their own data see only the enquiries they raised.
+    ...(ownerId ? { createdById: ownerId } : {}),
     // Mobile sends recent_days=45 so a phone never drags years of history over
     // a mobile connection. Desktop omits it and sees everything.
     ...recentDaysWhere("createdAt", recentDays),
@@ -345,6 +352,8 @@ export async function listEnquiries(filters = {}) {
 
   const cacheKey = buildCacheKey(ENQUIRY_CACHE_PREFIX, {
     status: status || null,
+    excludeDraft,
+    ownerId,
     stage: normalizedStage || null,
     q: q || null,
     // Must be part of the key, or a cached response would ignore the month.
@@ -380,6 +389,40 @@ export async function listEnquiries(filters = {}) {
     }
 
     return prisma.enquiry.findMany(query);
+  });
+}
+
+// Moves a draft into the approval queue. An enquiry with several products is
+// stored as one row per product under a shared enquiry number, so every draft
+// row of that enquiry goes together.
+export async function submitEnquiryForApproval(enquiryId) {
+  const enquiry = await prisma.enquiry.findUnique({
+    where: { id: enquiryId },
+    select: { id: true, enquiryNumber: true, status: true }
+  });
+
+  if (!enquiry) {
+    const error = new Error("Enquiry not found.");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  if (enquiry.status !== "DRAFT") {
+    const error = new Error("This enquiry has already been sent for approval.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const where = enquiry.enquiryNumber
+    ? { enquiryNumber: enquiry.enquiryNumber, status: "DRAFT" }
+    : { id: enquiry.id, status: "DRAFT" };
+
+  await prisma.enquiry.updateMany({ where, data: { status: "PENDING" } });
+  invalidateEnquiryReadCaches();
+
+  return prisma.enquiry.findUnique({
+    where: { id: enquiryId },
+    select: ENQUIRY_LIST_SELECT
   });
 }
 

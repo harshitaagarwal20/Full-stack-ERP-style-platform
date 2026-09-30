@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS `User` (
     `role` ENUM('admin', 'sales', 'production', 'dispatch', 'purchase', 'accounts') NOT NULL,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `passwordChangedAt` DATETIME(3) NULL,
+    `dataScope` ENUM('SELF', 'ALL') NOT NULL DEFAULT 'ALL',
 
     UNIQUE INDEX `User_email_key`(`email`),
     INDEX `User_createdAt_id_idx`(`createdAt`, `id`),
@@ -138,7 +139,7 @@ CREATE TABLE IF NOT EXISTS `Enquiry` (
     `assignedPerson` VARCHAR(191) NOT NULL,
     `notesForProduction` VARCHAR(191) NULL,
     `remarks` VARCHAR(191) NULL,
-    `status` ENUM('PENDING', 'ACCEPTED', 'HOLD', 'REJECTED') NOT NULL DEFAULT 'PENDING',
+    `status` ENUM('PENDING', 'ACCEPTED', 'HOLD', 'REJECTED', 'DRAFT') NOT NULL DEFAULT 'PENDING',
     `stage` ENUM('GENERAL', 'SAMPLED', 'QUOTED') NOT NULL DEFAULT 'GENERAL',
     `sampledAt` DATETIME(3) NULL,
     `sampleFollowUpMailedAt` DATETIME(3) NULL,
@@ -735,6 +736,13 @@ SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
 SET @sql := IF(@c = 0, 'ALTER TABLE `User` ADD COLUMN `passwordChangedAt` DATETIME(3) NULL', 'DO 0');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
+-- User.dataScope (SELF = sees only their own sales data, ALL = everyone's).
+-- Existing users get ALL, so nobody loses sight of data until an admin changes it.
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'User' AND COLUMN_NAME = 'dataScope');
+SET @sql := IF(@c = 0, 'ALTER TABLE `User` ADD COLUMN `dataScope` ENUM(''SELF'', ''ALL'') NOT NULL DEFAULT ''ALL''', 'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
 -- RolePermission.role
 SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'RolePermission' AND COLUMN_NAME = 'role');
@@ -1003,6 +1011,14 @@ PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Enquiry' AND COLUMN_NAME = 'state');
 SET @sql := IF(@c = 0, 'ALTER TABLE `Enquiry` ADD COLUMN `state` VARCHAR(191) NULL', 'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Enquiry.status gains DRAFT (saved, not yet sent for approval). Appended at
+-- the end of the ENUM so MySQL extends it in place; existing rows keep their value.
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Enquiry' AND COLUMN_NAME = 'status'
+             AND COLUMN_TYPE LIKE '%''DRAFT''%');
+SET @sql := IF(@c = 0, 'ALTER TABLE `Enquiry` MODIFY COLUMN `status` ENUM(''PENDING'', ''ACCEPTED'', ''HOLD'', ''REJECTED'', ''DRAFT'') NOT NULL DEFAULT ''PENDING''', 'DO 0');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- Enquiry.lastTransaction

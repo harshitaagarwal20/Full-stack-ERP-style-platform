@@ -45,6 +45,7 @@ function getStatusClass(status) {
   if (status === "ACCEPTED") return "approved";
   if (status === "REJECTED") return "rejected";
   if (status === "PENDING") return "pending";
+  if (status === "DRAFT") return "draft";
   return "new";
 }
 
@@ -589,6 +590,17 @@ function EnquiryPage() {
     setIsCreateModalOpen(true);
   };
 
+  const onSubmitForApproval = async (enquiry) => {
+    if (!window.confirm(`Send ${getDisplayEnquiryNumber(enquiry)} for approval?`)) return;
+    try {
+      await api.post(`/enquiries/${enquiry.id}/submit`);
+      setSelectedEnquiry(null);
+      await fetchEnquiries();
+    } catch (error) {
+      logApiError(error, "Failed to send enquiry for approval");
+    }
+  };
+
   const onDelete = async (enquiryId) => {
     if (!window.confirm("Delete this enquiry?")) return;
     try {
@@ -745,6 +757,9 @@ function EnquiryPage() {
                       <td>
                         <div className="enquiry-row-actions">
                           <button className="icon-btn" onClick={() => setSelectedEnquiry(enquiry)} aria-label="View enquiry"><EyeIcon /></button>
+                          {canManageEnquiries && enquiry.status === "DRAFT" && (
+                            <button className="enquiry-send-btn" onClick={() => onSubmitForApproval(enquiry)}>Send for Approval</button>
+                          )}
                           {canManageEnquiries && <button className="icon-btn" onClick={() => onEdit(enquiry)} aria-label="Edit enquiry"><EditIcon /></button>}
                           {canManageEnquiries && <button className="icon-btn danger" onClick={() => onDelete(enquiry.id)} aria-label="Delete enquiry"><TrashIcon /></button>}
                         </div>

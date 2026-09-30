@@ -33,7 +33,7 @@ function UsersPage() {
   const [resetPasswordError, setResetPasswordError] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [users, setUsers] = useState([]);
-  const [form, setForm] = useState({ name: "", email: "", password: "", role: "sales" });
+  const [form, setForm] = useState({ name: "", email: "", password: "", role: "sales", data_scope: "SELF" });
   const [formErrors, setFormErrors] = useState({});
   const [formErrorMessage, setFormErrorMessage] = useState("");
   const canManageUsers = user?.role === "admin";
@@ -82,13 +82,19 @@ function UsersPage() {
   }, [users, roleFilter]);
 
   const resetUserForm = () => {
-    setForm({ name: "", email: "", password: "", role: "sales" });
+    setForm({ name: "", email: "", password: "", role: "sales", data_scope: "SELF" });
     setFormErrors({});
     setFormErrorMessage("");
   };
 
   const updateFormField = (field, value) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
+    setForm((prev) => ({
+      ...prev,
+      [field]: value,
+      // A new sales user starts limited to their own data; other roles work
+      // across everyone's records. The admin can still pick either.
+      ...(field === "role" && !editingUserId ? { data_scope: value === "sales" ? "SELF" : "ALL" } : {})
+    }));
     setFormErrors((prev) => {
       if (!prev[field]) return prev;
       const next = { ...prev };
@@ -116,7 +122,8 @@ function UsersPage() {
         const payload = {
           name: form.name,
           email: form.email,
-          role: form.role
+          role: form.role,
+          data_scope: form.data_scope
         };
         if (form.password) payload.password = form.password;
         await api.put(`/users/${editingUserId}`, payload);
@@ -150,11 +157,13 @@ function UsersPage() {
         { key: "name", header: "Name" },
         { key: "email", header: "Email" },
         { key: "role", header: "Role" },
+        { key: "dataAccess", header: "Data Access" },
         { key: "createdAt", header: "Created At" }
       ],
       filteredUsers.map((user) => ({
         ...user,
         status: "Active",
+        dataAccess: user.role === "admin" || user.dataScope !== "SELF" ? "All" : "Self",
         createdAt: user.createdAt ? new Date(user.createdAt).toLocaleString() : ""
       }))
     );
@@ -175,7 +184,8 @@ function UsersPage() {
       name: user.name || "",
       email: user.email || "",
       password: "",
-      role: user.role || "sales"
+      role: user.role || "sales",
+      data_scope: user.dataScope || "ALL"
     });
     setFormErrors({});
     setFormErrorMessage("");
@@ -277,6 +287,9 @@ function UsersPage() {
 
                 <div className="user-item-right">
                   <span className={`user-role-badge role-${user.role}`}>{user.role}</span>
+                  {user.role !== "admin" && user.dataScope === "SELF" && (
+                    <span className="user-scope-badge" title="Sees only their own enquiries, requests and orders">Own data only</span>
+                  )}
                   <span className="user-status-badge active">Active</span>
                     {canManageUsers && (
                       <div className="user-menu">
@@ -438,6 +451,20 @@ function UsersPage() {
                 />
                 {formErrors.role ? <small className="field-error">{formErrors.role[0]}</small> : null}
               </div>
+              {form.role !== "admin" && (
+                <div>
+                  <label className="users-field-label" htmlFor="userDataScope">Data Access</label>
+                  <select
+                    id="userDataScope"
+                    className="users-input"
+                    value={form.data_scope}
+                    onChange={(event) => updateFormField("data_scope", event.target.value)}
+                  >
+                    <option value="SELF">Self: only their own enquiries, requests and orders</option>
+                    <option value="ALL">All: every user's records</option>
+                  </select>
+                </div>
+              )}
               <div className="users-form-actions">
                 <button
                   type="button"

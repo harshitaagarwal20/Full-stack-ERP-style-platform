@@ -28,11 +28,18 @@ enum Role {
   accounts
 }
 
+enum DataScope {
+  SELF
+  ALL
+}
+
 enum EnquiryStatus {
   PENDING
   ACCEPTED
   HOLD
   REJECTED
+  // Saved but not yet sent for approval; the creator moves it to PENDING.
+  DRAFT
 }
 
 // Sales progress of an enquiry. Independent of EnquiryStatus, which drives
@@ -128,6 +135,9 @@ model User {
   role               Role
   createdAt          DateTime  @default(now())
   passwordChangedAt  DateTime?
+  // Whose sales data this user sees: ALL, or only records they created (SELF).
+  // Admins always see everything regardless.
+  dataScope          DataScope @default(ALL)
   enquiriesCreated   Enquiry[] @relation("EnquiryCreator")
   enquiriesApproved  Enquiry[] @relation("EnquiryApprover")
   ordersCreated      Order[]

@@ -3,6 +3,7 @@ export const USER_PUBLIC_SELECT = {
   name: true,
   email: true,
   role: true,
+  dataScope: true,
   createdAt: true
 };
 

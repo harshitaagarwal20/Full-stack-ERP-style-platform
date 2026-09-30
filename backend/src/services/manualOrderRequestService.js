@@ -226,13 +226,14 @@ export async function createManualOrderRequest(payload, createdByUser) {
 
 export { buildManualOrderCreateData };
 
-export async function listManualOrderRequests(filters = {}) {
+export async function listManualOrderRequests(filters = {}, { ownerId = null } = {}) {
   const { status, q } = filters;
   const { page, take, skip } = buildPagination(filters, { defaultLimit: 20, maxLimit: 100 });
   const normalizedStatus = String(status || "").trim();
 
   const where = {
     ...(normalizedStatus ? { status: normalizedStatus } : {}),
+    ...(ownerId ? { createdById: ownerId } : {}),
     ...(q
       ? {
           OR: [
@@ -247,6 +248,7 @@ export async function listManualOrderRequests(filters = {}) {
 
   const cacheKey = buildCacheKey(MANUAL_ORDER_REQUEST_CACHE_PREFIX, {
     status: normalizedStatus || null,
+    ownerId,
     q: q || null,
     page,
     take,

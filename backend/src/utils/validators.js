@@ -58,6 +58,8 @@ const enquiryBaseSchema = z.object({
   inco_term: z.string().optional().nullable(),
   country: z.string().optional().nullable(),
   port: z.string().optional().nullable(),
+  city: z.string().optional().nullable(),
+  state: z.string().optional().nullable(),
   last_transaction: z.string().optional().nullable(),
   product: z.string().min(1).optional(),
   products: enquiryProductsInputSchema,

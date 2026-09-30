@@ -57,6 +57,8 @@ export const ENQUIRY_LIST_SELECT = {
   incoTerm: true,
   country: true,
   port: true,
+  city: true,
+  state: true,
   lastTransaction: true,
   expectedTimeline: true,
   assignedPerson: true,

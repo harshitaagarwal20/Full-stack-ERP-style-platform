@@ -64,6 +64,8 @@ function createEmptyForm() {
     inco_term: "",
     country: "",
     port: "",
+    city: "",
+    state: "",
     last_transaction: "",
     notes_for_production: "",
     stage: "GENERAL",
@@ -132,6 +134,16 @@ const COUNTRY_OPTIONS_INTL = [
 ];
 
 const COUNTRY_SELECT_OPTIONS = COUNTRY_OPTIONS_INTL.map((country) => ({ value: country, label: country }));
+// Indian states and union territories, for domestic enquiries.
+const INDIAN_STATES = [
+  "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Gujarat", "Haryana",
+  "Himachal Pradesh", "Jharkhand", "Karnataka", "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur",
+  "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana",
+  "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal",
+  "Andaman and Nicobar Islands", "Chandigarh", "Dadra and Nagar Haveli and Daman and Diu", "Delhi",
+  "Jammu and Kashmir", "Ladakh", "Lakshadweep", "Puducherry"
+];
+const STATE_SELECT_OPTIONS = INDIAN_STATES.map((state) => ({ value: state, label: state }));
 
 function EnquiryPage() {
   const PAGE_SIZE = 10;
@@ -424,6 +436,11 @@ function EnquiryPage() {
 
     // An urgent enquiry skips approval and immediately creates a sales order
     // and a production job, so make the user acknowledge that before saving.
+    if (form.enquiry_type === "Domestic" && (!String(form.city || "").trim() || !form.state)) {
+      window.alert("Fill city and state for a domestic enquiry.");
+      return;
+    }
+
     if (form.is_urgent && !editingEnquiryId) {
       const proceed = window.confirm(
         "Marked URGENT.\n\n"
@@ -461,6 +478,8 @@ function EnquiryPage() {
         inco_term: form.inco_term || null,
         country: form.country || null,
         port: form.port || null,
+        city: String(form.city || "").trim() || null,
+        state: form.state || null,
         last_transaction: form.last_transaction || null,
         unit_of_measurement: unitOfMeasurement,
         notes_for_production: form.notes_for_production || null,
@@ -509,6 +528,8 @@ function EnquiryPage() {
         { key: "enquiryDate", header: "Enquiry Date" },
         { key: "modeOfEnquiry", header: "Mode of Enquiry" },
         { key: "companyName", header: "Company" },
+        { key: "city", header: "City" },
+        { key: "state", header: "State" },
         { key: "product", header: "Product Summary" },
         { key: "products", header: "Products" },
         { key: "grade", header: "Grade" },
@@ -526,6 +547,8 @@ function EnquiryPage() {
         enquiryNumber: getDisplayEnquiryNumber(item),
         enquiryDate: formatDate(item.enquiryDate),
         modeOfEnquiry: item.modeOfEnquiry || "-",
+        city: item.city || "-",
+        state: item.state || "-",
         product: formatEnquiryProductNames(item) || "-",
         products: formatEnquiryProductNames(item) || "-",
         grade: getEnquiryProductGrades(item) || "-",
@@ -556,6 +579,8 @@ function EnquiryPage() {
       inco_term: enquiry.incoTerm || "",
       country: enquiry.country || "",
       port: enquiry.port || "",
+      city: enquiry.city || "",
+      state: enquiry.state || "",
       last_transaction: enquiry.lastTransaction || "",
       notes_for_production: enquiry.notesForProduction || "",
       stage: enquiry.stage || "GENERAL",
@@ -895,6 +920,29 @@ function EnquiryPage() {
                       value={form.port}
                       onChange={(e) => setForm((p) => ({ ...p, port: e.target.value }))}
                       placeholder="Enter port name"
+                      required
+                    />
+                  </div>
+                </>
+              )}
+              {form.enquiry_type === "Domestic" && (
+                <>
+                  <div>
+                    <label>State*</label>
+                    <SearchableSelect
+                      options={STATE_SELECT_OPTIONS}
+                      value={form.state}
+                      onChange={(value) => setForm((p) => ({ ...p, state: value }))}
+                      placeholder="Search state"
+                    />
+                  </div>
+                  <div>
+                    <label>City*</label>
+                    <input autoComplete="off"
+                      type="text"
+                      value={form.city}
+                      onChange={(e) => setForm((p) => ({ ...p, city: e.target.value }))}
+                      placeholder="Enter city"
                       required
                     />
                   </div>

@@ -233,6 +233,8 @@ model Enquiry {
   incoTerm         String?
   country          String?
   port             String?
+  city             String?
+  state            String?
   lastTransaction  String?
   expectedTimeline DateTime?
   assignedPerson   String

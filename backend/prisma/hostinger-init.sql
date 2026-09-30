@@ -131,6 +131,8 @@ CREATE TABLE IF NOT EXISTS `Enquiry` (
     `incoTerm` VARCHAR(191) NULL,
     `country` VARCHAR(191) NULL,
     `port` VARCHAR(191) NULL,
+    `city` VARCHAR(191) NULL,
+    `state` VARCHAR(191) NULL,
     `lastTransaction` VARCHAR(191) NULL,
     `expectedTimeline` DATETIME(3) NULL,
     `assignedPerson` VARCHAR(191) NOT NULL,
@@ -989,6 +991,18 @@ PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Enquiry' AND COLUMN_NAME = 'port');
 SET @sql := IF(@c = 0, 'ALTER TABLE `Enquiry` ADD COLUMN `port` VARCHAR(191) NULL', 'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Enquiry.city
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Enquiry' AND COLUMN_NAME = 'city');
+SET @sql := IF(@c = 0, 'ALTER TABLE `Enquiry` ADD COLUMN `city` VARCHAR(191) NULL', 'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Enquiry.state
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Enquiry' AND COLUMN_NAME = 'state');
+SET @sql := IF(@c = 0, 'ALTER TABLE `Enquiry` ADD COLUMN `state` VARCHAR(191) NULL', 'DO 0');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- Enquiry.lastTransaction

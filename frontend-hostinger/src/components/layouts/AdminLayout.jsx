@@ -29,7 +29,10 @@ function AdminLayout() {
   const [installPromptEvent, setInstallPromptEvent] = useState(null);
   const [isStandalone, setIsStandalone] = useState(false);
   const [changePwOpen, setChangePwOpen] = useState(false);
-  const [changePwForm, setChangePwForm] = useState({ current_password: "", new_password: "", confirm_password: "" });
+  const [changePwForm, setChangePwForm] = useState({ current_password: "", new_password: "", confirm_password: "", otp: "" });
+  // Set once the server has emailed an OTP; holds the masked address it went to.
+  const [changePwOtpSentTo, setChangePwOtpSentTo] = useState("");
+  const [changePwSendingOtp, setChangePwSendingOtp] = useState(false);
   const [changePwError, setChangePwError] = useState("");
   const [changePwSuccess, setChangePwSuccess] = useState("");
   const [changePwSubmitting, setChangePwSubmitting] = useState(false);
@@ -95,14 +98,47 @@ function AdminLayout() {
   }, []);
 
   const openChangePassword = () => {
-    setChangePwForm({ current_password: "", new_password: "", confirm_password: "" });
+    setChangePwForm({ current_password: "", new_password: "", confirm_password: "", otp: "" });
+    setChangePwOtpSentTo("");
     setChangePwError("");
     setChangePwSuccess("");
     setChangePwOpen(true);
   };
 
+  // Step 1: the server checks the current password, then emails a 6-digit OTP.
+  const sendChangePasswordOtp = async () => {
+    if (!changePwForm.current_password) {
+      setChangePwError("Enter your current password first.");
+      return;
+    }
+    setChangePwSendingOtp(true);
+    setChangePwError("");
+    setChangePwSuccess("");
+    try {
+      const { data } = await api.post("/users/me/password/otp", {
+        current_password: changePwForm.current_password
+      });
+      setChangePwOtpSentTo(data?.email || "your email");
+      setChangePwForm((prev) => ({ ...prev, otp: "" }));
+      setChangePwSuccess(`OTP sent to ${data?.email || "your email"}. It expires in ${data?.expiresInMinutes || 10} minutes.`);
+    } catch (err) {
+      const msg = err?.response?.data?.message || err?.response?.data?.error || "Failed to send the OTP.";
+      setChangePwError(msg);
+    } finally {
+      setChangePwSendingOtp(false);
+    }
+  };
+
   const submitChangePassword = async (e) => {
     e.preventDefault();
+    if (!changePwOtpSentTo) {
+      await sendChangePasswordOtp();
+      return;
+    }
+    if (!/^\d{6}$/.test(changePwForm.otp)) {
+      setChangePwError("Enter the 6-digit OTP from your email.");
+      return;
+    }
     if (changePwForm.new_password.length < 6) {
       setChangePwError("New password must be at least 6 characters.");
       return;
@@ -116,10 +152,12 @@ function AdminLayout() {
     try {
       await api.patch("/users/me/password", {
         current_password: changePwForm.current_password,
-        new_password: changePwForm.new_password
+        new_password: changePwForm.new_password,
+        otp: changePwForm.otp
       });
       setChangePwSuccess("Password updated successfully.");
-      setChangePwForm({ current_password: "", new_password: "", confirm_password: "" });
+      setChangePwForm({ current_password: "", new_password: "", confirm_password: "", otp: "" });
+      setChangePwOtpSentTo("");
     } catch (err) {
       const msg = err?.response?.data?.message || err?.response?.data?.error || "Failed to update password.";
       setChangePwError(msg);
@@ -170,7 +208,7 @@ function AdminLayout() {
             <div className="users-modal-head">
               <div>
                 <h3>Change Password</h3>
-                <p>Update your account password.</p>
+                <p>Enter your current password and we'll email you an OTP to confirm the change.</p>
               </div>
               <button
                 className="users-modal-close-btn"
@@ -196,6 +234,27 @@ function AdminLayout() {
                   required
                 />
               </div>
+              {changePwOtpSentTo && (
+              <>
+              <div>
+                <label className="users-field-label">OTP (6 digits, sent to {changePwOtpSentTo})</label>
+                <input
+                  className="users-input"
+                  value={changePwForm.otp}
+                  onChange={(e) => setChangePwForm((prev) => ({ ...prev, otp: e.target.value.replace(/\D/g, "").slice(0, 6) }))}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  required
+                />
+                <button
+                  type="button"
+                  className="users-link-btn"
+                  onClick={sendChangePasswordOtp}
+                  disabled={changePwSendingOtp || changePwSubmitting}
+                >
+                  {changePwSendingOtp ? "Sending..." : "Resend OTP"}
+                </button>
+              </div>
               <div>
                 <label className="users-field-label">New Password</label>
                 <input
@@ -218,6 +277,8 @@ function AdminLayout() {
                   required
                 />
               </div>
+              </>
+              )}
               <div className="users-form-actions">
                 <button
                   type="button"
@@ -227,8 +288,10 @@ function AdminLayout() {
                 >
                   Cancel
                 </button>
-                <button className="users-btn users-btn-primary min-width" disabled={changePwSubmitting}>
-                  {changePwSubmitting ? "Saving..." : "Update Password"}
+                <button className="users-btn users-btn-primary min-width" disabled={changePwSubmitting || changePwSendingOtp}>
+                  {!changePwOtpSentTo
+                    ? (changePwSendingOtp ? "Sending OTP..." : "Send OTP")
+                    : (changePwSubmitting ? "Saving..." : "Update Password")}
                 </button>
               </div>
             </form>

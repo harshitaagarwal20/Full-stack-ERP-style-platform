@@ -93,6 +93,7 @@ export const ORDER_DISPATCH_SELECT = {
   dispatchDate: true,
   packingDone: true,
   shipmentStatus: true,
+  invoiceNumber: true,
   remarks: true
 };
 
@@ -412,6 +413,7 @@ export const DISPATCH_LIST_SELECT = {
   dispatchDate: true,
   packingDone: true,
   shipmentStatus: true,
+  invoiceNumber: true,
   remarks: true,
   createdAt: true,
   order: {

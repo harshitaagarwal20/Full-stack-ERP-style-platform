@@ -10848,3 +10848,19 @@ tr.row-urgent td:first-child {
     width: 100%;
     height: 42px;
 }
+
+.users-link-btn {
+  margin-top: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.users-link-btn:disabled {
+  color: #94a3b8;
+  cursor: default;
+}

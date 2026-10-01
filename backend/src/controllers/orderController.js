@@ -1,6 +1,7 @@
-import { createOrder, deleteOrder, listOrders, moveOrderToProduction, updateOrder, updateOrderPayment } from "../services/orderService.js";
+import { createOrder, deleteOrder, listOrders, moveOrderToProduction, updateOrder } from "../services/orderService.js";
 import { emptyPaginatedOrArrayFallback, isMissingTableError } from "../utils/prismaListFallback.js";
 import { toPositiveIntOrThrow } from "../utils/routeParams.js";
+import { deletePayment, getAgingReport, listOrderInvoices, recordPayment } from "../services/paymentService.js";
 import { assertEnquiryAccess, assertOrderAccess, scopedOwnerId } from "../utils/dataScope.js";
 
 export async function getOrders(req, res, next) {
@@ -60,15 +61,39 @@ export async function updateOrderStatus(req, res, next) {
   }
 }
 
-export async function recordOrderPayment(req, res, next) {
+export async function getOrderInvoices(req, res, next) {
   try {
-    await assertOrderAccess(req.user, toPositiveIntOrThrow(req.params.id, "id"));
-    const order = await updateOrderPayment(
-      toPositiveIntOrThrow(req.params.id, "id"),
-      req.validatedBody,
-      req.user
-    );
-    return res.json(order);
+    const orderId = toPositiveIntOrThrow(req.params.id, "id");
+    await assertOrderAccess(req.user, orderId);
+    return res.json(await listOrderInvoices(orderId));
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function addOrderPayment(req, res, next) {
+  try {
+    const orderId = toPositiveIntOrThrow(req.params.id, "id");
+    await assertOrderAccess(req.user, orderId);
+    return res.status(201).json(await recordPayment(orderId, req.validatedBody, req.user));
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function removeOrderPayment(req, res, next) {
+  try {
+    const orderId = toPositiveIntOrThrow(req.params.id, "id");
+    await assertOrderAccess(req.user, orderId);
+    return res.json(await deletePayment(orderId, toPositiveIntOrThrow(req.params.paymentId, "payment id"), req.user));
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function getAgingReportHandler(req, res, next) {
+  try {
+    return res.json(await getAgingReport(req.query, { ownerId: scopedOwnerId(req.user) }));
   } catch (error) {
     return next(error);
   }

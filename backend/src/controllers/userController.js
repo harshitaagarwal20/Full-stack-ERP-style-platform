@@ -1,4 +1,4 @@
-import { changePassword, createUser, deleteUser, listUsers, updateUser } from "../services/userService.js";
+import { changePassword, createUser, deleteUser, listUsers, requestPasswordChangeOtp, updateUser } from "../services/userService.js";
 import { toPositiveIntOrThrow } from "../utils/routeParams.js";
 
 // Whose data a user may see is an admin decision, even when another role has
@@ -51,8 +51,22 @@ export async function removeUser(req, res, next) {
 
 export async function changeOwnPassword(req, res, next) {
   try {
-    await changePassword(req.user.id, req.validatedBody.current_password, req.validatedBody.new_password);
+    await changePassword(
+      req.user.id,
+      req.validatedBody.current_password,
+      req.validatedBody.new_password,
+      req.validatedBody.otp
+    );
     return res.json({ message: "Password updated successfully." });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function sendPasswordOtp(req, res, next) {
+  try {
+    const result = await requestPasswordChangeOtp(req.user.id, req.validatedBody.current_password);
+    return res.json(result);
   } catch (error) {
     return next(error);
   }

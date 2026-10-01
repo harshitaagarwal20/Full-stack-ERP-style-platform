@@ -121,6 +121,11 @@ enum FgQcResult {
 
 // Accounts tracks payment after the goods ship. An order is only COMPLETED once
 // it is both fully dispatched and paid — dispatch alone leaves it DISPATCHED.
+enum PaymentType {
+  FULL
+  PARTIAL
+}
+
 enum PaymentStatus {
   PENDING
   PARTIAL
@@ -141,6 +146,7 @@ model User {
   enquiriesCreated   Enquiry[] @relation("EnquiryCreator")
   enquiriesApproved  Enquiry[] @relation("EnquiryApprover")
   ordersCreated      Order[]
+  paymentsRecorded   Payment[]
   manualOrderRequestsCreated ManualOrderRequest[] @relation("ManualOrderRequestCreator")
   manualOrderRequestsApproved ManualOrderRequest[] @relation("ManualOrderRequestApprover")
   auditLogs          AuditLog[]
@@ -160,6 +166,16 @@ enum PermissionLevel {
 // Admin-editable module access per role. Admin itself is never stored here —
 // it always has full access, so that no admin can lock every admin out of the
 // permissions screen.
+/// The emailed OTP that must accompany a user's own password change. One row
+/// per user (a new request replaces it); only an HMAC of the code is stored.
+model PasswordChangeOtp {
+  userId    Int      @id
+  codeHash  String   @db.VarChar(64)
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
 model RolePermission {
   id        Int             @id @default(autoincrement())
   role      Role
@@ -349,6 +365,7 @@ model Order {
   createdBy        User        @relation(fields: [createdById], references: [id], onDelete: Restrict)
   productions      Production[]
   dispatches       Dispatch[]
+  payments         Payment[]
   packingRecords   PackingRecord[]
   manualOrderRequest ManualOrderRequest? @relation("ManualOrderRequestToOrder")
 
@@ -513,14 +530,41 @@ model Dispatch {
   packingDone    Boolean
   shipmentStatus ShipmentStatus
   remarks        String?
+  // Each dispatch is invoiced on its own; this is the number accounts reconciles
+  // payments against and the aging report groups by. Dispatch date is the
+  // invoice date.
+  invoiceNumber  String?
   createdAt      DateTime       @default(now())
   order          Order          @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  payments       Payment[]
 
   // Every other list model carries these; Dispatch was the one gap. The list
   // sorts by createdAt, and orderId is joined on constantly (dispatch history
   // per order), so both want an index rather than a scan.
   @@index([orderId])
   @@index([createdAt, id])
+  @@index([invoiceNumber])
+}
+
+// A receipt booked by accounts against one invoice (dispatch). An invoice can be
+// settled over several receipts; Order.paymentStatus / amountReceived are
+// rolled up from these rows rather than typed in.
+model Payment {
+  id          Int          @id @default(autoincrement())
+  orderId     Int
+  dispatchId  Int
+  amount      Float
+  paymentType PaymentType
+  receivedAt  DateTime
+  remarks     String?
+  createdById Int
+  createdAt   DateTime     @default(now())
+  order       Order        @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  dispatch    Dispatch     @relation(fields: [dispatchId], references: [id], onDelete: Restrict)
+  createdBy   User         @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([dispatchId])
 }
 
 // Records finished goods being packed for an order, consuming packing

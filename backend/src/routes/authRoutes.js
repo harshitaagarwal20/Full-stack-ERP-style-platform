@@ -1,8 +1,8 @@
 ﻿import { Router } from "express";
 import rateLimit from "express-rate-limit";
-import { login } from "../controllers/authController.js";
+import { forgotPasswordOtp, login, resetPassword } from "../controllers/authController.js";
 import { validateBody } from "../middleware/validateMiddleware.js";
-import { loginSchema } from "../utils/validators.js";
+import { forgotPasswordOtpSchema, loginSchema, resetPasswordSchema } from "../utils/validators.js";
 
 const router = Router();
 
@@ -33,5 +33,26 @@ router.get("/login", (req, res) => {
 });
 
 router.post("/login", loginRateLimiter, validateBody(loginSchema), login);
+
+// Forgot password, signed out. Each OTP request sends an email, so one IP gets
+// a handful per window; wrong OTPs are also capped per code in the service.
+const forgotPasswordRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many OTP requests. Please wait a few minutes and try again." }
+});
+const resetPasswordRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: { message: "Too many attempts. Please wait a few minutes and try again." }
+});
+
+router.post("/forgot-password/otp", forgotPasswordRateLimiter, validateBody(forgotPasswordOtpSchema), forgotPasswordOtp);
+router.post("/forgot-password/reset", resetPasswordRateLimiter, validateBody(resetPasswordSchema), resetPassword);
 
 export default router;

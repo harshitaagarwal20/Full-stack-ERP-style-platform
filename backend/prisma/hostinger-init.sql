@@ -55,6 +55,18 @@ CREATE TABLE IF NOT EXISTS `User` (
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
+-- PasswordChangeOtp: the emailed OTP a user needs to change their own password.
+-- One row per user; only an HMAC of the 6-digit code is stored.
+CREATE TABLE IF NOT EXISTS `PasswordChangeOtp` (
+    `userId` INTEGER NOT NULL,
+    `codeHash` VARCHAR(64) NOT NULL,
+    `attempts` INTEGER NOT NULL DEFAULT 0,
+    `expiresAt` DATETIME(3) NOT NULL,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    PRIMARY KEY (`userId`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS `RolePermission` (
     `id` INTEGER NOT NULL AUTO_INCREMENT,
     `role` ENUM('admin', 'sales', 'production', 'dispatch', 'purchase', 'accounts') NOT NULL,
@@ -3792,6 +3804,83 @@ SET @fk := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
               AND CONSTRAINT_TYPE = 'FOREIGN KEY');
 SET @sql := IF(@fk = 0, 'ALTER TABLE `BatchSubstitution` ADD CONSTRAINT `BatchSubstitution_createdById_fkey` FOREIGN KEY (`createdById`) REFERENCES `User`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE', 'DO 0');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Dispatch.invoiceNumber
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Dispatch' AND COLUMN_NAME = 'invoiceNumber');
+SET @sql := IF(@c = 0, 'ALTER TABLE `Dispatch` ADD COLUMN `invoiceNumber` VARCHAR(191) NULL', 'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @i := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Dispatch' AND INDEX_NAME = 'Dispatch_invoiceNumber_idx');
+SET @sql := IF(@i = 0, 'CREATE INDEX `Dispatch_invoiceNumber_idx` ON `Dispatch`(`invoiceNumber`)', 'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- Payment: receipts booked against an invoice (dispatch)
+SET @payment_is_new := (SELECT COUNT(*) = 0 FROM INFORMATION_SCHEMA.TABLES
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'Payment');
+
+CREATE TABLE IF NOT EXISTS `Payment` (
+    `id` INTEGER NOT NULL AUTO_INCREMENT,
+    `orderId` INTEGER NOT NULL,
+    `dispatchId` INTEGER NOT NULL,
+    `amount` DOUBLE NOT NULL,
+    `paymentType` ENUM('FULL', 'PARTIAL') NOT NULL,
+    `receivedAt` DATETIME(3) NOT NULL,
+    `remarks` VARCHAR(191) NULL,
+    `createdById` INTEGER NOT NULL,
+    `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+
+    INDEX `Payment_orderId_idx`(`orderId`),
+    INDEX `Payment_dispatchId_idx`(`dispatchId`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+SET @fk := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+            WHERE CONSTRAINT_SCHEMA = DATABASE() AND CONSTRAINT_NAME = 'Payment_orderId_fkey' AND CONSTRAINT_TYPE = 'FOREIGN KEY');
+SET @sql := IF(@fk = 0, 'ALTER TABLE `Payment` ADD CONSTRAINT `Payment_orderId_fkey` FOREIGN KEY (`orderId`) REFERENCES `Order`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE', 'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @fk := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+            WHERE CONSTRAINT_SCHEMA = DATABASE() AND CONSTRAINT_NAME = 'Payment_dispatchId_fkey' AND CONSTRAINT_TYPE = 'FOREIGN KEY');
+SET @sql := IF(@fk = 0, 'ALTER TABLE `Payment` ADD CONSTRAINT `Payment_dispatchId_fkey` FOREIGN KEY (`dispatchId`) REFERENCES `Dispatch`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE', 'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @fk := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+            WHERE CONSTRAINT_SCHEMA = DATABASE() AND CONSTRAINT_NAME = 'Payment_createdById_fkey' AND CONSTRAINT_TYPE = 'FOREIGN KEY');
+SET @sql := IF(@fk = 0, 'ALTER TABLE `Payment` ADD CONSTRAINT `Payment_createdById_fkey` FOREIGN KEY (`createdById`) REFERENCES `User`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE', 'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- One-off carry-over of order-level payments (only when the table was just created).
+-- A fully paid order gets a FULL receipt on every dispatch, for that invoice's
+-- value (0 when unpriced), so no invoice of a paid order shows as unpaid.
+INSERT INTO `Payment` (`orderId`, `dispatchId`, `amount`, `paymentType`, `receivedAt`, `remarks`, `createdById`)
+SELECT o.`id`,
+       d.`id`,
+       IF(o.`price` IS NULL, 0, ROUND(d.`dispatchedQuantity` * o.`price`, 2)),
+       'FULL',
+       COALESCE(o.`paymentReceivedAt`, o.`updatedAt`),
+       COALESCE(o.`paymentRemarks`, 'Carried over from the order-level payment'),
+       o.`createdById`
+FROM `Order` o
+JOIN `Dispatch` d ON d.`orderId` = o.`id`
+WHERE @payment_is_new = 1
+  AND o.`paymentStatus` = 'RECEIVED';
+
+-- A part-paid order only has a lump sum with no invoice attached, so it stays
+-- one PARTIAL receipt on the first dispatch.
+INSERT INTO `Payment` (`orderId`, `dispatchId`, `amount`, `paymentType`, `receivedAt`, `remarks`, `createdById`)
+SELECT o.`id`,
+       (SELECT MIN(d.`id`) FROM `Dispatch` d WHERE d.`orderId` = o.`id`),
+       COALESCE(o.`amountReceived`, 0),
+       'PARTIAL',
+       COALESCE(o.`paymentReceivedAt`, o.`updatedAt`),
+       COALESCE(o.`paymentRemarks`, 'Carried over from the order-level payment'),
+       o.`createdById`
+FROM `Order` o
+WHERE @payment_is_new = 1
+  AND o.`paymentStatus` = 'PARTIAL'
+  AND EXISTS (SELECT 1 FROM `Dispatch` d WHERE d.`orderId` = o.`id`);
 
 -- Restore the caller's FK-check setting.
 SET FOREIGN_KEY_CHECKS = @OLD_FOREIGN_KEY_CHECKS;

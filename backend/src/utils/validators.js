@@ -34,9 +34,24 @@ export const updateUserSchema = z.object({
   data_scope: z.enum(["SELF", "ALL"]).optional()
 });
 
+export const forgotPasswordOtpSchema = z.object({
+  email: z.string().trim().email("Enter a valid email address.")
+});
+
+export const resetPasswordSchema = z.object({
+  email: z.string().trim().email("Enter a valid email address."),
+  otp: z.string().trim().regex(/^\d{6}$/, "Enter the 6-digit OTP from your email."),
+  new_password: z.string().min(6, "New password must be at least 6 characters")
+});
+
+export const requestPasswordOtpSchema = z.object({
+  current_password: z.string().min(1, "Current password is required")
+});
+
 export const changePasswordSchema = z.object({
   current_password: z.string().min(1, "Current password is required"),
-  new_password: z.string().min(6, "New password must be at least 6 characters")
+  new_password: z.string().min(6, "New password must be at least 6 characters"),
+  otp: z.string().trim().regex(/^\d{6}$/, "Enter the 6-digit OTP from your email.")
 });
 
 const enquiryProductsInputSchema = z.preprocess((value) => {
@@ -199,10 +214,14 @@ export const updateOrderSchema = z.object({
   remarks: z.string().optional().nullable()
 });
 
-export const updateOrderPaymentSchema = z.object({
-  payment_status: z.enum(["PENDING", "PARTIAL", "RECEIVED"]),
-  amount_received: z.number().nonnegative().optional().nullable(),
-  remarks: z.string().max(500).optional().nullable()
+export const recordPaymentSchema = z.object({
+  dispatch_id: z.number().int().positive(),
+  payment_type: z.enum(["FULL", "PARTIAL"]),
+  // Optional for a FULL payment: it then means "whatever is still pending".
+  amount: z.number().positive().optional().nullable(),
+  received_date: z.string().regex(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/, "Date must be in YYYY-MM-DD format."),
+  invoice_number: z.string().trim().max(100).optional().nullable(),
+  remarks: z.string().max(190).optional().nullable()
 });
 
 export const moveOrderToProductionSchema = z.object({
@@ -302,6 +321,7 @@ export const createDispatchSchema = z.object({
   dispatch_date: dateOnlySchema,
   packing_done: z.boolean(),
   shipment_status: z.enum(["PACKING", "SHIPPED", "DELIVERED"]),
+  invoice_number: z.string().trim().max(100).optional().nullable(),
   remarks: z.string().optional().nullable()
 });
 
@@ -310,6 +330,7 @@ export const updateDispatchSchema = z.object({
   dispatch_date: dateOnlySchema.optional().nullable(),
   packing_done: z.boolean().optional(),
   shipment_status: z.enum(["PACKING", "SHIPPED", "DELIVERED"]).optional(),
+  invoice_number: z.string().trim().max(100).optional().nullable(),
   remarks: z.string().optional().nullable()
 });
 

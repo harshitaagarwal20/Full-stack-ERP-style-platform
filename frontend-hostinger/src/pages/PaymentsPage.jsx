@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import api from "../api/axiosClient";
 import { BoxesIcon, SearchIcon } from "../components/erp/ErpIcons";
 import { logApiError } from "../utils/apiError";
@@ -9,6 +9,7 @@ import { fetchAllPages, windowParams } from "../utils/listWindow";
 import { useAuth } from "../context/AuthContext";
 import { useIsMobile } from "../hooks/useIsMobile";
 import MobileListCard from "../components/common/MobileListCard";
+import AgingReport from "../components/payments/AgingReport";
 
 const PAYMENT_FILTERS = [
   { value: "", label: "All payments" },
@@ -17,10 +18,9 @@ const PAYMENT_FILTERS = [
   { value: "RECEIVED", label: "Paid" }
 ];
 
-const PAYMENT_OPTIONS = [
-  { value: "PENDING", label: "Pending" },
-  { value: "PARTIAL", label: "Partially received" },
-  { value: "RECEIVED", label: "Received in full" }
+const PAYMENT_TYPE_OPTIONS = [
+  { value: "FULL", label: "Full payment" },
+  { value: "PARTIAL", label: "Partial payment" }
 ];
 
 const PAYMENT_META = {
@@ -33,7 +33,26 @@ const PAYMENT_META = {
 // before the goods leave.
 const DISPATCHED_STATUSES = ["PARTIALLY_DISPATCHED", "DISPATCHED", "COMPLETED"];
 
-const emptyPaymentForm = { payment_status: "PENDING", amount_received: "", remarks: "" };
+// Local calendar date: toISOString() is UTC, which is already "tomorrow" (or
+// still "yesterday") for part of every day in India.
+const today = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+};
+
+const emptyPaymentForm = () => ({
+  dispatch_id: "",
+  payment_type: "FULL",
+  amount: "",
+  received_date: today(),
+  invoice_number: "",
+  remarks: ""
+});
+
+const money = (value) =>
+  value === null || value === undefined ? "-" : Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 });
+
+const invoiceLabel = (invoice) => invoice.invoiceNumber || `Dispatch #${invoice.id} (no invoice no.)`;
 
 function formatDate(value) {
   if (!value) return "-";
@@ -65,6 +84,9 @@ function PaymentsPage() {
   const [totalRecords, setTotalRecords] = useState(0);
   const [activeOrder, setActiveOrder] = useState(null);
   const [form, setForm] = useState(emptyPaymentForm);
+  const [invoices, setInvoices] = useState([]);
+  const [invoicesLoading, setInvoicesLoading] = useState(false);
+  const [view, setView] = useState("orders");
   // Bumped after a payment is saved to force the list to reload.
   const [reloadToken, setReloadToken] = useState(0);
 
@@ -110,41 +132,86 @@ function PaymentsPage() {
 
   const displayOrders = orders;
 
-  const openPaymentModal = (order) => {
+  const loadInvoices = async (orderId) => {
+    setInvoicesLoading(true);
+    try {
+      const { data } = await api.get(`/orders/${orderId}/invoices`);
+      const list = Array.isArray(data) ? data : [];
+      setInvoices(list);
+      return list;
+    } catch (error) {
+      logApiError(error, "Failed to load invoices");
+      return [];
+    } finally {
+      setInvoicesLoading(false);
+    }
+  };
+
+  // Picks the invoice to pay and pre-fills what is still owed on it.
+  const selectInvoice = (list, dispatchId, type) => {
+    const invoice = list.find((item) => String(item.id) === String(dispatchId));
+    setForm((prev) => ({
+      ...prev,
+      dispatch_id: dispatchId,
+      invoice_number: "",
+      amount: invoice && type === "FULL" && invoice.pending !== null ? String(invoice.pending) : ""
+    }));
+  };
+
+  const openPaymentModal = async (order) => {
     setActiveOrder(order);
-    setForm({
-      payment_status: order.paymentStatus || "PENDING",
-      amount_received: order.amountReceived ?? "",
-      remarks: order.paymentRemarks || ""
-    });
+    setInvoices([]);
+    setForm(emptyPaymentForm());
+    const list = await loadInvoices(order.id);
+    const firstOpen = list.find((invoice) => !invoice.settled);
+    if (firstOpen) selectInvoice(list, String(firstOpen.id), "FULL");
   };
 
   const closePaymentModal = () => {
     if (saving) return;
     setActiveOrder(null);
-    setForm(emptyPaymentForm);
+    setInvoices([]);
+    setForm(emptyPaymentForm());
+    // Receipts booked in the dialog change the list's roll-up columns.
+    setReloadToken((token) => token + 1);
   };
+
+  const selectedInvoice = invoices.find((invoice) => String(invoice.id) === String(form.dispatch_id));
 
   const submitPayment = async (e) => {
     e.preventDefault();
-    if (saving) return;
+    if (saving || !selectedInvoice) return;
     setSaving(true);
     try {
-      await api.patch(`/orders/${activeOrder.id}/payment`, {
-        payment_status: form.payment_status,
-        amount_received: form.amount_received === "" ? null : Number(form.amount_received),
-        remarks: form.remarks || null
+      await api.post(`/orders/${activeOrder.id}/payments`, {
+        dispatch_id: selectedInvoice.id,
+        payment_type: form.payment_type,
+        amount: form.amount === "" ? null : Number(form.amount),
+        received_date: form.received_date,
+        invoice_number: !selectedInvoice.invoiceNumber && form.invoice_number.trim() ? form.invoice_number.trim() : null,
+        remarks: form.remarks.trim() || null
       });
-      dispatchUserMessage(
-        form.payment_status === "RECEIVED"
-          ? "Payment received — the order is now complete."
-          : "Payment updated.",
-        { title: "Saved", variant: "success" }
-      );
-      closePaymentModal();
-      setReloadToken((token) => token + 1);
+      dispatchUserMessage("Payment recorded.", { title: "Saved", variant: "success" });
+      const list = await loadInvoices(activeOrder.id);
+      const nextOpen = list.find((invoice) => !invoice.settled);
+      setForm({ ...emptyPaymentForm(), payment_type: "FULL" });
+      if (nextOpen) selectInvoice(list, String(nextOpen.id), "FULL");
     } catch (error) {
       logApiError(error, "Failed to record payment");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removePayment = async (paymentId) => {
+    if (saving || !window.confirm("Delete this payment entry?")) return;
+    setSaving(true);
+    try {
+      await api.delete(`/orders/${activeOrder.id}/payments/${paymentId}`);
+      const list = await loadInvoices(activeOrder.id);
+      if (selectedInvoice) selectInvoice(list, String(selectedInvoice.id), form.payment_type);
+    } catch (error) {
+      logApiError(error, "Failed to delete payment");
     } finally {
       setSaving(false);
     }
@@ -198,6 +265,20 @@ function PaymentsPage() {
         </div>
       </section>
 
+      <section className="order-card">
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className={view === "orders" ? "masterdata-btn-primary" : "order-btn-secondary"} onClick={() => setView("orders")}>
+            Orders
+          </button>
+          <button className={view === "aging" ? "masterdata-btn-primary" : "order-btn-secondary"} onClick={() => setView("aging")}>
+            Aging Report
+          </button>
+        </div>
+      </section>
+
+      {view === "aging" && <AgingReport />}
+
+      {view === "orders" && (<>
       {/* SEARCH + FILTERS + ACTIONS */}
       <section className="order-card">
         <div className="unified-search-box">
@@ -342,68 +423,172 @@ function PaymentsPage() {
         )}
       </section>
 
+      </>)}
+
       {activeOrder && (
         <div className="masterdata-modal-overlay">
-          <div className="masterdata-modal-card" style={{ width: "min(480px, 100%)" }}>
+          <div className="masterdata-modal-card" style={{ width: "min(760px, 100%)", maxHeight: "92vh", overflowY: "auto" }}>
             <div className="masterdata-modal-head">
               <div>
                 <h3>Record Payment</h3>
-                <p>{activeOrder.clientName} · {formatMoney(activeOrder)}</p>
+                <p>{activeOrder.orderNo} · {activeOrder.clientName} · {formatMoney(activeOrder)}</p>
               </div>
               <button className="masterdata-modal-close-btn" onClick={closePaymentModal} disabled={saving} type="button">
                 ✕
               </button>
             </div>
 
-            <form onSubmit={submitPayment}>
-              <div className="masterdata-form-grid">
-                <div>
-                  <label className="label">Payment Status <span className="req">*</span></label>
-                  <SearchableSelect
-                    options={PAYMENT_OPTIONS}
-                    value={form.payment_status}
-                    onChange={(value) => setForm((p) => ({ ...p, payment_status: value }))}
-                    placeholder="Select status"
-                  />
-                  {form.payment_status === "RECEIVED" && (
-                    <small style={{ color: "#15803d", fontWeight: 600 }}>
-                      This completes the order.
-                    </small>
-                  )}
+            {invoicesLoading && invoices.length === 0 ? (
+              <p style={{ padding: 16 }}>Loading invoices...</p>
+            ) : invoices.length === 0 ? (
+              <p style={{ padding: 16 }}>This order has no dispatches yet, so there is nothing to invoice.</p>
+            ) : (
+              <>
+                <div className="order-table-wrap" style={{ marginBottom: 16 }}>
+                  <table className="order-table">
+                    <thead>
+                      <tr>
+                        <th>Invoice</th>
+                        <th>Date</th>
+                        <th style={{ textAlign: "right" }}>Amount</th>
+                        <th style={{ textAlign: "right" }}>Received</th>
+                        <th style={{ textAlign: "right" }}>Pending</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {invoices.map((invoice) => (
+                        <Fragment key={invoice.id}>
+                          <tr>
+                            <td style={{ fontWeight: 600 }}>{invoiceLabel(invoice)}</td>
+                            <td>{formatDate(invoice.dispatchDate)}</td>
+                            <td style={{ textAlign: "right" }}>{invoice.currency || ""} {money(invoice.amount)}</td>
+                            <td style={{ textAlign: "right" }}>{money(invoice.received)}</td>
+                            <td style={{ textAlign: "right" }}>{money(invoice.pending)}</td>
+                            <td>{invoice.settled ? "Paid" : invoice.received > 0 ? "Part paid" : "Pending"}</td>
+                          </tr>
+                          {invoice.payments.map((payment) => (
+                            <tr key={`p-${payment.id}`} style={{ color: "#64748b", fontSize: 12 }}>
+                              <td colSpan={2} style={{ paddingLeft: 24 }}>
+                                {formatDate(payment.receivedAt)} · {payment.paymentType === "FULL" ? "Full" : "Partial"}
+                                {payment.remarks ? ` · ${payment.remarks}` : ""}
+                              </td>
+                              <td />
+                              <td style={{ textAlign: "right" }}>{money(payment.amount)}</td>
+                              <td colSpan={2}>
+                                <button type="button" className="order-btn-secondary" onClick={() => removePayment(payment.id)} disabled={saving}>
+                                  Delete
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </Fragment>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-                <div>
-                  <label className="label">Amount Received</label>
-                  <input
-                    autoComplete="off"
-                    className="input"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={form.amount_received}
-                    onChange={(e) => setForm((p) => ({ ...p, amount_received: e.target.value }))}
-                  />
-                </div>
-                <div className="full-row">
-                  <label className="label">Remarks</label>
-                  <textarea
-                    className="input"
-                    rows={2}
-                    value={form.remarks}
-                    onChange={(e) => setForm((p) => ({ ...p, remarks: e.target.value }))}
-                    style={{ resize: "vertical" }}
-                  />
-                </div>
-              </div>
 
-              <div className="masterdata-form-actions" style={{ marginTop: 24, paddingTop: 24, borderTop: "1px solid #e5e7eb" }}>
-                <button type="button" className="masterdata-btn-secondary" onClick={closePaymentModal} disabled={saving}>
-                  Cancel
-                </button>
-                <button type="submit" className="masterdata-btn-primary" disabled={saving}>
-                  {saving ? "Saving..." : "Save Payment"}
-                </button>
+                {invoices.every((invoice) => invoice.settled) ? (
+                  <p style={{ color: "#15803d", fontWeight: 600 }}>All invoices on this order are paid.</p>
+                ) : (
+                  <form onSubmit={submitPayment}>
+                    <div className="masterdata-form-grid">
+                      <div>
+                        <label className="label">Against Invoice <span className="req">*</span></label>
+                        <SearchableSelect
+                          options={invoices.filter((invoice) => !invoice.settled).map((invoice) => ({
+                            value: String(invoice.id),
+                            label: `${invoiceLabel(invoice)} — pending ${money(invoice.pending)}`
+                          }))}
+                          value={String(form.dispatch_id)}
+                          onChange={(value) => selectInvoice(invoices, value, form.payment_type)}
+                          placeholder="Select invoice"
+                        />
+                      </div>
+                      <div>
+                        <label className="label">Payment <span className="req">*</span></label>
+                        <SearchableSelect
+                          options={PAYMENT_TYPE_OPTIONS}
+                          value={form.payment_type}
+                          onChange={(value) => {
+                            setForm((prev) => ({
+                              ...prev,
+                              payment_type: value,
+                              amount: value === "FULL" && selectedInvoice && selectedInvoice.pending !== null
+                                ? String(selectedInvoice.pending)
+                                : prev.amount
+                            }));
+                          }}
+                          placeholder="Select type"
+                        />
+                      </div>
+                      <div>
+                        <label className="label">Amount Received <span className="req">*</span></label>
+                        <input
+                          autoComplete="off"
+                          className="input"
+                          type="number"
+                          min="0.01"
+                          step="0.01"
+                          value={form.amount}
+                          onChange={(e) => setForm((p) => ({ ...p, amount: e.target.value }))}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="label">Received On <span className="req">*</span></label>
+                        <input
+                          className="input"
+                          type="date"
+                          max={today()}
+                          value={form.received_date}
+                          onChange={(e) => setForm((p) => ({ ...p, received_date: e.target.value }))}
+                          required
+                        />
+                      </div>
+                      {selectedInvoice && !selectedInvoice.invoiceNumber && (
+                        <div className="full-row">
+                          <label className="label">Invoice Number</label>
+                          <input
+                            autoComplete="off"
+                            className="input"
+                            maxLength={100}
+                            placeholder="Not entered at dispatch — add it here"
+                            value={form.invoice_number}
+                            onChange={(e) => setForm((p) => ({ ...p, invoice_number: e.target.value }))}
+                          />
+                        </div>
+                      )}
+                      <div className="full-row">
+                        <label className="label">Remarks</label>
+                        <textarea
+                          className="input"
+                          rows={2}
+                          maxLength={190}
+                          value={form.remarks}
+                          onChange={(e) => setForm((p) => ({ ...p, remarks: e.target.value }))}
+                          style={{ resize: "vertical" }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="masterdata-form-actions" style={{ marginTop: 24, paddingTop: 24, borderTop: "1px solid #e5e7eb" }}>
+                      <button type="button" className="masterdata-btn-secondary" onClick={closePaymentModal} disabled={saving}>
+                        Close
+                      </button>
+                      <button type="submit" className="masterdata-btn-primary" disabled={saving || !selectedInvoice}>
+                        {saving ? "Saving..." : "Save Payment"}
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </>
+            )}
+            {invoices.length > 0 && invoices.every((invoice) => invoice.settled) && (
+              <div className="masterdata-form-actions" style={{ marginTop: 16 }}>
+                <button type="button" className="masterdata-btn-secondary" onClick={closePaymentModal}>Close</button>
               </div>
-            </form>
+            )}
           </div>
         </div>
       )}

@@ -18,5 +18,9 @@ backend/public
 *.sql
 !backend/prisma/hostinger-init.sql
 !backend/prisma/hostinger-additive-migration.sql
+# Prisma migrations are schema only and must ship, or `prisma migrate deploy`
+# builds a database without the newer tables and columns.
+!backend/prisma/migrations/**/migration.sql
+!backend/prisma/hostinger-fix-approval.sql
 # Data-free repair script (schema-driven UPDATEs only, no dump content)
 !backend/prisma/hostinger-fix-zero-dates.sql

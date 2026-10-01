@@ -186,6 +186,7 @@ function DispatchPage() {
     shipment_status: "",
     packing_done: false,
     original_dispatch_quantity: 0,
+    invoice_number: "",
     remarks: ""
   });
   const tableWrapRef = useRef(null);
@@ -276,6 +277,7 @@ function DispatchPage() {
       shipment_status: "",
       packing_done: false,
       original_dispatch_quantity: 0,
+      invoice_number: "",
       remarks: ""
     });
   };
@@ -297,6 +299,7 @@ function DispatchPage() {
           dispatch_date: dispatchForm.dispatch_date || null,
           packing_done: Boolean(dispatchForm.packing_done),
           shipment_status: dispatchForm.shipment_status,
+          invoice_number: dispatchForm.invoice_number.trim() || null,
           remarks: dispatchForm.remarks || null
         });
       } else {
@@ -306,6 +309,7 @@ function DispatchPage() {
           dispatch_date: dispatchForm.dispatch_date || null,
           packing_done: Boolean(dispatchForm.packing_done),
           shipment_status: dispatchForm.shipment_status,
+          invoice_number: dispatchForm.invoice_number.trim() || null,
           remarks: dispatchForm.remarks || null
         });
       }
@@ -336,6 +340,7 @@ function DispatchPage() {
       shipment_status: dispatch.shipmentStatus || "",
       packing_done: Boolean(dispatch.packingDone),
       original_dispatch_quantity: Number(dispatch.dispatchedQuantity || 0),
+      invoice_number: dispatch.invoiceNumber || "",
       remarks: dispatch.remarks || ""
     });
   };
@@ -540,6 +545,7 @@ function DispatchPage() {
                     <th>Pincode</th>
                     <th>State</th>
                     <th>Country Code</th>
+                    <th>Invoice No</th>
                     <th><button className="dispatch-sort-btn" onClick={() => onSort("dispatchDate")}>Dispatch Date</button></th>
                     <th><button className="dispatch-sort-btn" onClick={() => onSort("status")}>Status</button></th>
                     <th>Prod Comp Date</th>
@@ -548,7 +554,7 @@ function DispatchPage() {
                 </thead>
               <VirtualizedTableBody
                 rows={sortedDispatchRows}
-                colSpan={18}
+                colSpan={19}
                 rowHeight={52}
                 overscan={8}
                 scrollContainerRef={tableWrapRef}
@@ -575,6 +581,7 @@ function DispatchPage() {
                       <td>{location.pincode || "-"}</td>
                       <td>{location.state || "-"}</td>
                       <td>{location.countryCode || "-"}</td>
+                      <td>{row.dispatch?.invoiceNumber || "-"}</td>
                       <td>{row.dispatch ? formatDate(row.dispatch.dispatchDate) : "-"}</td>
                       <td>
                         <span className={`dispatch-status ${shipment.className}`}>{shipment.label}</span>
@@ -733,7 +740,13 @@ function DispatchPage() {
                 />
               </div>
               <div className="full-row">
-                
+                <label>Invoice Number</label>
+                <input autoComplete="off"
+                  maxLength={100}
+                  placeholder="Invoice raised for this dispatch"
+                  value={dispatchForm.invoice_number}
+                  onChange={(event) => setDispatchForm((prev) => ({ ...prev, invoice_number: event.target.value }))}
+                />
               </div>
               <div className="full-row">
                 <label>Remarks</label>

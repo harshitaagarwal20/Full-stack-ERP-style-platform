@@ -7,6 +7,7 @@ import { normalizeOrderUnit } from "../utils/orderUnits.js";
 import { getCustomerMasterProfileByName } from "../utils/customerCatalog.js";
 import { assertEntryDate } from "../utils/dateRules.js";
 import { getAvailableInventoryQty } from "./inventoryService.js";
+import { lockOrderForPayment, recomputeOrderPayment } from "./paymentService.js";
 import {
   extractSalesGroupSequence,
   formatSalesGroupNumber,
@@ -152,6 +153,10 @@ export function resolveOrderStatusFromDispatch(order, delivered) {
 }
 
 async function syncOrderDispatchStatus(tx, orderId) {
+  // Dispatching more (or deleting a dispatch) changes which invoices exist, so
+  // the order's payment roll-up has to be redone before its status is resolved.
+  await recomputeOrderPayment(tx, orderId);
+
   const order = await tx.order.findUnique({
     where: { id: orderId },
     select: {
@@ -251,7 +256,8 @@ async function buildDispatchDashboardData(query = {}, client = prisma) {
               id: true,
               dispatchedQuantity: true,
               dispatchDate: true,
-              shipmentStatus: true
+              shipmentStatus: true,
+              invoiceNumber: true
             },
             orderBy: {
               createdAt: "asc"
@@ -413,7 +419,8 @@ async function buildDispatchDashboardData(query = {}, client = prisma) {
               id: true,
               dispatchedQuantity: true,
               dispatchDate: true,
-              shipmentStatus: true
+              shipmentStatus: true,
+              invoiceNumber: true
             },
             orderBy: {
               createdAt: "asc"
@@ -840,6 +847,7 @@ export async function createDispatch(payload, actorUser) {
         dispatchDate: dispatchDateValue,
         packingDone: payload.packing_done,
         shipmentStatus: payload.shipment_status,
+        invoiceNumber: payload.invoice_number?.trim() || null,
         remarks: payload.remarks
       },
       select: {
@@ -849,6 +857,7 @@ export async function createDispatch(payload, actorUser) {
         dispatchDate: true,
         packingDone: true,
         shipmentStatus: true,
+        invoiceNumber: true,
         remarks: true,
         createdAt: true
       }
@@ -936,6 +945,8 @@ export async function updateDispatch(dispatchId, payload, actorUser) {
         dispatchDate: parsedDispatchDate,
         packingDone: payload.packing_done,
         shipmentStatus: payload.shipment_status,
+        // undefined leaves the number alone; an explicit empty value clears it.
+        invoiceNumber: payload.invoice_number === undefined ? undefined : (payload.invoice_number?.trim() || null),
         remarks: payload.remarks
       },
       select: {
@@ -945,6 +956,7 @@ export async function updateDispatch(dispatchId, payload, actorUser) {
         dispatchDate: true,
         packingDone: true,
         shipmentStatus: true,
+        invoiceNumber: true,
         remarks: true,
         createdAt: true
       }
@@ -976,6 +988,16 @@ export async function deleteDispatch(dispatchId, actorUser) {
   }
 
   await prisma.$transaction(async (tx) => {
+    // Checked under the same row lock recordPayment takes, so a receipt can't
+    // slip in between this check and the delete.
+    await lockOrderForPayment(tx, dispatch.orderId);
+    await tx.$queryRaw`SELECT id FROM \`Dispatch\` WHERE id = ${dispatchId} FOR UPDATE`;
+    if ((await tx.payment.count({ where: { dispatchId } })) > 0) {
+      const error = new Error("Payments have been recorded against this invoice — delete them in Payments before deleting the dispatch.");
+      error.statusCode = 409;
+      throw error;
+    }
+
     await syncDispatchOutward(tx, dispatchId, dispatch.order.product, 0);
 
 

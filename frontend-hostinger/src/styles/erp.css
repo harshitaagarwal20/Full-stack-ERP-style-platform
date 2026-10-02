@@ -10864,3 +10864,273 @@ tr.row-urgent td:first-child {
   color: #94a3b8;
   cursor: default;
 }
+
+
+/* ============================================================
+   PAYMENTS -> AGING REPORT
+   ============================================================ */
+
+.aging-filter-card .aging-toolbar {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.aging-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-text-secondary);
+}
+
+.aging-field input {
+  height: 38px;
+  min-width: 170px;
+  border-radius: 8px;
+  border: 1px solid var(--ui-border);
+  background: #ffffff;
+  color: var(--ui-text-primary);
+  padding: 0 10px;
+  font-size: 13px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.aging-field input:focus {
+  outline: none;
+  border-color: var(--ui-primary);
+  box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.1);
+}
+
+.aging-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  background: #ffffff;
+  font-size: 13px;
+  color: var(--ui-text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.aging-check input {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  margin: 0;
+  accent-color: var(--ui-primary);
+  cursor: pointer;
+}
+
+.aging-toolbar-end {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.aging-link-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.aging-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 12px;
+}
+
+.aging-summary-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.aging-currency-pill {
+  border-radius: 999px;
+  background: var(--ui-primary-light);
+  color: var(--ui-primary);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 4px 10px;
+  text-transform: uppercase;
+}
+
+.aging-summary-period {
+  font-size: 13px;
+  color: var(--ui-text-secondary);
+}
+
+.aging-stat-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.aging-stat {
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 10px 12px;
+}
+
+.aging-stat-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ui-text-muted);
+}
+
+.aging-stat-value {
+  margin-top: 4px;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ui-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.aging-stat-received {
+  color: var(--ui-success);
+}
+
+.aging-stat-pending {
+  color: var(--ui-danger);
+}
+
+.aging-bucket-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.aging-bucket {
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+.aging-bucket-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ui-text-secondary);
+}
+
+.aging-bucket-value {
+  margin-top: 2px;
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.aging-bucket-ok { background: #ecfdf5; border-color: #a7f3d0; }
+.aging-bucket-ok .aging-bucket-value { color: #047857; }
+.aging-bucket-warn { background: #fffbeb; border-color: #fde68a; }
+.aging-bucket-warn .aging-bucket-value { color: #b45309; }
+.aging-bucket-high { background: #fff7ed; border-color: #fed7aa; }
+.aging-bucket-high .aging-bucket-value { color: #c2410c; }
+.aging-bucket-danger { background: #fef2f2; border-color: #fecaca; }
+.aging-bucket-danger .aging-bucket-value { color: #b91c1c; }
+
+.aging-bucket.is-empty {
+  background: #f8fafc;
+  border-color: var(--ui-border);
+}
+
+.aging-bucket.is-empty .aging-bucket-value {
+  color: var(--ui-text-muted);
+}
+
+.aging-note {
+  margin: 12px 0 0;
+  border-left: 3px solid #fbbf24;
+  background: #fffbeb;
+  border-radius: 0 6px 6px 0;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: #92400e;
+}
+
+.aging-table-wrap {
+  padding: 14px 16px 16px;
+}
+
+.aging-table thead th {
+  position: sticky;
+  top: 0;
+  background: #f8fafc;
+  z-index: 1;
+}
+
+.aging-table tbody tr:nth-child(even) {
+  background: #fcfdff;
+}
+
+.aging-table tbody tr:hover {
+  background: var(--ui-primary-light);
+}
+
+.aging-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.aging-num-strong {
+  font-weight: 700;
+  color: var(--ui-text-primary);
+}
+
+.aging-pill {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.aging-pill-ok { background: #ecfdf5; color: #047857; }
+.aging-pill-warn { background: #fffbeb; color: #b45309; }
+.aging-pill-high { background: #fff7ed; color: #c2410c; }
+.aging-pill-danger { background: #fef2f2; color: #b91c1c; }
+.aging-pill-settled { background: #f1f5f9; color: #475569; }
+
+@media (max-width: 720px) {
+  .aging-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .aging-field,
+  .aging-field input,
+  .aging-check {
+    width: 100%;
+  }
+
+  .aging-toolbar-end {
+    width: 100%;
+    margin-left: 0;
+    justify-content: space-between;
+  }
+
+  .aging-stat-row,
+  .aging-bucket-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

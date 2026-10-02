@@ -14,6 +14,10 @@ export const AGING_BUCKETS = [
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+// Go-live for payment tracking: invoices dated before this are out of the aging
+// report, so the outstanding totals only cover invoices raised on the system.
+export const AGING_START_DATE = (process.env.AGING_START_DATE || "2026-10-01").trim();
+
 function round2(value) {
   return Math.round(value * 100) / 100;
 }
@@ -281,18 +285,31 @@ function parseAsOn(value) {
   return parsed;
 }
 
+// Invoices raised before go-live are legacy and are not counted. The caller can
+// move the cut-off, or pass an explicit blank `from` to drop it altogether.
+function parseFrom(query) {
+  if (!Object.prototype.hasOwnProperty.call(query, "from")) return new Date(`${AGING_START_DATE}T00:00:00.000Z`);
+  const value = String(query.from || "").trim();
+  if (!value) return null;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime())) throw httpError("from must be YYYY-MM-DD.", 400);
+  return parsed;
+}
+
 // Invoice-wise received vs pending, aged from the invoice (dispatch) date.
-// Settled invoices are left out unless include_settled is set. Totals are kept
-// per currency — summing rupees and dollars into one number would be wrong.
+// Only invoices from AGING_START_DATE onwards are counted. Settled invoices are
+// left out unless include_settled is set. Totals are kept per currency — summing
+// rupees and dollars into one number would be wrong.
 export async function getAgingReport(query = {}, { ownerId = null } = {}) {
   const asOn = parseAsOn(String(query.as_on || "").trim());
+  const from = parseFrom(query);
   const client = String(query.client || "").trim();
   const q = String(query.q || "").trim();
   const includeSettled = String(query.include_settled || "") === "1";
 
   const dispatches = await prisma.dispatch.findMany({
     where: {
-      dispatchDate: { lte: asOn },
+      dispatchDate: from ? { gte: from, lte: asOn } : { lte: asOn },
       order: {
         ...(client ? { clientName: { contains: client } } : {}),
         ...(ownerId ? orderOwnerWhere(ownerId) : {})
@@ -374,6 +391,7 @@ export async function getAgingReport(query = {}, { ownerId = null } = {}) {
 
   return {
     asOn: asOn.toISOString().slice(0, 10),
+    from: from ? from.toISOString().slice(0, 10) : null,
     buckets: AGING_BUCKETS.map(({ key, label }) => ({ key, label })),
     summary: [...totals.values()],
     rows

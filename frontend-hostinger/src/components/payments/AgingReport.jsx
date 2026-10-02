@@ -1,8 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import api from "../../api/axiosClient";
 import { logApiError } from "../../utils/apiError";
 import { exportRowsToExcel } from "../../utils/exportExcel";
 import { SearchIcon } from "../erp/ErpIcons";
+
+// Payment tracking went live in October 2026; invoices before that are legacy
+// and stay out of the report. The backend applies the same cut-off by default.
+const AGING_START_DATE = "2026-10-01";
 
 function formatDate(value) {
   if (!value) return "-";
@@ -14,11 +18,14 @@ function formatDate(value) {
 const money = (value) =>
   value === null || value === undefined ? "-" : Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 });
 
+const BUCKET_TONE = { d0_30: "ok", d31_60: "warn", d61_90: "high", d90_plus: "danger" };
+
 // Invoice-wise received vs pending, aged from the invoice (dispatch) date.
 function AgingReport() {
   const [loading, setLoading] = useState(true);
   const [report, setReport] = useState(null);
   const [searchText, setSearchText] = useState("");
+  const [fromDate, setFromDate] = useState(AGING_START_DATE);
   const [asOn, setAsOn] = useState("");
   const [includeSettled, setIncludeSettled] = useState(false);
 
@@ -29,6 +36,7 @@ function AgingReport() {
       try {
         const { data } = await api.get("/payments/aging", {
           params: {
+            from: fromDate,
             ...(searchText.trim() ? { q: searchText.trim() } : {}),
             ...(asOn ? { as_on: asOn } : {}),
             ...(includeSettled ? { include_settled: 1 } : {})
@@ -42,11 +50,17 @@ function AgingReport() {
       }
     }, 300);
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [searchText, asOn, includeSettled]);
+  }, [searchText, fromDate, asOn, includeSettled]);
 
   const buckets = report?.buckets || [];
   const rows = report?.rows || [];
   const bucketLabel = (key) => buckets.find((b) => b.key === key)?.label || "-";
+  const currencyLabel = (currency) => (!currency || currency === "-" ? "No currency set" : currency);
+
+  const periodLabel = useMemo(() => {
+    if (!report) return "";
+    return report.from ? `${formatDate(report.from)} - ${formatDate(report.asOn)}` : `up to ${formatDate(report.asOn)}`;
+  }, [report]);
 
   const exportReport = () => {
     const columns = [
@@ -79,7 +93,7 @@ function AgingReport() {
 
   return (
     <>
-      <section className="order-card">
+      <section className="order-card aging-filter-card">
         <div className="unified-search-box">
           <SearchIcon />
           <input
@@ -89,44 +103,73 @@ function AgingReport() {
             onChange={(e) => setSearchText(e.target.value)}
           />
         </div>
-        <div className="unified-filter-row" style={{ alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
-            As on
-            <input className="input" type="date" value={asOn} onChange={(e) => setAsOn(e.target.value)} />
+        <div className="aging-toolbar">
+          <label className="aging-field">
+            <span>Invoices from</span>
+            <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
           </label>
-          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+          <label className="aging-field">
+            <span>Outstanding as on</span>
+            <input type="date" value={asOn} onChange={(e) => setAsOn(e.target.value)} />
+          </label>
+          <label className="aging-check">
             <input type="checkbox" checked={includeSettled} onChange={(e) => setIncludeSettled(e.target.checked)} />
-            Show settled invoices
+            <span>Show settled invoices</span>
           </label>
-        </div>
-        <div className="unified-actions">
-          <button className="order-btn-secondary" onClick={exportReport} disabled={rows.length === 0}>Export to Excel</button>
+          <div className="aging-toolbar-end">
+            {fromDate !== AGING_START_DATE && (
+              <button className="aging-link-btn" type="button" onClick={() => setFromDate(AGING_START_DATE)}>
+                Reset to Oct 2026
+              </button>
+            )}
+            <button className="order-btn-secondary" onClick={exportReport} disabled={rows.length === 0}>Export to Excel</button>
+          </div>
         </div>
       </section>
 
-      {(report?.summary || []).map((total) => (
-        <section className="order-card" key={total.currency}>
-          <div style={{ fontWeight: 600, marginBottom: 10 }}>
-            Outstanding as on {formatDate(report.asOn)} · {total.currency}
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
-            <div><div className="pack-cell-sub">Invoiced</div><strong>{money(total.invoiced)}</strong></div>
-            <div><div className="pack-cell-sub">Received</div><strong>{money(total.received)}</strong></div>
-            <div><div className="pack-cell-sub">Pending</div><strong>{money(total.pending)}</strong></div>
-            {buckets.map((bucket) => (
-              <div key={bucket.key}>
-                <div className="pack-cell-sub">{bucket.label}</div>
-                <strong>{money(total.buckets[bucket.key])}</strong>
+      <div className="aging-summary-grid">
+        {(report?.summary || []).map((total) => (
+          <section className="order-card aging-summary-card" key={total.currency}>
+            <div className="aging-summary-head">
+              <span className="aging-currency-pill">{currencyLabel(total.currency)}</span>
+              <span className="aging-summary-period">Outstanding {periodLabel}</span>
+            </div>
+            <div className="aging-stat-row">
+              <div className="aging-stat">
+                <div className="aging-stat-label">Invoiced</div>
+                <div className="aging-stat-value">{money(total.invoiced)}</div>
               </div>
-            ))}
-          </div>
-          {total.unpriced > 0 && (
-            <small style={{ color: "#b45309" }}>
-              {total.unpriced} unsettled invoice{total.unpriced !== 1 ? "s" : ""} on unpriced orders are not in these totals.
-            </small>
-          )}
-        </section>
-      ))}
+              <div className="aging-stat">
+                <div className="aging-stat-label">Received</div>
+                <div className="aging-stat-value aging-stat-received">{money(total.received)}</div>
+              </div>
+              <div className="aging-stat">
+                <div className="aging-stat-label">Pending</div>
+                <div className="aging-stat-value aging-stat-pending">{money(total.pending)}</div>
+              </div>
+            </div>
+            <div className="aging-bucket-row">
+              {buckets.map((bucket) => {
+                const value = total.buckets[bucket.key] || 0;
+                return (
+                  <div
+                    key={bucket.key}
+                    className={`aging-bucket aging-bucket-${BUCKET_TONE[bucket.key] || "ok"}${value ? "" : " is-empty"}`}
+                  >
+                    <div className="aging-bucket-label">{bucket.label}</div>
+                    <div className="aging-bucket-value">{money(value)}</div>
+                  </div>
+                );
+              })}
+            </div>
+            {total.unpriced > 0 && (
+              <p className="aging-note">
+                {total.unpriced} unsettled invoice{total.unpriced !== 1 ? "s" : ""} on unpriced orders are not in these totals.
+              </p>
+            )}
+          </section>
+        ))}
+      </div>
 
       <section className="order-card" style={{ padding: 0, overflow: "hidden" }}>
         {loading ? (
@@ -134,11 +177,15 @@ function AgingReport() {
             {[1, 2, 3].map((i) => <div key={i} className="order-skeleton-row" />)}
           </div>
         ) : rows.length === 0 ? (
-          <div className="order-empty-state"><p>No outstanding invoices</p></div>
+          <div className="order-empty-state">
+            <p>No outstanding invoices{report?.from ? ` dated on or after ${formatDate(report.from)}` : ""}</p>
+          </div>
         ) : (
-          <div className="order-table-wrap">
-            <div className="order-table-meta">{rows.length} invoice{rows.length !== 1 ? "s" : ""}</div>
-            <table className="order-table">
+          <div className="order-table-wrap aging-table-wrap">
+            <div className="order-table-meta">
+              {rows.length} invoice{rows.length !== 1 ? "s" : ""} · {periodLabel}
+            </div>
+            <table className="order-table aging-table">
               <thead>
                 <tr>
                   <th>Invoice No</th>
@@ -159,11 +206,17 @@ function AgingReport() {
                     <td>{formatDate(row.invoiceDate)}</td>
                     <td>{row.orderNo || "-"}</td>
                     <td>{row.clientName || "-"}</td>
-                    <td style={{ textAlign: "right" }}>{row.currency || ""} {money(row.invoiceAmount)}</td>
-                    <td style={{ textAlign: "right" }}>{money(row.received)}</td>
-                    <td style={{ textAlign: "right", fontWeight: 600 }}>{money(row.pending)}</td>
-                    <td style={{ textAlign: "right" }}>{row.settled ? "-" : row.ageDays}</td>
-                    <td>{row.settled ? "Settled" : bucketLabel(row.bucket)}</td>
+                    <td className="aging-num">{row.currency || ""} {money(row.invoiceAmount)}</td>
+                    <td className="aging-num">{money(row.received)}</td>
+                    <td className="aging-num aging-num-strong">{money(row.pending)}</td>
+                    <td className="aging-num">{row.settled ? "-" : row.ageDays}</td>
+                    <td>
+                      {row.settled ? (
+                        <span className="aging-pill aging-pill-settled">Settled</span>
+                      ) : (
+                        <span className={`aging-pill aging-pill-${BUCKET_TONE[row.bucket] || "ok"}`}>{bucketLabel(row.bucket)}</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>

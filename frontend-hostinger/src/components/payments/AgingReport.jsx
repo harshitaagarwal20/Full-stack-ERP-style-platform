@@ -4,28 +4,33 @@ import { logApiError } from "../../utils/apiError";
 import { exportRowsToExcel } from "../../utils/exportExcel";
 import { SearchIcon } from "../erp/ErpIcons";
 
-// Payment tracking went live in October 2026; invoices before that are legacy
-// and stay out of the report. The backend applies the same cut-off by default.
-const AGING_START_DATE = "2026-10-01";
-
+// Invoice dates are calendar days stored at UTC midnight, so they are read off
+// the string. Going through local getters would show the day before for anyone
+// behind UTC.
 function formatDate(value) {
   if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-  return `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}`;
+  const parts = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value));
+  if (!parts) return "-";
+  return `${parts[3]}/${parts[2]}/${parts[1]}`;
 }
 
 const money = (value) =>
   value === null || value === undefined ? "-" : Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 });
 
-const BUCKET_TONE = { d0_30: "ok", d31_60: "warn", d61_90: "high", d90_plus: "danger" };
+// The backend sends its buckets youngest first, so the tone follows that order
+// rather than a second copy of the bucket keys. A bucket this build does not
+// know is painted as the worst case: the one thing it must never look is fine.
+const BUCKET_TONES = ["ok", "warn", "high", "danger"];
 
 // Invoice-wise received vs pending, aged from the invoice (dispatch) date.
 function AgingReport() {
   const [loading, setLoading] = useState(true);
   const [report, setReport] = useState(null);
   const [searchText, setSearchText] = useState("");
-  const [fromDate, setFromDate] = useState(AGING_START_DATE);
+  // null means "no choice made", so the backend's go-live cut-off applies and
+  // this build does not have to keep its own copy of that date.
+  const [fromDate, setFromDate] = useState(null);
+  const [defaultFrom, setDefaultFrom] = useState("");
   const [asOn, setAsOn] = useState("");
   const [includeSettled, setIncludeSettled] = useState(false);
 
@@ -36,13 +41,16 @@ function AgingReport() {
       try {
         const { data } = await api.get("/payments/aging", {
           params: {
-            from: fromDate,
+            ...(fromDate === null ? {} : { from: fromDate }),
             ...(searchText.trim() ? { q: searchText.trim() } : {}),
             ...(asOn ? { as_on: asOn } : {}),
             ...(includeSettled ? { include_settled: 1 } : {})
           }
         });
-        if (!cancelled) setReport(data);
+        if (!cancelled) {
+          setReport(data);
+          if (fromDate === null && data.from) setDefaultFrom(data.from);
+        }
       } catch (error) {
         if (!cancelled) logApiError(error, "Failed to load the aging report");
       } finally {
@@ -55,6 +63,11 @@ function AgingReport() {
   const buckets = report?.buckets || [];
   const rows = report?.rows || [];
   const bucketLabel = (key) => buckets.find((b) => b.key === key)?.label || "-";
+  const bucketTone = (key) => {
+    const index = buckets.findIndex((b) => b.key === key);
+    if (index < 0) return "danger";
+    return BUCKET_TONES[Math.min(index, BUCKET_TONES.length - 1)];
+  };
   const currencyLabel = (currency) => (!currency || currency === "-" ? "No currency set" : currency);
 
   const periodLabel = useMemo(() => {
@@ -106,20 +119,30 @@ function AgingReport() {
         <div className="aging-toolbar">
           <label className="aging-field">
             <span>Invoices from</span>
-            <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+            <input
+              type="date"
+              max={asOn || undefined}
+              value={fromDate ?? defaultFrom}
+              onChange={(e) => setFromDate(e.target.value)}
+            />
           </label>
           <label className="aging-field">
             <span>Outstanding as on</span>
-            <input type="date" value={asOn} onChange={(e) => setAsOn(e.target.value)} />
+            <input
+              type="date"
+              min={(fromDate ?? defaultFrom) || undefined}
+              value={asOn}
+              onChange={(e) => setAsOn(e.target.value)}
+            />
           </label>
           <label className="aging-check">
             <input type="checkbox" checked={includeSettled} onChange={(e) => setIncludeSettled(e.target.checked)} />
             <span>Show settled invoices</span>
           </label>
           <div className="aging-toolbar-end">
-            {fromDate !== AGING_START_DATE && (
-              <button className="aging-link-btn" type="button" onClick={() => setFromDate(AGING_START_DATE)}>
-                Reset to Oct 2026
+            {fromDate !== null && defaultFrom && fromDate !== defaultFrom && (
+              <button className="aging-link-btn" type="button" onClick={() => setFromDate(null)}>
+                Reset to {formatDate(defaultFrom)}
               </button>
             )}
             <button className="order-btn-secondary" onClick={exportReport} disabled={rows.length === 0}>Export to Excel</button>
@@ -154,7 +177,7 @@ function AgingReport() {
                 return (
                   <div
                     key={bucket.key}
-                    className={`aging-bucket aging-bucket-${BUCKET_TONE[bucket.key] || "ok"}${value ? "" : " is-empty"}`}
+                    className={`aging-bucket aging-bucket-${bucketTone(bucket.key)}${value ? "" : " is-empty"}`}
                   >
                     <div className="aging-bucket-label">{bucket.label}</div>
                     <div className="aging-bucket-value">{money(value)}</div>
@@ -214,7 +237,7 @@ function AgingReport() {
                       {row.settled ? (
                         <span className="aging-pill aging-pill-settled">Settled</span>
                       ) : (
-                        <span className={`aging-pill aging-pill-${BUCKET_TONE[row.bucket] || "ok"}`}>{bucketLabel(row.bucket)}</span>
+                        <span className={`aging-pill aging-pill-${bucketTone(row.bucket)}`}>{bucketLabel(row.bucket)}</span>
                       )}
                     </td>
                   </tr>

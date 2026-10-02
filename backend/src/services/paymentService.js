@@ -14,9 +14,33 @@ export const AGING_BUCKETS = [
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+const AGING_START_FALLBACK = "2026-10-01";
+
+// `new Date("2026-02-30")` quietly rolls over to March and `new Date("2026")`
+// parses as a valid year, so the shape is matched and the parse round-tripped
+// before the value is handed to Prisma.
+function isRealDateOnly(value) {
+  if (!DATE_ONLY.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
 // Go-live for payment tracking: invoices dated before this are out of the aging
 // report, so the outstanding totals only cover invoices raised on the system.
-export const AGING_START_DATE = (process.env.AGING_START_DATE || "2026-10-01").trim();
+// A misconfigured override is reported and dropped — left in place it would
+// become an Invalid Date and fail every aging request.
+function resolveAgingStartDate() {
+  const configured = (process.env.AGING_START_DATE || "").trim();
+  if (!configured) return AGING_START_FALLBACK;
+  if (isRealDateOnly(configured)) return configured;
+  console.warn(
+    `[aging] AGING_START_DATE="${configured}" is not a real YYYY-MM-DD date; using ${AGING_START_FALLBACK}.`
+  );
+  return AGING_START_FALLBACK;
+}
+
+export const AGING_START_DATE = resolveAgingStartDate();
 
 function round2(value) {
   return Math.round(value * 100) / 100;
@@ -278,22 +302,32 @@ function bucketFor(ageDays) {
   return AGING_BUCKETS.find((bucket) => ageDays <= bucket.max).key;
 }
 
-function parseAsOn(value) {
-  if (!value) return new Date();
-  const parsed = new Date(`${value}T23:59:59.999Z`);
-  if (Number.isNaN(parsed.getTime())) throw httpError("as_on must be YYYY-MM-DD.", 400);
-  return parsed;
+function parseDateOnly(value, field) {
+  if (!isRealDateOnly(value)) throw httpError(`${field} must be a real date as YYYY-MM-DD.`, 400);
+  return new Date(`${value}T00:00:00.000Z`);
 }
 
-// Invoices raised before go-live are legacy and are not counted. The caller can
-// move the cut-off, or pass an explicit blank `from` to drop it altogether.
-function parseFrom(query) {
-  if (!Object.prototype.hasOwnProperty.call(query, "from")) return new Date(`${AGING_START_DATE}T00:00:00.000Z`);
-  const value = String(query.from || "").trim();
-  if (!value) return null;
-  const parsed = new Date(`${value}T00:00:00.000Z`);
-  if (Number.isNaN(parsed.getTime())) throw httpError("from must be YYYY-MM-DD.", 400);
-  return parsed;
+// The aging window: `as_on` runs to the end of its UTC day, and invoices raised
+// before go-live are legacy and are not counted. The caller can move the
+// cut-off, or pass an explicit blank `from` to drop it altogether.
+export function parseAgingWindow(query = {}) {
+  const asOnValue = String(query.as_on || "").trim();
+  const asOn = asOnValue
+    ? new Date(parseDateOnly(asOnValue, "as_on").getTime() + DAY_MS - 1)
+    : new Date();
+
+  let from;
+  if (!Object.prototype.hasOwnProperty.call(query, "from")) {
+    from = new Date(`${AGING_START_DATE}T00:00:00.000Z`);
+  } else {
+    const value = String(query.from || "").trim();
+    from = value ? parseDateOnly(value, "from") : null;
+  }
+
+  // An inverted window matches nothing, which would read as "fully collected"
+  // on a report about what is owed.
+  if (from && from > asOn) throw httpError("from cannot be after as_on.", 400);
+  return { asOn, from };
 }
 
 // Invoice-wise received vs pending, aged from the invoice (dispatch) date.
@@ -301,8 +335,7 @@ function parseFrom(query) {
 // left out unless include_settled is set. Totals are kept per currency — summing
 // rupees and dollars into one number would be wrong.
 export async function getAgingReport(query = {}, { ownerId = null } = {}) {
-  const asOn = parseAsOn(String(query.as_on || "").trim());
-  const from = parseFrom(query);
+  const { asOn, from } = parseAgingWindow(query);
   const client = String(query.client || "").trim();
   const q = String(query.q || "").trim();
   const includeSettled = String(query.include_settled || "") === "1";

@@ -172,6 +172,7 @@ Routes are mounted under `/api`:
 - `orders`, `manual-orders` — order lifecycle and manual order requests
 - `production`, `packing` — production batches, batch cards, QC, packing
 - `dispatch` — dispatch queue and shipments
+- `payments` — invoice-wise receipts against dispatches, and the aging report
 - `purchase-orders`, `grns`, `inventory`, `bom` — procurement and stock
 - `customers`, `master-data`, `dashboard`, `diagnostics` — supporting data and metrics
 - `GET /api/health` — liveness; `GET /api/health/mysql` tests the DB via the
@@ -187,6 +188,15 @@ Routes are mounted under `/api`:
 - Each dispatch is linked 1:1 with an order.
 - Dispatch tracking statuses: `PACKING`, `SHIPPED`, `DELIVERED`.
 - Enquiry approval/rejection only allowed from `PENDING` state.
+- A dispatch is one invoice, billed at the order price; with no price on the
+  order the value is unknown and only a `FULL` receipt can settle it.
+- The aging report counts invoices from `AGING_START_DATE` onwards (payment
+  go-live, default `2026-10-01`) so outstanding totals only cover invoices
+  raised on the system. Passing a blank `from` drops the cut-off.
+- Aging totals are kept per currency — rupees and dollars are never summed
+  into one number.
+- `from` and `as_on` must be real `YYYY-MM-DD` dates and `from` cannot be
+  after `as_on`; anything else is a 400 rather than a silently wrong window.
 
 ## UI Features
 

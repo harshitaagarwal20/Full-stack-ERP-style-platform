@@ -22,6 +22,7 @@ connected to GitHub with auto-deploy from `main`.
 | `DATABASE_URL` | Plain `mysql://` URL. URL-encode any special characters in the password — an unencoded `@` breaks parsing. |
 | `JWT_SECRET` | 32+ chars; the backend refuses to start in production without it. |
 | `CRON_SECRET` | Required for scheduled endpoints. |
+| `AGING_START_DATE` | Optional, `YYYY-MM-DD` (default `2026-10-01`). Payment-tracking go-live: invoices dated before it stay out of the aging report. A value that is not a real calendar date is logged as `[aging] ...` and ignored, falling back to the default. |
 | `CLIENT_ORIGIN` | Comma-separated allowed origins; `*` wildcards supported. Must include the deployed origin, e.g. `https://app.nimbasia.com`. |
 | `NODE_ENV` | `production` |
 

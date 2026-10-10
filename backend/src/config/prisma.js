@@ -1,6 +1,7 @@
 import prismaPkg from "@prisma/client";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 import { createRetryablePrismaClientProxy } from "../utils/prismaClientProxy.js";
+import { buildSslOption } from "../utils/dbSsl.js";
 
 const { PrismaClient } = prismaPkg;
 
@@ -26,9 +27,19 @@ function buildAdapterConfig() {
     user: decodeURIComponent(url.username || ""),
     password: decodeURIComponent(url.password || ""),
     database: url.pathname.replace(/^\/+/, ""),
+    ...buildSslOption(url),
     // Keep the pool small: Hostinger's MySQL caps concurrent connections and
     // this is a single low-traffic app instance.
     connectionLimit: 5,
+    // Hostinger caps a DB user at 500 NEW connections per hour
+    // (max_connections_per_hour) and closes idle ones. The driver's default is
+    // to hold `connectionLimit` connections open at all times, so every idle
+    // kill re-opened five of them and burned the hourly quota until the DB
+    // locked everyone out ("pool timeout ... active=0 idle=0"). Keep just one
+    // warm (the heartbeat feeds it), let bursts borrow more, and drop the
+    // extras quickly instead of re-opening them.
+    minimumIdle: 1,
+    idleTimeout: 120,
     connectTimeout: 10000
   };
 }

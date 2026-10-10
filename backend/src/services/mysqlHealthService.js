@@ -1,5 +1,6 @@
 import mysql from "mysql2/promise";
 import env from "../config/env.js";
+import { buildSslOption } from "../utils/dbSsl.js";
 
 function parseDatabaseUrl(databaseUrl) {
   if (!databaseUrl) {
@@ -31,7 +32,8 @@ function parseDatabaseUrl(databaseUrl) {
     user: decodeURIComponent(url.username || ""),
     password: decodeURIComponent(url.password || ""),
     database,
-    connectTimeout: 5000
+    connectTimeout: 5000,
+    ...buildSslOption(url)
   };
 }
 

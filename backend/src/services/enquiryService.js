@@ -243,9 +243,9 @@ export async function createEnquiry(payload, user) {
           stage,
           sampledAt,
           isUrgent,
-          // Enquiries wait as drafts until their creator sends them for
-          // approval; urgent ones skip the queue, so they start as PENDING.
-          status: isUrgent ? "PENDING" : "DRAFT",
+          // Every new enquiry goes straight to the approval queue. DRAFT is
+          // kept only for older enquiries still waiting on Send for Approval.
+          status: "PENDING",
           createdById: userId
         },
         select: ENQUIRY_LIST_SELECT

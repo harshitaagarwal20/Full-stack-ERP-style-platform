@@ -215,24 +215,29 @@ async function ensureMasterDataInitialized() {
     const defaults = defaultMasterData[category] || [];
     for (let index = 0; index < defaults.length; index += 1) {
       const item = defaults[index];
+      // Seed only values that are missing. An existing row — including one an
+      // admin retired (isActive = 0) — is left exactly as it is; this runs on
+      // every process start and must not bring deleted defaults back.
       await prisma.$executeRaw`
-        INSERT INTO \`MasterDataItem\` (\`category\`, \`value\`, \`label\`, \`sortOrder\`, \`isActive\`)
+        INSERT IGNORE INTO \`MasterDataItem\` (\`category\`, \`value\`, \`label\`, \`sortOrder\`, \`isActive\`)
         VALUES (${category}, ${item.value}, ${item.label}, ${index + 1}, 1)
-        ON DUPLICATE KEY UPDATE
-          \`isActive\` = VALUES(\`isActive\`)
       `;
     }
   }
 
   // The product master starts as the existing product name list, uncategorised.
   // An admin then edits each row to set its category — no product disappears
-  // from the pickers in the meantime.
-  await prisma.$executeRaw`
-    INSERT IGNORE INTO \`ProductMaster\` (\`productName\`, \`isActive\`)
-    SELECT \`value\`, 1
-    FROM \`MasterDataItem\`
-    WHERE \`category\` = 'products' AND \`isActive\` = 1
-  `;
+  // from the pickers in the meantime. Seeded once, into an empty table only:
+  // re-running it on every start would resurrect products an admin removed.
+  const [{ total: productMasterRows }] = await prisma.$queryRaw`SELECT COUNT(*) AS total FROM \`ProductMaster\``;
+  if (Number(productMasterRows || 0) === 0) {
+    await prisma.$executeRaw`
+      INSERT IGNORE INTO \`ProductMaster\` (\`productName\`, \`isActive\`)
+      SELECT \`value\`, 1
+      FROM \`MasterDataItem\`
+      WHERE \`category\` = 'products' AND \`isActive\` = 1
+    `;
+  }
 
   hasInitialized = true;
 }

@@ -485,8 +485,11 @@ export async function updateEnquiryStatus(enquiryId, status, approvedByUser, rej
       }
     });
 
+    // An urgent enquiry already has its order (raised at creation, while the
+    // enquiry stays PENDING for approval). Approving it must not raise a second
+    // one — Order.enquiryId is unique, so that aborted the whole approval.
     let createdOrder = null;
-    if (status === "ACCEPTED") {
+    if (status === "ACCEPTED" && !enquiry.order) {
       const dispatchDate = enquiry.expectedTimeline || new Date();
       createdOrder = await createOrderFromEnquiry(enquiry, dispatchDate, approvedByUser, tx);
     }

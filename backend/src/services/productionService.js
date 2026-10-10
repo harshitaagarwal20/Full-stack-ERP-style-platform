@@ -682,10 +682,16 @@ const MAX_SPLIT_BATCHES = 100;
 // batches rather than dumped on the last one, which keeps batch sizes within
 // one unit of each other (7 into 3 gives 3,2,2 — not 2,2,3).
 export function splitQuantityEvenly(total, count) {
-  const base = Math.floor(total / count);
-  const remainder = total % count;
+  // Whole quantities split in whole units (remainder to the leading batches).
+  // Order quantities can be decimal though, and whole-unit maths handed out +1
+  // for a fractional remainder (10.5 over 3 → 4+4+3 = 11), over-planning the
+  // order — so a fractional total is split in thousandths and always sums back.
+  const SCALE = Number.isInteger(Number(total)) ? 1 : 1000;
+  const units = Math.round(Number(total) * SCALE);
+  const base = Math.floor(units / count);
+  const remainder = units - base * count;
 
-  return Array.from({ length: count }, (_, index) => base + (index < remainder ? 1 : 0));
+  return Array.from({ length: count }, (_, index) => (base + (index < remainder ? 1 : 0)) / SCALE);
 }
 
 // Schedule batches backwards from the order's expected timeline: the final
@@ -1252,12 +1258,14 @@ export async function markProductionComplete(productionId, actorUser, payload = 
       }
     });
 
-    await tx.order.update({
-      where: { id: production.orderId },
+    // Only promote an order that hasn't reached dispatch yet. A later batch
+    // finishing on an order that is already PARTIALLY_DISPATCHED / DISPATCHED /
+    // COMPLETED must not drag it back to READY_FOR_DISPATCH — the dispatch and
+    // payment roll-up owns those statuses.
+    await tx.order.updateMany({
+      where: { id: production.orderId, status: { in: ["CREATED", "IN_PRODUCTION"] } },
       data: { status: "READY_FOR_DISPATCH" }
     });
-
-
   });
 
   const updated = await prisma.production.findUnique({
@@ -1323,21 +1331,38 @@ export async function updateProduction(productionId, payload, actorUser) {
       error.statusCode = 400;
       throw error;
     }
-    // Load order quantity to validate upper bound
+    // A finished batch is final: re-posting a different produced quantity would
+    // either drag it back to PARTIALLY_PRODUCED or leave inventory out of step
+    // with what QC already booked.
+    if (production.status === "COMPLETED" && numeric !== Number(production.producedQuantity || 0)) {
+      const error = new Error("Produced quantity cannot be changed after the batch is completed.");
+      error.statusCode = 400;
+      throw error;
+    }
+
+    // Each row is its own batch, so the upper bound is the batch's planned
+    // capacity (never more than the order). Bounding by the whole order let a
+    // 100 kg batch of a 1000 kg order record 900 and never complete.
     const order = await prisma.order.findUnique({
       where: { id: production.orderId },
       select: { quantity: true }
     });
-    const maxQty = Number(order?.quantity || 0);
-    if (numeric > maxQty) {
-      const error = new Error(`Produced quantity cannot exceed order quantity (${maxQty}).`);
+    const orderQty = Number(order?.quantity || 0);
+    const batchCapacity = Number(production.capacity || 0);
+    const maxQty = batchCapacity > 0 ? Math.min(batchCapacity, orderQty) : orderQty;
+    // Tolerate float residue from decimal quantities (e.g. 3.1 + 7.4).
+    const EPSILON = 1e-6;
+    if (numeric > maxQty + EPSILON) {
+      const error = new Error(`Produced quantity cannot exceed the batch quantity (${maxQty}).`);
       error.statusCode = 400;
       throw error;
     }
 
     updateData.producedQuantity = numeric;
 
-    if (numeric >= maxQty) {
+    if (production.status === "COMPLETED") {
+      // Unchanged quantity on a completed batch: leave status and dates alone.
+    } else if (numeric >= maxQty - EPSILON) {
       assertInProcessTestApproved(production);
       updateData.status = "COMPLETED";
       updateData.productionCompletionDate = new Date();
@@ -1687,12 +1712,22 @@ export async function substituteProductionBatch(productionId, payload, actorUser
 
   const production = await prisma.production.findUnique({
     where: { id: productionId },
-    select: { id: true, rawMaterials: true }
+    select: { id: true, status: true, rawMaterials: true }
   });
 
   if (!production) {
     const error = new Error("Production record not found.");
     error.statusCode = 404;
+    throw error;
+  }
+
+  // Raw material is only deducted from the ledger when the batch leaves
+  // PENDING. Before that there is nothing to reverse, so a substitution would
+  // mint stock for the original batch and deduct the substitute — and the
+  // start would then deduct again from the updated row.
+  if (production.status === "PENDING") {
+    const error = new Error("Start the batch before substituting a raw material batch — nothing has been consumed yet.");
+    error.statusCode = 409;
     throw error;
   }
 

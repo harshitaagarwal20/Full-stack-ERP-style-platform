@@ -777,6 +777,13 @@ export async function createDispatch(payload, actorUser) {
   // quantity and both pass, over-dispatching the order and pushing the
   // finished-goods ledger negative.
   const dispatch = await prisma.$transaction(async (tx) => {
+    // The order row lock is what actually serialises concurrent dispatches of
+    // one order (the reads below are plain snapshot reads and block nobody).
+    // It is the first statement so the snapshot is taken after the lock, and
+    // it is always taken before any Dispatch row lock — the same order
+    // recordPayment and deleteDispatch use — so they cannot deadlock.
+    await lockOrderForPayment(tx, payload.order_id);
+
     const order = await tx.order.findUnique({
       where: { id: payload.order_id },
       select: {
@@ -881,8 +888,20 @@ export async function updateDispatch(dispatchId, payload, actorUser) {
     throw error;
   }
 
+  // The order id is needed to take the order lock before anything else in the
+  // transaction (see createDispatch), so it is looked up on its own first.
+  const lockTarget = await prisma.dispatch.findUnique({ where: { id: dispatchId }, select: { orderId: true } });
+  if (!lockTarget) {
+    const error = new Error("Dispatch record not found.");
+    error.statusCode = 404;
+    throw error;
+  }
+
   // Load and re-validate inside the write transaction — see createDispatch.
   const result = await prisma.$transaction(async (tx) => {
+    await lockOrderForPayment(tx, lockTarget.orderId);
+    await tx.$queryRaw`SELECT id FROM \`Dispatch\` WHERE id = ${dispatchId} FOR UPDATE`;
+
     const dispatch = await tx.dispatch.findUnique({
       where: { id: dispatchId },
       select: {

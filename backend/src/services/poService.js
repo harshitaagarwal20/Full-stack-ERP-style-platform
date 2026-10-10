@@ -90,9 +90,30 @@ function generateUniqueKey(poId, itemIndex) {
   return `POI-${poId}-${itemIndex}-${Date.now()}`;
 }
 
-function buildItemsCreateData(items, poId, supplierName, poNumber, existingItems = []) {
+// Pairs each submitted line with the stored line it replaces, so pricing the
+// payload omits (non-pricing roles never send it) is carried over from the
+// right item. Matching by array index attached prices to the wrong item the
+// moment a line was removed or reordered. Pairing is by line id when the client
+// sends one, otherwise by item + UOM, consuming duplicates in order.
+function pairExistingItems(items, existingItems) {
+  const remaining = [...existingItems];
+  const take = (predicate) => {
+    const at = remaining.findIndex(predicate);
+    return at === -1 ? undefined : remaining.splice(at, 1)[0];
+  };
+  const keyOf = (value) => String(value || "").trim().toLowerCase();
+
+  const byId = items.map((item) => (item.id !== undefined ? take((row) => row.id === Number(item.id)) : undefined));
   return items.map((item, index) => {
-    const preserved = existingItems[index];
+    if (byId[index]) return byId[index];
+    return take((row) => keyOf(row.itemId) === keyOf(item.item_description) && keyOf(row.uom) === keyOf(item.uom));
+  });
+}
+
+function buildItemsCreateData(items, poId, supplierName, poNumber, existingItems = []) {
+  const pairs = pairExistingItems(items, existingItems);
+  return items.map((item, index) => {
+    const preserved = pairs[index];
     return {
       uniqueKey: generateUniqueKey(poId, index),
       poNumber,

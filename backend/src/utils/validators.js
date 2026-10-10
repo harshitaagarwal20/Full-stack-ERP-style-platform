@@ -449,6 +449,9 @@ export const importProductMasterSchema = z.object({
 });
 
 const poItemSchema = z.object({
+  // Stored line id, when the client has one — lets an edit keep a line's
+  // pricing even if the item is renamed or lines are reordered.
+  id: z.number().int().positive().optional(),
   item_description: z.string().min(1),
   quantity_ordered: z.number().positive(),
   unit_price: z.number().nonnegative().optional().default(0),

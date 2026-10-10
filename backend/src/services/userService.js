@@ -51,6 +51,34 @@ function assertAllowedEmail(email) {
   }
 }
 
+// Holding the Users screen does not make someone an admin. Only an admin may
+// hand out the admin role or touch an existing admin account (role change,
+// password reset, delete) — otherwise a Users-screen grant is a one-step
+// route to full admin. Non-admins also can't change their own role.
+export async function assertActorMayManageUser(actor, { targetUserId, newRole } = {}) {
+  if (actor?.role === "admin") return;
+
+  const deny = (message) => {
+    const error = new Error(message);
+    error.statusCode = 403;
+    return error;
+  };
+
+  if (newRole === "admin") {
+    throw deny("Only an admin can grant the admin role.");
+  }
+  if (targetUserId === undefined) return;
+
+  if (newRole !== undefined && newRole !== actor?.role && targetUserId === actor?.id) {
+    throw deny("You cannot change your own role.");
+  }
+
+  const target = await prisma.user.findUnique({ where: { id: targetUserId }, select: { role: true } });
+  if (target?.role === "admin") {
+    throw deny("Only an admin can modify or delete an admin account.");
+  }
+}
+
 export async function createUser(payload) {
   assertAllowedEmail(payload.email);
   const hashedPassword = await bcrypt.hash(payload.password, 10);

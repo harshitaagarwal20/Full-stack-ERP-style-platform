@@ -1,4 +1,4 @@
-import { changePassword, createUser, deleteUser, listUsers, requestPasswordChangeOtp, updateUser } from "../services/userService.js";
+import { assertActorMayManageUser, changePassword, createUser, deleteUser, listUsers, requestPasswordChangeOtp, updateUser } from "../services/userService.js";
 import { toPositiveIntOrThrow } from "../utils/routeParams.js";
 
 // Whose data a user may see is an admin decision, even when another role has
@@ -23,6 +23,7 @@ export async function getUsers(req, res, next) {
 export async function addUser(req, res, next) {
   try {
     assertCanSetDataScope(req);
+    await assertActorMayManageUser(req.user, { newRole: req.validatedBody?.role });
     const user = await createUser(req.validatedBody);
     return res.status(201).json(user);
   } catch (error) {
@@ -33,7 +34,9 @@ export async function addUser(req, res, next) {
 export async function editUser(req, res, next) {
   try {
     assertCanSetDataScope(req);
-    const user = await updateUser(toPositiveIntOrThrow(req.params.id, "id"), req.validatedBody);
+    const userId = toPositiveIntOrThrow(req.params.id, "id");
+    await assertActorMayManageUser(req.user, { targetUserId: userId, newRole: req.validatedBody?.role });
+    const user = await updateUser(userId, req.validatedBody);
     return res.json(user);
   } catch (error) {
     return next(error);
@@ -42,7 +45,9 @@ export async function editUser(req, res, next) {
 
 export async function removeUser(req, res, next) {
   try {
-    await deleteUser(toPositiveIntOrThrow(req.params.id, "id"));
+    const userId = toPositiveIntOrThrow(req.params.id, "id");
+    await assertActorMayManageUser(req.user, { targetUserId: userId });
+    await deleteUser(userId);
     return res.status(204).end();
   } catch (error) {
     return next(error);

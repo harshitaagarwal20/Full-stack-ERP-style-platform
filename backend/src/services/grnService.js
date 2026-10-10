@@ -341,6 +341,10 @@ export async function rejectGRN(id, payload, user) {
 
 export async function confirmGRN(id, user) {
   const result = await prisma.$transaction(async (tx) => {
+    // Row lock first: without it a double-click/retry has both requests read
+    // DRAFT and both book the receipt. The loser waits, then sees CONFIRMED.
+    await tx.$queryRaw`SELECT id FROM \`GoodsReceiptNote\` WHERE id = ${id} FOR UPDATE`;
+
     const grn = await tx.goodsReceiptNote.findUnique({
       where: { id },
       select: {

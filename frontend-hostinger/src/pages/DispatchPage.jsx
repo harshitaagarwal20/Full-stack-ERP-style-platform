@@ -55,14 +55,17 @@ function getOrderRemainingQuantity(order, dispatch) {
   return order.remainingQuantity ?? order.quantity ?? 0;
 }
 
-function getDispatchModalRemainingQuantity(order, dispatchQty, originalDispatchQuantity = 0) {
+// selectedOrder.remainingQuantity already excludes the dispatch being edited
+// (see editDispatch), so the row's original quantity must not be added back —
+// doing so left Remaining stuck at the full quantity after marking Delivered.
+function getDispatchModalRemainingQuantity(order, dispatchQty) {
   if (!order) return 0;
 
   const baseRemaining = Number(order.remainingQuantity ?? order.quantity ?? 0);
   const currentDispatchQuantity = Number(dispatchQty || 0);
-  const previousDispatchQuantity = Number(originalDispatchQuantity || 0);
 
-  return Math.max(baseRemaining + previousDispatchQuantity - currentDispatchQuantity, 0);
+  // Round off float residue (e.g. 10.5 - 3.1 - 7.4) so a full dispatch shows 0.
+  return Math.max(Math.round((baseRemaining - currentDispatchQuantity) * 1e6) / 1e6, 0);
 }
 
 function getDispatchRowStatus(row) {
@@ -209,12 +212,8 @@ function DispatchPage() {
     return getAllowedShipmentStatusOptions(selectedOrder, dispatchQty, dispatchForm.shipment_status);
   }, [dispatchForm.dispatch_quantity, dispatchForm.shipment_status, selectedOrder]);
   const dispatchModalRemainingQuantity = useMemo(() => (
-    getDispatchModalRemainingQuantity(
-      selectedOrder,
-      dispatchForm.dispatch_quantity,
-      dispatchForm.original_dispatch_quantity
-    )
-  ), [dispatchForm.dispatch_quantity, dispatchForm.original_dispatch_quantity, selectedOrder]);
+    getDispatchModalRemainingQuantity(selectedOrder, dispatchForm.dispatch_quantity)
+  ), [dispatchForm.dispatch_quantity, selectedOrder]);
 
   const fetchDispatchData = async ({
     searchQuery = query,
